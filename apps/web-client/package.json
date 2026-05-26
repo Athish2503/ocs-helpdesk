@@ -11,7 +11,10 @@
   "dependencies": {
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "next": "15.5.18"
+    "next": "15.5.18",
+    "@ocs/types": "workspace:*",
+    "@ocs/shared": "workspace:*",
+    "lucide-react": "^0.475.0"
   },
   "devDependencies": {
     "typescript": "^5",
