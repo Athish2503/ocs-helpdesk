@@ -1,0 +1,10 @@
+{
+  "name": "ocs-helpdesk",
+  "private": true,
+  "packageManager": "pnpm",
+  "devDependencies": {
+    "prettier": "^3.8.3",
+    "turbo": "^2.9.16",
+    "typescript": "^6.0.3"
+  }
+}
