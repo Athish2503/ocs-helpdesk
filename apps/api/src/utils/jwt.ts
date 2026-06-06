@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import type { Role } from "../generated/prisma/enums.js";
 
 // ---------------------------------------------------------------------------
@@ -51,10 +52,11 @@ export function verifyAccessToken(token: string): JwtAccessPayload {
 
 /**
  * Sign a long-lived refresh token (7 days).
- * Only embeds the userId — the full payload is fetched from the DB on refresh.
+ * Embeds the userId (sub) and a unique jti identifier to prevent generation collisions.
  */
 export function signRefreshToken(userId: string): string {
-  return jwt.sign({ sub: userId }, getSecret(), { expiresIn: REFRESH_TOKEN_TTL });
+  const jti = crypto.randomUUID();
+  return jwt.sign({ sub: userId, jti }, getSecret(), { expiresIn: REFRESH_TOKEN_TTL });
 }
 
 /**
