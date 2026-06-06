@@ -1,10 +1,21 @@
 {
   "name": "ocs-helpdesk",
   "private": true,
-  "packageManager": "pnpm",
+  "packageManager": "pnpm@11.1.3",
+
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+
+    "dev:web": "turbo run dev --filter=web",
+    "dev:api": "turbo run dev --filter=api"
+  },
+
   "devDependencies": {
     "prettier": "^3.8.3",
     "turbo": "^2.9.16",
-    "typescript": "^6.0.3"
+    "typescript": "^5.9.3"
   }
 }
