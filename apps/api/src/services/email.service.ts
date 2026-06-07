@@ -67,11 +67,11 @@ ${input.text
 
 export async function sendMagicLinkEmail(email: string, magicLink: string, name?: string): Promise<void> {
   const greeting = name ? `Hello ${name},` : "Hello,";
-  
+
   const text = `
 ${greeting}
 
-You requested a secure magic link to sign in or sign up to OCS Helpdesk.
+ Sign in to OCS Helpdesk.
 
 Click the link below to verify your email and access your account:
 ${magicLink}
