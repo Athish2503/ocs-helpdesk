@@ -28,7 +28,7 @@ model User {
   id             String         @id @default(uuid())
   name           String
   email          String         @unique
-  passwordHash   String
+  passwordHash   String?
   role           Role           @default(CUSTOMER)
   isActive       Boolean        @default(true)
   emailVerified  Boolean        @default(false)
@@ -52,3 +52,15 @@ model RefreshToken {
 
   @@map("refresh_tokens")
 }
+
+model MagicToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  email     String
+  name      String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("magic_tokens")
+}
+

@@ -20,9 +20,11 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string; message?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  sendMagicLink: (email: string, name?: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithMagicLink: (token: string) => Promise<{ success: boolean; error?: string; user?: User }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -173,8 +175,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      // Registration is successful. Next step is to automatically log them in
-      return await login(email, password);
+      // Registration is successful.
+      return { success: true, message: resData.data.message || "Registration successful. Please verify your email." };
     } catch (err) {
       console.error("Registration request error:", err);
       return { success: false, error: "Unable to connect to the registration server." };
@@ -203,8 +205,77 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push("/login");
   };
 
+  const sendMagicLink = async (email: string, name?: string) => {
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+      const response = await fetch(`${API_URL}/auth/magic-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, name }),
+      });
+
+      const resData = await response.json();
+
+      if (!response.ok) {
+        let errorMessage = resData.error?.message || "Failed to send magic link.";
+        if (resData.error?.details && Array.isArray(resData.error.details)) {
+          errorMessage = resData.error.details.map((d: any) => d.message).join(". ");
+        }
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+
+      if (resData.data?.magicLink) {
+        console.log("Dev Magic Link from API Response:", resData.data.magicLink);
+      }
+
+      return { success: true };
+    } catch (err) {
+      console.error("Send magic link error:", err);
+      return { success: false, error: "Unable to connect to the server." };
+    }
+  };
+
+  const loginWithMagicLink = async (token: string) => {
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+      const response = await fetch(`${API_URL}/auth/magic-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+
+      const resData = await response.json();
+
+      if (!response.ok) {
+        let errorMessage = resData.error?.message || "Invalid or expired magic link.";
+        if (resData.error?.details && Array.isArray(resData.error.details)) {
+          errorMessage = resData.error.details.map((d: any) => d.message).join(". ");
+        }
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+
+      const { accessToken, refreshToken, user: loggedUser } = resData.data;
+
+      // Save credentials in cookies
+      setCookie("accessToken", accessToken, 15 / (24 * 60)); // 15 mins
+      setCookie("refreshToken", refreshToken, 7); // 7 days
+
+      setUser(loggedUser);
+      return { success: true, user: loggedUser };
+    } catch (err) {
+      console.error("Magic login error:", err);
+      return { success: false, error: "Unable to connect to the server." };
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser, sendMagicLink, loginWithMagicLink }}>
       {children}
     </AuthContext.Provider>
   );

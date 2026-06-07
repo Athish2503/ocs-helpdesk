@@ -200,3 +200,207 @@ body {
   animation: skeleton-loading 1.5s infinite linear;
   border-radius: 6px;
 }
+
+/* ── Cyber & Glassmorphism Revamp (Design System v2) ───────────────────────── */
+
+@keyframes float-slow-1 {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-15px) scale(1.05); }
+}
+
+@keyframes float-slow-2 {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(12px) scale(0.95); }
+}
+
+@keyframes error-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(1.08); }
+}
+
+@keyframes pulse-border {
+  0%, 100% { border-color: rgba(95, 192, 249, 0.2); box-shadow: 0 0 10px rgba(95, 192, 249, 0.05); }
+  50% { border-color: rgba(95, 192, 249, 0.5); box-shadow: 0 0 20px rgba(95, 192, 249, 0.2); }
+}
+
+@keyframes scanline-anim {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.animate-float-1 {
+  animation: float-slow-1 8s ease-in-out infinite;
+}
+
+.animate-float-2 {
+  animation: float-slow-2 10s ease-in-out infinite;
+}
+
+.animate-error-shake {
+  animation: error-shake 0.35s ease-in-out;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 4s ease-in-out infinite;
+}
+
+/* Advanced Cyber-Tech Grid */
+.grid-bg {
+  background-image: 
+    linear-gradient(rgba(30, 41, 59, 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(30, 41, 59, 0.3) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: center center;
+}
+
+/* Glassmorphism Card styling */
+.glass-card {
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  box-shadow: 
+    0 4px 30px rgba(0, 0, 0, 0.4),
+    inset 0 1px 1px rgba(255, 255, 255, 0.05),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(95, 192, 249, 0.35), transparent);
+}
+
+/* Glow Orbs background effect */
+.glow-orb-cyan {
+  background: radial-gradient(circle, rgba(95, 192, 249, 0.18) 0%, rgba(95, 192, 249, 0) 70%);
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+.glow-orb-indigo {
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0) 70%);
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+/* Custom premium input fields */
+.glass-input-container {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.glass-input {
+  display: block;
+  width: 100%;
+  height: 48px;
+  padding: 0 16px 0 44px;
+  font-size: 14px;
+  background: rgba(3, 7, 18, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  color: #F8FAFC;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-input:focus {
+  border-color: rgba(95, 192, 249, 0.8);
+  background: rgba(3, 7, 18, 0.85);
+  box-shadow: 
+    0 0 0 1px rgba(95, 192, 249, 0.8),
+    0 0 15px rgba(95, 192, 249, 0.2);
+  outline: none;
+}
+
+.glass-input:focus ~ svg {
+  color: var(--primary-500);
+}
+
+/* Cybernetic Neon CTA Button */
+.btn-cyber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  padding: 0 24px;
+  background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
+  color: #020617;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.025em;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(95, 192, 249, 0.35);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-cyber:hover {
+  transform: translateY(-1px);
+  box-shadow: 
+    0 6px 20px rgba(95, 192, 249, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.2);
+  filter: brightness(1.05);
+}
+
+.btn-cyber:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 8px rgba(95, 192, 249, 0.3);
+}
+
+.btn-cyber::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+  transition: all 0.5s ease;
+}
+
+.btn-cyber:hover::after {
+  left: 100%;
+}
+
+.btn-cyber:disabled {
+  background: rgba(30, 41, 59, 0.5);
+  color: var(--text-muted);
+  box-shadow: none;
+  transform: none;
+  cursor: not-allowed;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Micro-scanline active visual effect for loading cards */
+.scanline-overlay {
+  position: relative;
+  overflow: hidden;
+}
+
+.scanline-overlay::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  z-index: 2;
+  background-size: 100% 2px, 3px 100%;
+  pointer-events: none;
+}
+

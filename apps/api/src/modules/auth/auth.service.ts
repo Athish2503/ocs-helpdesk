@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { prisma } from "../../config/prisma.js";
 import { hashPassword, verifyPassword } from "../../utils/password.js";
 import {
@@ -8,7 +9,8 @@ import {
 } from "../../utils/jwt.js";
 import type { Role } from "../../generated/prisma/enums.js";
 import type { AuthResponse, UserPublic } from "./auth.types.js";
-import type { RegisterInput, LoginInput } from "./auth.schemas.js";
+import type { RegisterInput, LoginInput, RequestMagicLinkInput } from "./auth.schemas.js";
+import { sendMagicLinkEmail } from "../../services/email.service.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -46,7 +48,7 @@ function buildTokens(user: { id: string; email: string; role: Role }) {
 // Register
 // ---------------------------------------------------------------------------
 
-export async function register(input: RegisterInput): Promise<AuthResponse> {
+export async function register(input: RegisterInput): Promise<{ message: string; magicLink?: string }> {
   // 1. Check for existing account
   const existing = await prisma.user.findUnique({ where: { email: input.email } });
   if (existing) {
@@ -58,31 +60,48 @@ export async function register(input: RegisterInput): Promise<AuthResponse> {
   // 2. Hash password
   const passwordHash = await hashPassword(input.password);
 
-  // 3. Create user
-  const user = await prisma.user.create({
+  // 3. Create user (emailVerified defaults to false)
+  await prisma.user.create({
     data: {
       name: input.name,
       email: input.email,
       passwordHash,
       role: "CUSTOMER",
+      emailVerified: false,
     },
   });
 
-  // 4. Issue tokens
-  const { accessToken, refreshToken } = buildTokens(user);
+  // 4. Generate secure token for email verification
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-  // 5. Persist refresh token
-  await prisma.refreshToken.create({
+  // 5. Persist the magic token
+  await prisma.magicToken.create({
     data: {
-      token: refreshToken,
-      userId: user.id,
-      expiresAt: refreshTokenExpiresAt(),
+      token,
+      email: input.email,
+      name: null,
+      expiresAt,
     },
   });
+
+  // 6. Compose verification URL pointing to the frontend callback page
+  const frontendUrl = process.env["FRONTEND_URL"] || "http://localhost:3000";
+  const magicLink = `${frontendUrl}/auth/callback?token=${token}`;
+
+  // 7. Send verification email
+  await sendMagicLinkEmail(input.email, magicLink, input.name);
+
+  // In development, return the link in the response body for easier manual verification
+  if (process.env["NODE_ENV"] === "development") {
+    return {
+      message: "Registration successful. Verification email sent (logged to console).",
+      magicLink,
+    };
+  }
 
   return {
-    user: toPublicUser(user),
-    tokens: { accessToken, refreshToken },
+    message: "Registration successful. Please check your inbox to verify your email.",
   };
 }
 
@@ -101,10 +120,23 @@ export async function login(input: LoginInput): Promise<AuthResponse> {
   if (!user) throw invalidCredentials;
 
   // 2. Verify password
+  if (!user.passwordHash) {
+    const err = new Error("This account is passwordless. Please sign in using Magic Link.") as Error & { statusCode: number };
+    err.statusCode = 401;
+    throw err;
+  }
+
   const passwordValid = await verifyPassword(input.password, user.passwordHash);
   if (!passwordValid) throw invalidCredentials;
 
-  // 3. Ensure account is active
+  // 3. Ensure email is verified
+  if (!user.emailVerified) {
+    const err = new Error("Please verify your email address before logging in. Check your inbox for the verification link.") as Error & { statusCode: number };
+    err.statusCode = 403;
+    throw err;
+  }
+
+  // 4. Ensure account is active
   if (!user.isActive) {
     const err = new Error("Your account has been deactivated. Please contact support.") as Error & { statusCode: number };
     err.statusCode = 403;
@@ -196,3 +228,132 @@ export async function logout(token: string): Promise<void> {
 export async function logoutAll(userId: string): Promise<void> {
   await prisma.refreshToken.deleteMany({ where: { userId } });
 }
+
+// ---------------------------------------------------------------------------
+// Magic Link Actions
+// ---------------------------------------------------------------------------
+
+export async function requestMagicLink(
+  input: RequestMagicLinkInput
+): Promise<{ message: string; magicLink?: string }> {
+  // 1. Check if it's register vs login
+  const existingUser = await prisma.user.findUnique({ where: { email: input.email } });
+
+  // If registering, name is required
+  if (!existingUser && !input.name) {
+    const error = new Error("Account does not exist. Please register by providing your name.") as Error & { statusCode: number };
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (existingUser && input.name) {
+    const error = new Error("An account with this email already exists. Please sign in instead.") as Error & { statusCode: number };
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // 2. Generate secure token
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+  // 3. Persist the magic token
+  await prisma.magicToken.create({
+    data: {
+      token,
+      email: input.email,
+      name: input.name || null,
+      expiresAt,
+    },
+  });
+
+  // 4. Compose frontend callback url
+  const frontendUrl = process.env["FRONTEND_URL"] || "http://localhost:3000";
+  const magicLink = `${frontendUrl}/auth/callback?token=${token}`;
+
+  // 5. Send email
+  await sendMagicLinkEmail(input.email, magicLink, input.name || existingUser?.name);
+
+  // In development, return the link in the response body for easier manual verification
+  if (process.env["NODE_ENV"] === "development") {
+    return {
+      message: "Magic link sent successfully (logged to console)",
+      magicLink,
+    };
+  }
+
+  return {
+    message: "Magic link sent successfully. Please check your inbox.",
+  };
+}
+
+export async function magicLogin(token: string): Promise<AuthResponse> {
+  // 1. Retrieve the token details
+  const magicToken = await prisma.magicToken.findUnique({ where: { token } });
+  if (!magicToken) {
+    const err = new Error("Invalid or expired magic link token") as Error & { statusCode: number };
+    err.statusCode = 401;
+    throw err;
+  }
+
+  // 2. Check expiration
+  if (magicToken.expiresAt < new Date()) {
+    // Clean up expired token
+    await prisma.magicToken.delete({ where: { id: magicToken.id } }).catch(() => {});
+    const err = new Error("This magic link has expired. Please request a new one.") as Error & { statusCode: number };
+    err.statusCode = 401;
+    throw err;
+  }
+
+  // Consume the token immediately (single-use constraint)
+  await prisma.magicToken.delete({ where: { id: magicToken.id } });
+
+  // 3. Find or create the user
+  let user = await prisma.user.findUnique({ where: { email: magicToken.email } });
+
+  if (!user) {
+    // Must be registration flow. Name should be present, otherwise fallback
+    const name = magicToken.name || magicToken.email.split("@")[0] || "User";
+    user = await prisma.user.create({
+      data: {
+        name,
+        email: magicToken.email,
+        passwordHash: null, // Passwordless
+        role: "CUSTOMER",
+        emailVerified: true,
+      },
+    });
+  } else {
+    // If user exists, ensure they are active
+    if (!user.isActive) {
+      const err = new Error("Your account has been deactivated. Please contact support.") as Error & { statusCode: number };
+      err.statusCode = 403;
+      throw err;
+    }
+
+    // Mark email as verified if it wasn't
+    if (!user.emailVerified) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerified: true },
+      });
+    }
+  }
+
+  // 4. Issue tokens
+  const { accessToken, refreshToken } = buildTokens(user);
+
+  // 5. Persist refresh token
+  await prisma.refreshToken.create({
+    data: {
+      token: refreshToken,
+      userId: user.id,
+      expiresAt: refreshTokenExpiresAt(),
+    },
+  });
+
+  return {
+    user: toPublicUser(user),
+    tokens: { accessToken, refreshToken },
+  };
+}
+

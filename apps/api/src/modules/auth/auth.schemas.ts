@@ -56,3 +56,32 @@ export const refreshSchema = z.object({
 });
 
 export type RefreshInput = z.infer<typeof refreshSchema>;
+
+// ---------------------------------------------------------------------------
+// Magic Link
+// ---------------------------------------------------------------------------
+
+export const requestMagicLinkSchema = z.object({
+  email: z
+    .string({ error: "Email is required" })
+    .trim()
+    .toLowerCase()
+    .email("Please provide a valid email address"),
+  name: z
+    .string()
+    .trim()
+    .min(2, "Name must be at least 2 characters")
+    .max(100, "Name must be at most 100 characters")
+    .optional(),
+});
+
+export type RequestMagicLinkInput = z.infer<typeof requestMagicLinkSchema>;
+
+export const magicLoginSchema = z.object({
+  token: z
+    .string({ error: "Magic token is required" })
+    .min(1, "Magic token is required"),
+});
+
+export type MagicLoginInput = z.infer<typeof magicLoginSchema>;
+

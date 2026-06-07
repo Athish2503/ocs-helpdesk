@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { registerSchema, loginSchema, refreshSchema } from "./auth.schemas.js";
+import { registerSchema, loginSchema, refreshSchema, requestMagicLinkSchema, magicLoginSchema } from "./auth.schemas.js";
 import * as AuthService from "./auth.service.js";
 
 // ---------------------------------------------------------------------------
@@ -79,3 +79,32 @@ export async function logoutHandler(req: Request, res: Response, next: NextFunct
     next(err);
   }
 }
+
+// ---------------------------------------------------------------------------
+// POST /api/auth/magic-link
+// ---------------------------------------------------------------------------
+
+export async function requestMagicLinkHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const input = requestMagicLinkSchema.parse(req.body);
+    const result = await AuthService.requestMagicLink(input);
+    ok(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/auth/magic-login
+// ---------------------------------------------------------------------------
+
+export async function magicLoginHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { token } = magicLoginSchema.parse(req.body);
+    const result = await AuthService.magicLogin(token);
+    ok(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+

@@ -313,6 +313,117 @@ const openApiSpecification = {
         },
       },
     },
+    "/api/auth/magic-link": {
+      post: {
+        summary: "Request a magic link for registration or login",
+        tags: ["Authentication"],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["email"],
+                properties: {
+                  email: {
+                    type: "string",
+                    format: "email",
+                    example: "customer@example.com",
+                  },
+                  name: {
+                    type: "string",
+                    example: "Jane Doe",
+                    description: "Required for registration; omit for login",
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "Magic link sent successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "object",
+                      properties: {
+                        message: { type: "string", example: "Magic link sent successfully. Please check your inbox." },
+                        magicLink: { type: "string", example: "http://localhost:3000/auth/callback?token=..." },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: "Validation error or invalid action type",
+          },
+        },
+      },
+    },
+    "/api/auth/magic-login": {
+      post: {
+        summary: "Verify magic link token and log the user in",
+        tags: ["Authentication"],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["token"],
+                properties: {
+                  token: {
+                    type: "string",
+                    example: "6c2bc4a0...",
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "Login successful via magic link",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "object",
+                      properties: {
+                        user: {
+                          type: "object",
+                          properties: {
+                            id: { type: "string", example: "cm0..." },
+                            name: { type: "string", example: "Jane Doe" },
+                            email: { type: "string", example: "customer@example.com" },
+                            role: { type: "string", example: "CUSTOMER" },
+                          },
+                        },
+                        accessToken: { type: "string", example: "eyJhbG..." },
+                        refreshToken: { type: "string", example: "eyJhbG..." },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: {
+            description: "Invalid or expired token",
+          },
+        },
+      },
+    },
   },
   components: {
     securitySchemes: {
