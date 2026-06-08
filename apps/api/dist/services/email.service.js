@@ -64,7 +64,7 @@ async function sendMagicLinkEmail(email, magicLink, name) {
     const text = `
 ${greeting}
 
-You requested a secure magic link to sign in or sign up to OCS Helpdesk.
+ Sign in to OCS Helpdesk.
 
 Click the link below to verify your email and access your account:
 ${magicLink}
@@ -76,11 +76,11 @@ If you did not request this email, you can safely ignore it.
     const html = `
     <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
       <div style="text-align: center; margin-bottom: 24px;">
-        <span style="font-size: 24px; font-weight: bold; color: #0f172a;">Ω OCS Helpdesk</span>
+        <span style="font-size: 24px; font-weight: bold; color: #0f172a;">OCS Helpdesk</span>
       </div>
       <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 16px; color: #0f172a;">${greeting}</h2>
       <p style="font-size: 15px; line-height: 24px; margin-bottom: 24px; color: #475569;">
-        You requested a secure magic link to sign in or register to OCS Helpdesk. Click the button below to log in directly.
+        You requested a secure verification link to sign in or register to OCS Helpdesk. Click the button below to log in directly.
       </p>
       <div style="text-align: center; margin-bottom: 24px;">
         <a href="${magicLink}" style="display: inline-block; background-color: #0ea5e9; color: #ffffff; font-weight: 600; font-size: 15px; padding: 12px 32px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(14, 165, 233, 0.1), 0 2px 4px -2px rgba(14, 165, 233, 0.1);">

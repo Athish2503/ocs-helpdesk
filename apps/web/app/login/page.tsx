@@ -5,13 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import { 
+  Ticket,
   Mail, 
   Lock, 
   Eye, 
   EyeOff, 
   AlertCircle, 
   Loader2,
-  Terminal,
   ArrowRight
 } from "lucide-react";
 
@@ -80,55 +80,97 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#030712] text-[#F8FAFC] flex flex-col justify-center items-center p-6 selection:bg-[#5FC0F9]/30 relative overflow-hidden grid-bg">
-      {/* Decorative Glow Orbs */}
-      <div className="absolute top-1/4 left-1/4 w-[350px] h-[350px] glow-orb-cyan rounded-full animate-float-1" />
-      <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] glow-orb-indigo rounded-full animate-float-2" />
-
-      {/* Main Container */}
-      <div className="w-full max-w-[420px] z-10">
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row text-slate-800 selection:bg-[#38b1f7]/10 selection:text-[#005d89]">
+      {/* Left Panel - Hero Branding */}
+      <div className="hidden md:flex md:w-[45%] bg-[#38b1f7] text-white flex-col justify-between p-12 lg:p-16 relative overflow-hidden select-none">
+        {/* Subtle Background Radial Glow */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_60%)] pointer-events-none" />
         
-        {/* Portal Home Navigation */}
-        <div className="mb-6 flex justify-start">
-          <Link href="/" className="inline-flex items-center space-x-2 text-xs font-semibold text-[#94A3B8] hover:text-[#5FC0F9] transition-colors group">
-            <span className="p-1.5 rounded-md bg-[#0F172A] border border-[#1E293B] group-hover:border-[#5FC0F9]/40 group-hover:bg-[#5FC0F9]/5 transition-all">
-              <Terminal className="w-3.5 h-3.5" />
-            </span>
-            <span>Return to Main Terminal</span>
-          </Link>
+        {/* Logo */}
+        <Link href="/">
+        <div className="flex items-center space-x-3 z-10 cursor-pointer">
+          <div className="w-9 h-9 bg-white flex items-center justify-center rounded-lg shadow-md">
+            <Ticket className="w-5.5 h-5.5 text-[#38b1f7]" />
+          </div>
+          <span className="font-extrabold text-xl tracking-tight text-white font-display" >OCS Helpdesk</span>
         </div>
+        </Link>
 
-        {/* Logo and Greeting Header */}
-        <div className="flex flex-col items-center text-center mb-8">
-          <Link href="/" className="w-12 h-12 rounded-xl bg-gradient-to-tr from-[#0ea5e9] to-[#6366f1] flex items-center justify-center shadow-[0_0_20px_rgba(14,165,233,0.3)] hover:scale-105 transition-transform duration-200 mb-4">
-            <span className="font-black text-white text-lg tracking-wider">Ω</span>
-          </Link>
-          <h1 className="font-extrabold text-2xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-[#F8FAFC] to-[#CBD5E1]">
-            Sign in to Desk
+        {/* Marketing Copy */}
+        <div className="my-auto space-y-6 z-10 max-w-md">
+          <h1 className="text-3xl lg:text-4xl xl:text-5xl font-extrabold tracking-tight leading-[1.15] text-white font-display">
+            Elevate your enterprise support.
           </h1>
-          <p className="text-xs text-[#94A3B8] mt-1.5 font-medium">
-            Enter security credentials to access OCS Helpdesk
+          <p className="text-sm lg:text-base text-slate-100/90  leading-relaxed font-body">
+           Create, Track, and Resolve Tickets with Ease — Powered by AI and Supported by Our Expert Team.
           </p>
+          
+          {/* Agent Avatar Group Stack */}
+          {/* <div className="flex items-center space-x-4 pt-4">
+            <div className="flex -space-x-3.5">
+              <Image 
+                className="inline-block h-10 w-10 rounded-full ring-2 ring-[#005d89] object-cover" 
+                src="/agent-1.png" 
+                alt="Customer support agent" 
+                width={40}
+                height={40}
+              />
+              <Image 
+                className="inline-block h-10 w-10 rounded-full ring-2 ring-[#005d89] object-cover" 
+                src="/agent-2.png" 
+                alt="IT support specialist" 
+                width={40}
+                height={40}
+              />
+              <Image 
+                className="inline-block h-10 w-10 rounded-full ring-2 ring-[#005d89] object-cover" 
+                src="/agent-3.png" 
+                alt="Helpdesk agent coordinator" 
+                width={40}
+                height={40}
+              />
+            </div>
+            <span className="text-xs font-semibold text-white/90 font-body">
+              Joined by 10k+ agents worldwide
+            </span>
+          </div> */}
         </div>
 
-        {/* Glassmorphic Form Card */}
-        <div className="glass-card p-8 md:p-10 shadow-2xl relative">
+        {/* Footer info */}
+        <div className="text-xs text-white/90 z-10 font-body">
+          &copy; {new Date().getFullYear()} OCS Helpdesk. All rights reserved.
+        </div>
+      </div>
+
+      {/* Right Panel - Login Form */}
+      <div className="w-full md:w-[55%] flex flex-col justify-center items-center p-6 sm:p-10 md:p-16 lg:p-24 bg-white min-h-screen">
+        <div className="w-full max-w-[420px] space-y-8">
+          
+          {/* Form Header */}
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-display">
+              Welcome back
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 mt-2 font-body">
+              Please enter your credentials to access your dashboard.
+            </p>
+          </div>
+
+          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
-            
-            {/* Animated Error Alert */}
             {error && (
-              <div className="p-4 rounded-xl bg-red-950/40 border border-red-500/20 text-[#FEF3F2] text-xs font-medium flex items-start space-x-2.5 animate-error-shake shadow-[0_4px_12px_rgba(239,68,68,0.1)]">
-                <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-start space-x-2.5 animate-error-shake shadow-sm">
+                <AlertCircle className="w-4.5 h-4.5 text-red-500 flex-shrink-0 mt-0.5" />
                 <span>{error}</span>
               </div>
             )}
 
-            {/* Email Field */}
+            {/* Email Address */}
             <div className="space-y-2">
-              <label htmlFor="email" className="block text-[11px] font-bold uppercase tracking-wider text-[#94A3B8]">
-                Console Identity / Email
+              <label htmlFor="email" className="block text-xs font-bold uppercase tracking-wider text-slate-500 font-display">
+                Email Address
               </label>
-              <div className="glass-input-container">
+              <div className="relative flex items-center">
                 <input
                   id="email"
                   type="email"
@@ -137,20 +179,27 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@company.com"
-                  className="glass-input"
+                  className="w-full h-12 pl-11 pr-4 bg-slate-50 hover:bg-slate-100/60 focus:bg-white text-slate-900 text-sm font-medium border border-slate-200 focus:border-[#38b1f7] focus:ring-1 focus:ring-[#38b1f7] rounded-xl outline-none transition-all duration-200 disabled:opacity-50"
                 />
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[#64748B] w-4 h-4 transition-colors pointer-events-none" />
+                <Mail className="absolute left-4 text-slate-400 w-4.5 h-4.5 pointer-events-none" />
               </div>
             </div>
 
-            {/* Password Field */}
+            {/* Password */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label htmlFor="password" className="block text-[11px] font-bold uppercase tracking-wider text-[#94A3B8]">
-                  System Access Code
+                <label htmlFor="password" className="block text-xs font-bold uppercase tracking-wider text-slate-500 font-display">
+                  Password
                 </label>
+                <Link 
+                  href="#" 
+                  onClick={(e) => e.preventDefault()}
+                  className="text-xs font-semibold text-[#005d89] hover:underline"
+                >
+                  Forgot password?
+                </Link>
               </div>
-              <div className="glass-input-container">
+              <div className="relative flex items-center">
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
@@ -159,54 +208,63 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="glass-input pr-12"
+                  className="w-full h-12 pl-11 pr-12 bg-slate-50 hover:bg-slate-100/60 focus:bg-white text-slate-900 text-sm font-medium border border-slate-200 focus:border-[#38b1f7] focus:ring-1 focus:ring-[#38b1f7] rounded-xl outline-none transition-all duration-200 disabled:opacity-50"
                 />
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#64748B] w-4 h-4 transition-colors pointer-events-none" />
+                <Lock className="absolute left-4 text-slate-400 w-4.5 h-4.5 pointer-events-none" />
                 <button
                   type="button"
                   tabIndex={-1}
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#F8FAFC] transition-colors focus:outline-none p-1 rounded-md"
+                  className="absolute right-4 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none p-1 rounded-md"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
                 </button>
               </div>
+            </div>
+
+            {/* Remember Device */}
+            <div className="flex items-center">
+              <input
+                id="remember-device"
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-[#005d89] focus:ring-[#005d89] cursor-pointer"
+              />
+              <label htmlFor="remember-device" className="ml-2 block text-xs text-slate-600 font-semibold select-none cursor-pointer">
+                Remember this device for 30 days
+              </label>
             </div>
 
             {/* Submit CTA */}
             <button
               type="submit"
               disabled={isSubmitting}
-              className="btn-cyber w-full flex items-center justify-center space-x-2"
+              className="w-full h-12 bg-[#38b1f7] hover:bg-[#004b70] text-white font-bold rounded-xl flex items-center justify-center space-x-2 shadow-lg shadow-[#005d89]/25 hover:shadow-xl hover:shadow-[#005d89]/35 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="w-4.5 h-4.5 animate-spin text-slate-900" />
-                  <span className="text-slate-900">Establishing Link...</span>
+                  <Loader2 className="w-4.5 h-4.5 animate-spin text-white" />
+                  <span>Signing in...</span>
                 </>
               ) : (
                 <>
-                  <span>Initialize Connection</span>
-                  <ArrowRight className="w-4 h-4 text-slate-900 transition-transform group-hover:translate-x-1" />
+                  <span>Sign in to Dashboard</span>
+                  <ArrowRight className="w-4.5 h-4.5 text-white" />
                 </>
               )}
             </button>
           </form>
 
-          {/* Registration Redirect Link */}
-          <div className="mt-8 pt-6 border-t border-[#1E293B]/60 text-center text-xs text-[#94A3B8]">
-            Need credentials?{" "}
-            <Link href="/register" className="font-bold text-[#5FC0F9] hover:text-[#38B1F7] hover:underline underline-offset-4 transition-colors">
-              Request access key
+          {/* Form Footer */}
+          <div className="pt-6 border-t border-slate-100 text-center text-xs text-slate-500 font-body">
+            {"Don't have an account?"}{" "}
+            <Link 
+              href="/register" 
+              className="font-bold text-[#38b1f7] hover:underline"
+            >
+              Sign up 
             </Link>
           </div>
         </div>
-
-        {/* Small security footer */}
-        <p className="text-center text-[10px] text-[#64748B] mt-8 font-mono">
-          SECURE PROTOCOL // SSL-465 // IP TRACED
-        </p>
-
       </div>
     </div>
   );
