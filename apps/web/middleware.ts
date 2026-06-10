@@ -35,7 +35,7 @@ export async function middleware(request: NextRequest) {
   let accessToken = accessTokenCookie?.value || null;
   let refreshToken = refreshTokenCookie?.value || null;
   let decodedUser: JwtPayload | null = null;
-  let newCookiesToSet: { accessToken: string; refreshToken: string } | null = null;
+  let newCookiesToSet: { accessToken: string; refreshToken?: string } | null = null;
 
   // 1. Attempt to decode access token if present and not expired
   if (accessToken) {
@@ -61,7 +61,7 @@ export async function middleware(request: NextRequest) {
         const resData = await refreshResponse.json();
         const tokens = resData.data;
         accessToken = tokens.accessToken;
-        refreshToken = tokens.refreshToken;
+        refreshToken = tokens.refreshToken || null;
         decodedUser = decodeJwt(accessToken!);
         newCookiesToSet = {
           accessToken: tokens.accessToken,
@@ -117,18 +117,21 @@ export async function middleware(request: NextRequest) {
   // 5. Proceed and append new cookies if refreshed successfully
   const response = NextResponse.next();
   if (newCookiesToSet) {
+    const isSecure = request.nextUrl.protocol === "https:";
     response.cookies.set("accessToken", newCookiesToSet.accessToken, {
       path: "/",
       maxAge: 900, // 15 minutes
       sameSite: "lax",
-      secure: true,
+      secure: isSecure,
     });
-    response.cookies.set("refreshToken", newCookiesToSet.refreshToken, {
-      path: "/",
-      maxAge: 7 * 24 * 60 * 60, // 7 days
-      sameSite: "lax",
-      secure: true,
-    });
+    if (newCookiesToSet.refreshToken) {
+      response.cookies.set("refreshToken", newCookiesToSet.refreshToken, {
+        path: "/",
+        maxAge: 7 * 24 * 60 * 60, // 7 days
+        sameSite: "lax",
+        secure: isSecure,
+      });
+    }
   }
 
   return response;

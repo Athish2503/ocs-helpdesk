@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const auth_routes_js_1 = __importDefault(require("./modules/auth/auth.routes.js"));
+const categories_routes_js_1 = __importDefault(require("./modules/categories/categories.routes.js"));
+const tickets_routes_js_1 = __importDefault(require("./modules/tickets/tickets.routes.js"));
 const error_middleware_js_1 = require("./middleware/error.middleware.js");
 const swagger_js_1 = require("./config/swagger.js");
 const app = (0, express_1.default)();
@@ -27,6 +29,8 @@ app.get("/health", (_, res) => {
 // API routes
 // ---------------------------------------------------------------------------
 app.use("/api/auth", auth_routes_js_1.default);
+app.use("/api/categories", categories_routes_js_1.default);
+app.use("/api/tickets", tickets_routes_js_1.default);
 // ---------------------------------------------------------------------------
 // 404 handler — must be after all routes
 // ---------------------------------------------------------------------------

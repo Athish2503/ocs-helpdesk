@@ -18,21 +18,9 @@ export async function fetchWithAuth(path: string, options: FetchOptions = {}): P
 
   let token = options.token;
 
-  // If token is not explicitly provided, try to load it from cookies
+  // If token is not explicitly provided, try to load it from client cookies
   if (!token) {
-    if (typeof window === "undefined") {
-      // Server-side: Dynamically load Next.js headers to avoid compilation issues on client side
-      try {
-        const { cookies } = await import("next/headers");
-        const cookieStore = await cookies();
-        token = cookieStore.get("accessToken")?.value;
-      } catch {
-        // cookies() may throw if evaluated in a static rendering context
-      }
-    } else {
-      // Client-side
-      token = getCookie("accessToken") || undefined;
-    }
+    token = getCookie("accessToken") || undefined;
   }
 
   if (token) {

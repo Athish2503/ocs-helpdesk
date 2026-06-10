@@ -6,7 +6,10 @@ Phase 1
 - Dashboard
 
 Phase 2
-
+- Admin
+- Team Members Assigning
+- Ticket Categorization
+- Ticket Status
 - Knowledge Base
 - Search
 

@@ -83,7 +83,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           // Save new tokens
           setCookie("accessToken", newAccess, 15 / (24 * 60)); // 15 mins
-          setCookie("refreshToken", newRefresh, 7); // 7 days
+          if (newRefresh) {
+            setCookie("refreshToken", newRefresh, 7); // 7 days
+          }
 
           const profile = await fetchUserProfile(newAccess);
           if (profile) {
@@ -139,7 +141,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      const { accessToken, refreshToken, user: loggedUser } = resData.data;
+      const { tokens, user: loggedUser } = resData.data;
+      const { accessToken, refreshToken } = tokens;
 
       // Save credentials in cookies
       setCookie("accessToken", accessToken, 15 / (24 * 60)); // 15 mins
@@ -260,7 +263,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      const { accessToken, refreshToken, user: loggedUser } = resData.data;
+      const { tokens, user: loggedUser } = resData.data;
+      const { accessToken, refreshToken } = tokens;
 
       // Save credentials in cookies
       setCookie("accessToken", accessToken, 15 / (24 * 60)); // 15 mins

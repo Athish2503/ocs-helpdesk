@@ -3,9 +3,21 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import app from "./app.js";
+import { seedDefaultCategories } from "./utils/seed.js";
 
 const PORT = process.env["PORT"] ?? 4000;
 
-app.listen(PORT, () => {
-  console.log(`✅  API running on http://localhost:${PORT}`);
-});
+async function startServer() {
+  try {
+    // Seed default categories
+    await seedDefaultCategories();
+  } catch (err) {
+    console.error("❌ Database seeding failed:", err);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`✅  API running on http://localhost:${PORT}`);
+  });
+}
+
+startServer();

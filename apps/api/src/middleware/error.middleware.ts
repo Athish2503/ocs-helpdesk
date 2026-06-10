@@ -22,6 +22,7 @@ export function errorHandler(
 ): void {
   // ── Zod validation errors ────────────────────────────────────────────────
   if (err instanceof ZodError) {
+    console.log("[ZodError] Validation failed details:", JSON.stringify(err.issues, null, 2));
     res.status(422).json({
       success: false,
       error: {
