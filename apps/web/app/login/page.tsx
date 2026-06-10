@@ -192,8 +192,7 @@ export default function LoginPage() {
                   Password
                 </label>
                 <Link 
-                  href="#" 
-                  onClick={(e) => e.preventDefault()}
+                  href="/forgot-password" 
                   className="text-xs font-semibold text-[#005d89] hover:underline"
                 >
                   Forgot password?

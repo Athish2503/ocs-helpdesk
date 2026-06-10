@@ -67,6 +67,16 @@ model MagicToken {
   @@map("magic_tokens")
 }
 
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  email     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("password_reset_tokens")
+}
+
 enum TicketStatus {
   OPEN
   IN_PROGRESS

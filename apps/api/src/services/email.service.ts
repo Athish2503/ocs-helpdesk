@@ -84,11 +84,11 @@ If you did not request this email, you can safely ignore it.
   const html = `
     <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
       <div style="text-align: center; margin-bottom: 24px;">
-        <span style="font-size: 24px; font-weight: bold; color: #0f172a;">Ω OCS Helpdesk</span>
+        <span style="font-size: 24px; font-weight: bold; color: #0f172a;">OCS Helpdesk</span>
       </div>
       <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 16px; color: #0f172a;">${greeting}</h2>
       <p style="font-size: 15px; line-height: 24px; margin-bottom: 24px; color: #475569;">
-        You requested a secure magic link to sign in or register to OCS Helpdesk. Click the button below to log in directly.
+        You requested a verification link to sign in to OCS Helpdesk. Click the button below to log in directly.
       </p>
       <div style="text-align: center; margin-bottom: 24px;">
         <a href="${magicLink}" style="display: inline-block; background-color: #0ea5e9; color: #ffffff; font-weight: 600; font-size: 15px; padding: 12px 32px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(14, 165, 233, 0.1), 0 2px 4px -2px rgba(14, 165, 233, 0.1);">
@@ -111,6 +111,57 @@ If you did not request this email, you can safely ignore it.
   await sendEmail({
     to: email,
     subject: "Sign in to OCS Helpdesk",
+    html,
+    text,
+  });
+}
+
+export async function sendPasswordResetEmail(email: string, resetLink: string, name?: string): Promise<void> {
+  const greeting = name ? `Hello ${name},` : "Hello,";
+
+  const text = `
+${greeting}
+
+Reset your OCS Helpdesk password.
+
+Click the link below to reset your password:
+${resetLink}
+
+This link will expire in 1 hour and can only be used once.
+
+If you did not request a password reset, you can safely ignore this email.
+  `.trim();
+
+  const html = `
+    <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <span style="font-size: 24px; font-weight: bold; color: #0f172a;">OCS Helpdesk</span>
+      </div>
+      <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 16px; color: #0f172a;">${greeting}</h2>
+      <p style="font-size: 15px; line-height: 24px; margin-bottom: 24px; color: #475569;">
+        We received a request to reset the password for your OCS Helpdesk account. Click the button below to set a new password.
+      </p>
+      <div style="text-align: center; margin-bottom: 24px;">
+        <a href="${resetLink}" style="display: inline-block; background-color: #0ea5e9; color: #ffffff; font-weight: 600; font-size: 15px; padding: 12px 32px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(14, 165, 233, 0.1), 0 2px 4px -2px rgba(14, 165, 233, 0.1);">
+          Reset Password
+        </a>
+      </div>
+      <p style="font-size: 13px; line-height: 20px; color: #64748b; margin-bottom: 24px;">
+        This password reset link is valid for 1 hour and will expire after its first use.
+      </p>
+      <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 12px; color: #94a3b8;">
+        If you didn't request a password reset, you can safely ignore this email.
+        <br/><br/>
+        Or copy and paste this link in your browser:
+        <br/>
+        <a href="${resetLink}" style="color: #0ea5e9; text-decoration: underline; word-break: break-all;">${resetLink}</a>
+      </div>
+    </div>
+  `;
+
+  await sendEmail({
+    to: email,
+    subject: "Reset your OCS Helpdesk password",
     html,
     text,
   });

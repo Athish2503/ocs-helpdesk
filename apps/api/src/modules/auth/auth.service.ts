@@ -9,8 +9,8 @@ import {
 } from "../../utils/jwt.js";
 import type { Role } from "../../generated/prisma/enums.js";
 import type { AuthResponse, UserPublic } from "./auth.types.js";
-import type { RegisterInput, LoginInput, RequestMagicLinkInput } from "./auth.schemas.js";
-import { sendMagicLinkEmail } from "../../services/email.service.js";
+import type { RegisterInput, LoginInput, RequestMagicLinkInput, ForgotPasswordInput, ResetPasswordInput } from "./auth.schemas.js";
+import { sendMagicLinkEmail, sendPasswordResetEmail } from "../../services/email.service.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -355,5 +355,102 @@ export async function magicLogin(token: string): Promise<AuthResponse> {
     user: toPublicUser(user),
     tokens: { accessToken, refreshToken },
   };
+}
+
+export async function forgotPassword(
+  input: ForgotPasswordInput
+): Promise<{ message: string; resetLink?: string }> {
+  // 1. Check if user exists
+  const user = await prisma.user.findUnique({ where: { email: input.email } });
+
+  // For security, return a success message even if the user doesn't exist
+  // to prevent email enumeration.
+  const successResponse = {
+    message: "If an account exists with this email, a password reset link has been sent.",
+  };
+
+  if (!user) {
+    return successResponse;
+  }
+
+  // 2. Generate secure token
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+  // 3. Persist the reset token (delete any existing ones first to prevent clutter)
+  await prisma.passwordResetToken.deleteMany({ where: { email: input.email } });
+  await prisma.passwordResetToken.create({
+    data: {
+      token,
+      email: input.email,
+      expiresAt,
+    },
+  });
+
+  // 4. Compose reset link
+  const frontendUrl = process.env["FRONTEND_URL"] || "http://localhost:3000";
+  const resetLink = `${frontendUrl}/reset-password?token=${token}`;
+
+  // 5. Send email
+  await sendPasswordResetEmail(input.email, resetLink, user.name);
+
+  // In development, return the link in the response body for easier manual verification
+  if (process.env["NODE_ENV"] === "development") {
+    return {
+      message: "If an account exists with this email, a password reset link has been sent (logged to console).",
+      resetLink,
+    };
+  }
+
+  return successResponse;
+}
+
+export async function resetPassword(
+  input: ResetPasswordInput
+): Promise<{ message: string }> {
+  // 1. Retrieve the token record
+  const resetToken = await prisma.passwordResetToken.findUnique({
+    where: { token: input.token },
+  });
+
+  if (!resetToken) {
+    const err = new Error("Invalid or expired password reset token") as Error & { statusCode: number };
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // 2. Check expiration
+  if (resetToken.expiresAt < new Date()) {
+    await prisma.passwordResetToken.delete({ where: { id: resetToken.id } }).catch(() => {});
+    const err = new Error("This password reset link has expired. Please request a new one.") as Error & { statusCode: number };
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // 3. Find user
+  const user = await prisma.user.findUnique({ where: { email: resetToken.email } });
+  if (!user) {
+    const err = new Error("User not found") as Error & { statusCode: number };
+    err.statusCode = 404;
+    throw err;
+  }
+
+  // 4. Hash new password & update user password + make sure email is verified
+  const passwordHash = await hashPassword(input.password);
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        emailVerified: true, // Resetting password counts as email verification if they weren't verified
+      },
+    }),
+    // Consume the token (single use)
+    prisma.passwordResetToken.delete({ where: { id: resetToken.id } }),
+    // Revoke all sessions for security
+    prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
+  ]);
+
+  return { message: "Password reset successful. You can now log in with your new password." };
 }
 
