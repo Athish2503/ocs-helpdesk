@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.magicLoginSchema = exports.requestMagicLinkSchema = exports.refreshSchema = exports.loginSchema = exports.registerSchema = void 0;
+exports.resetPasswordSchema = exports.forgotPasswordSchema = exports.magicLoginSchema = exports.requestMagicLinkSchema = exports.refreshSchema = exports.loginSchema = exports.registerSchema = void 0;
 const zod_1 = require("zod");
 // ---------------------------------------------------------------------------
 // Register
@@ -61,4 +61,24 @@ exports.magicLoginSchema = zod_1.z.object({
     token: zod_1.z
         .string({ error: "Magic token is required" })
         .min(1, "Magic token is required"),
+});
+// ---------------------------------------------------------------------------
+// Forgot Password & Reset Password
+// ---------------------------------------------------------------------------
+exports.forgotPasswordSchema = zod_1.z.object({
+    email: zod_1.z
+        .string({ error: "Email is required" })
+        .trim()
+        .toLowerCase()
+        .email("Please provide a valid email address"),
+});
+exports.resetPasswordSchema = zod_1.z.object({
+    token: zod_1.z
+        .string({ error: "Reset token is required" })
+        .min(1, "Reset token is required"),
+    password: zod_1.z
+        .string({ error: "Password is required" })
+        .min(8, "Password must be at least 8 characters")
+        .max(128, "Password must be at most 128 characters")
+        .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, "Password must contain at least one uppercase letter, one lowercase letter, and one number"),
 });

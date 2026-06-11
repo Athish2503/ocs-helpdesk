@@ -16,6 +16,8 @@ import {
   Lock,
   ChevronRight,
   RefreshCw,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 interface Category {
@@ -62,6 +64,37 @@ interface Ticket {
 
 export default function CustomerDashboard() {
   const { user, logout, loading } = useAuth();
+  
+  // Theme state
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== "undefined") {
+      const savedTheme = localStorage.getItem("theme");
+      if (savedTheme === "dark" || savedTheme === "light") {
+        return savedTheme;
+      }
+    }
+    return "light";
+  });
+
+  useEffect(() => {
+    // Sync theme if it changes in other tabs
+    const handleStorage = () => {
+      const savedTheme = localStorage.getItem("theme");
+      if (savedTheme === "dark" || savedTheme === "light") {
+        setTheme(savedTheme);
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem("theme", newTheme);
+  };
+
+  const isDark = theme === 'dark';
   
   // Navigation tab state
   const [activeTab, setActiveTab] = useState<"dashboard" | "tickets">("dashboard");
@@ -263,68 +296,105 @@ export default function CustomerDashboard() {
   };
 
   const getStatusStyle = (status: Ticket["status"]) => {
-    switch (status) {
-      case "OPEN":
-        return "bg-blue-950/50 text-blue-400 border-blue-500/20";
-      case "IN_PROGRESS":
-        return "bg-amber-950/50 text-amber-400 border-amber-500/20";
-      case "RESOLVED":
-        return "bg-green-950/50 text-green-400 border-green-500/20";
-      case "CLOSED":
-        return "bg-slate-900 text-slate-400 border-slate-700/30";
-      default:
-        return "bg-zinc-800 text-zinc-400 border-zinc-700";
+    if (isDark) {
+      switch (status) {
+        case "OPEN":
+          return "bg-blue-950/50 text-blue-400 border-blue-500/20";
+        case "IN_PROGRESS":
+          return "bg-amber-950/50 text-amber-400 border-amber-500/20";
+        case "RESOLVED":
+          return "bg-green-950/50 text-green-400 border-green-500/20";
+        case "CLOSED":
+          return "bg-slate-900 text-slate-400 border-slate-700/30";
+        default:
+          return "bg-zinc-800 text-zinc-400 border-zinc-700";
+      }
+    } else {
+      switch (status) {
+        case "OPEN":
+          return "bg-blue-50 text-blue-700 border-blue-200";
+        case "IN_PROGRESS":
+          return "bg-amber-50 text-amber-700 border-amber-200";
+        case "RESOLVED":
+          return "bg-green-50 text-green-700 border-green-200";
+        case "CLOSED":
+          return "bg-slate-100 text-slate-600 border-slate-200";
+        default:
+          return "bg-slate-50 text-slate-500 border-slate-200";
+      }
     }
   };
 
   const getPriorityStyle = (priority: Ticket["priority"]) => {
-    switch (priority) {
-      case "URGENT":
-        return "text-red-400 border-red-500/20 bg-red-950/30";
-      case "HIGH":
-        return "text-orange-400 border-orange-500/20 bg-orange-950/30";
-      case "MEDIUM":
-        return "text-yellow-400 border-yellow-500/20 bg-yellow-950/30";
-      case "LOW":
-        return "text-slate-400 border-slate-700/20 bg-slate-800/20";
+    if (isDark) {
+      switch (priority) {
+        case "URGENT":
+          return "text-red-400 border-red-500/20 bg-red-950/30";
+        case "HIGH":
+          return "text-orange-400 border-orange-500/20 bg-orange-950/30";
+        case "MEDIUM":
+          return "text-yellow-400 border-yellow-500/20 bg-yellow-950/30";
+        case "LOW":
+          return "text-slate-400 border-slate-700/20 bg-slate-800/20";
+      }
+    } else {
+      switch (priority) {
+        case "URGENT":
+          return "text-red-700 border-red-200 bg-red-50";
+        case "HIGH":
+          return "text-orange-700 border-orange-200 bg-orange-50";
+        case "MEDIUM":
+          return "text-yellow-700 border-yellow-200 bg-yellow-50";
+        case "LOW":
+          return "text-slate-600 border-slate-200 bg-slate-100/50";
+      }
     }
   };
 
   // ── SKELETON LOADING STATE (Mandated: No full-page blocking spinners) ─────
   if (loading || !user) {
+    const isDarkTheme = typeof window !== "undefined" && localStorage.getItem("theme") === "dark";
+    const sk = isDarkTheme ? "skeleton" : "skeleton-light";
+    
     return (
-      <div className="min-h-screen bg-[#020617] text-[#F8FAFC] flex font-sans select-none">
+      <div className={`min-h-screen flex font-body select-none transition-colors duration-300 ${
+        isDarkTheme ? 'bg-[#020617] text-[#F8FAFC]' : 'bg-[#F8FAFC] text-[#0F172A]'
+      }`}>
         {/* Sidebar Skeleton */}
-        <aside className="w-[280px] bg-[#0F172A] border-r border-[#1E293B] p-6 flex flex-col justify-between hidden md:flex">
+        <aside className={`w-[280px] border-r p-6 flex flex-col justify-between hidden md:flex ${
+          isDarkTheme ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-white border-slate-200/80'
+        }`}>
           <div className="space-y-8">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-lg skeleton"></div>
-              <div className="h-5 w-24 skeleton"></div>
+              <div className={`w-8 h-8 rounded-lg ${sk}`}></div>
+              <div className={`h-5 w-24 ${sk}`}></div>
             </div>
             <div className="space-y-4">
-              <div className="h-10 w-full skeleton"></div>
-              <div className="h-10 w-full skeleton"></div>
-              <div className="h-10 w-full skeleton"></div>
+              <div className={`h-10 w-full ${sk}`}></div>
+              <div className={`h-10 w-full ${sk}`}></div>
+              <div className={`h-10 w-full ${sk}`}></div>
             </div>
           </div>
-          <div className="h-12 w-full skeleton"></div>
+          <div className={`h-12 w-full ${sk}`}></div>
         </aside>
 
         {/* Content Shell Skeleton */}
         <div className="flex-1 flex flex-col">
           {/* Top Bar Skeleton */}
-          <header className="h-[72px] bg-[#0F172A] border-b border-[#1E293B] px-8 flex items-center justify-between">
-            <div className="h-6 w-48 skeleton"></div>
-            <div className="h-8 w-24 skeleton"></div>
+          <header className={`h-[72px] border-b px-8 flex items-center justify-between ${
+            isDarkTheme ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-white border-slate-200/80'
+          }`}>
+            <div className={`h-6 w-48 ${sk}`}></div>
+            <div className={`h-8 w-24 ${sk}`}></div>
           </header>
 
           {/* Main Dashboard Space Skeleton */}
           <main className="flex-grow p-8 max-w-[1440px] w-full mx-auto space-y-6">
-            <div className="h-32 w-full skeleton"></div>
+            <div className={`h-32 w-full ${sk}`}></div>
             <div className="grid md:grid-cols-3 gap-6">
-              <div className="h-44 w-full skeleton"></div>
-              <div className="h-44 w-full skeleton"></div>
-              <div className="h-44 w-full skeleton"></div>
+              <div className={`h-44 w-full ${sk}`}></div>
+              <div className={`h-44 w-full ${sk}`}></div>
+              <div className={`h-44 w-full ${sk}`}></div>
             </div>
           </main>
         </div>
@@ -337,23 +407,35 @@ export default function CustomerDashboard() {
   const resolutionRate = tickets.length > 0 ? Math.round((resolvedTicketsCount / tickets.length) * 100) : 100;
 
   return (
-    <div className="min-h-screen bg-[#020617] text-[#F8FAFC] flex font-sans selection:bg-[#5FC0F9]/30 relative overflow-hidden">
+    <div className={`min-h-screen flex font-body selection:bg-[#38b1f7]/30 relative overflow-hidden transition-colors duration-300 ${
+      isDark ? 'bg-[#020617] text-[#F8FAFC]' : 'bg-[#F8FAFC] text-[#0F172A]'
+    }`}>
       {/* Background cyber grid and glow orbs */}
-      <div className="absolute inset-0 grid-bg opacity-40 pointer-events-none z-0"></div>
-      <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] glow-orb-cyan z-0 animate-float-1"></div>
-      <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] glow-orb-indigo z-0 animate-float-2"></div>
+      <div className={`absolute inset-0 grid-bg pointer-events-none z-0 transition-opacity duration-300 ${
+        isDark ? 'opacity-40' : 'opacity-10'
+      }`}></div>
+      <div className={`absolute top-[-10%] right-[-10%] w-[500px] h-[500px] z-0 animate-float-1 pointer-events-none rounded-full blur-[100px] ${
+        isDark ? 'bg-[#38b1f7]/15' : 'bg-[#38b1f7]/5'
+      }`}></div>
+      <div className={`absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] z-0 animate-float-2 pointer-events-none rounded-full blur-[100px] ${
+        isDark ? 'bg-indigo-500/10' : 'bg-indigo-500/3'
+      }`}></div>
 
       {/* 1. Sidebar Navigation (Width: 280px) */}
-      <aside className="w-[280px] bg-[#0F172A]/70 backdrop-blur-md border-r border-[#1E293B] p-6 flex flex-col justify-between hidden md:flex shrink-0 z-10">
+      <aside className={`w-[280px] border-r p-6 flex flex-col justify-between hidden md:flex shrink-0 z-10 transition-colors duration-300 ${
+        isDark 
+          ? 'bg-[#0F172A]/70 backdrop-blur-md border-[#1E293B] text-[#F8FAFC]' 
+          : 'bg-white/80 backdrop-blur-md border-slate-200/80 text-slate-800'
+      }`}>
         <div className="space-y-8">
           {/* Brand Logo Header */}
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-[#5FC0F9] flex items-center justify-center shadow-[0_0_15px_rgba(95,192,249,0.4)]">
+            <div className="w-8 h-8 rounded-lg bg-[#38b1f7] flex items-center justify-center shadow-[0_0_15px_rgba(56,177,247,0.4)]">
               <span className="font-extrabold text-[#020617] text-md">Ω</span>
             </div>
             <div>
-              <h2 className="font-bold text-sm text-[#F8FAFC]">OCS Helpdesk</h2>
-              <p className="text-[9px] text-[#94A3B8] font-mono tracking-wider uppercase">Portal Client</p>
+              <h2 className={`font-bold text-sm transition-colors ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>OCS Helpdesk</h2>
+              <p className={`text-[9px] font-mono tracking-wider uppercase ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>Portal Client</p>
             </div>
           </div>
 
@@ -363,8 +445,12 @@ export default function CustomerDashboard() {
               onClick={() => { setActiveTab("dashboard"); setSelectedTicketId(null); }}
               className={`w-full h-10 flex items-center justify-between px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
                 activeTab === "dashboard"
-                  ? "bg-[#1E293B]/70 border border-[#5FC0F9]/20 text-[#5FC0F9]"
-                  : "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
+                  ? isDark
+                    ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
+                    : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
+                  : isDark 
+                    ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               }`}
             >
               <div className="flex items-center space-x-2.5">
@@ -377,8 +463,12 @@ export default function CustomerDashboard() {
               onClick={() => { setActiveTab("tickets"); setSelectedTicketId(null); }}
               className={`w-full h-10 flex items-center justify-between px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
                 activeTab === "tickets"
-                  ? "bg-[#1E293B]/70 border border-[#5FC0F9]/20 text-[#5FC0F9]"
-                  : "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
+                  ? isDark
+                    ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
+                    : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
+                  : isDark 
+                    ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               }`}
             >
               <div className="flex items-center space-x-2.5">
@@ -386,7 +476,9 @@ export default function CustomerDashboard() {
                 <span>My Tickets</span>
               </div>
               {activeTicketsCount > 0 && (
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#5FC0F9] text-[#020617] font-bold">
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${
+                  isDark ? 'bg-[#38b1f7] text-[#020617]' : 'bg-[#38b1f7] text-white'
+                }`}>
                   {activeTicketsCount}
                 </span>
               )}
@@ -394,20 +486,26 @@ export default function CustomerDashboard() {
 
             <button
               disabled
-              className="w-full h-10 flex items-center justify-between px-3 rounded-lg text-xs font-semibold tracking-wide text-slate-500 cursor-not-allowed opacity-50"
+              className={`w-full h-10 flex items-center justify-between px-3 rounded-lg text-xs font-semibold tracking-wide cursor-not-allowed opacity-40 ${
+                isDark ? 'text-slate-500' : 'text-slate-400'
+              }`}
             >
               <div className="flex items-center space-x-2.5">
                 <BookOpen className="w-4 h-4" />
                 <span>Knowledge Base</span>
               </div>
-              <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-white/[0.03]">
+              <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded border ${
+                isDark ? 'bg-zinc-900 text-zinc-400 border-white/[0.03]' : 'bg-slate-100 text-slate-500 border-slate-200'
+              }`}>
                 Sprint 2
               </span>
             </button>
 
             <button
               disabled
-              className="w-full h-10 flex items-center justify-between px-3 rounded-lg text-xs font-semibold tracking-wide text-slate-500 cursor-not-allowed opacity-50"
+              className={`w-full h-10 flex items-center justify-between px-3 rounded-lg text-xs font-semibold tracking-wide cursor-not-allowed opacity-40 ${
+                isDark ? 'text-slate-500' : 'text-slate-400'
+              }`}
             >
               <div className="flex items-center space-x-2.5">
                 <Settings className="w-4 h-4" />
@@ -418,19 +516,29 @@ export default function CustomerDashboard() {
         </div>
 
         {/* Sidebar Bottom Profile Section */}
-        <div className="p-3 rounded-xl bg-[#111827]/80 border border-[#1E293B] flex flex-col space-y-3">
+        <div className={`p-3 rounded-xl border flex flex-col space-y-3 transition-colors ${
+          isDark ? 'bg-[#111827]/80 border-[#1E293B]' : 'bg-slate-50 border-slate-200/80'
+        }`}>
           <div className="flex items-center space-x-3 overflow-hidden">
-            <div className="w-8 h-8 rounded-lg bg-[#38B1F7]/20 border border-[#5FC0F9]/20 flex items-center justify-center text-sm font-bold text-[#5FC0F9] shrink-0">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 border ${
+              isDark 
+                ? 'bg-[#38b1f7]/20 border-[#38b1f7]/20 text-[#38b1f7]' 
+                : 'bg-[#38b1f7]/10 border-[#38b1f7]/20 text-[#0d7fc0]'
+            }`}>
               {user.name.charAt(0).toUpperCase()}
             </div>
             <div className="overflow-hidden">
-              <p className="text-xs font-semibold text-[#F8FAFC] truncate">{user.name}</p>
-              <p className="text-[9px] text-[#94A3B8] font-mono uppercase tracking-wider">{user.role}</p>
+              <p className={`text-xs font-semibold truncate ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>{user.name}</p>
+              <p className={`text-[9px] font-mono uppercase tracking-wider ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>{user.role}</p>
             </div>
           </div>
           <button
             onClick={() => logout()}
-            className="w-full h-8 flex items-center justify-center text-[11px] font-bold text-red-400 hover:text-white hover:bg-red-950/40 border border-red-500/20 hover:border-red-500/40 rounded-lg transition-all duration-150 active:scale-98"
+            className={`w-full h-8 flex items-center justify-center text-[11px] font-bold rounded-lg transition-all duration-150 active:scale-98 ${
+              isDark 
+                ? 'text-red-400 hover:text-white hover:bg-red-950/40 border border-red-500/20 hover:border-red-500/40' 
+                : 'text-red-600 hover:text-white hover:bg-red-600 border border-red-200 hover:border-red-600'
+            }`}
           >
             Logout Session
           </button>
@@ -440,34 +548,63 @@ export default function CustomerDashboard() {
       {/* 2. Main Work Shell */}
       <div className="flex-grow flex flex-col overflow-hidden z-10">
         {/* Top Bar Navigation (Height: 72px) */}
-        <header className="h-[72px] bg-[#0F172A]/70 backdrop-blur-md border-b border-[#1E293B] px-8 flex items-center justify-between shrink-0">
+        <header className={`h-[72px] backdrop-blur-md border-b px-8 flex items-center justify-between shrink-0 transition-colors duration-300 ${
+          isDark ? 'bg-[#0F172A]/70 border-[#1E293B]' : 'bg-white/80 border-slate-200/80'
+        }`}>
           <div>
-            <h1 className="font-bold text-lg text-[#F8FAFC] tracking-tight">
+            <h1 className={`font-bold text-lg tracking-tight ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>
               {activeTab === "dashboard" ? "Dashboard Overview" : "My Support Tickets"}
             </h1>
-            <p className="text-[10px] text-[#94A3B8]">
+            <p className={`text-[10px] ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>
               {activeTab === "dashboard" ? "Metrics and active support overview" : "View, manage, and discuss your submitted issues"}
             </p>
           </div>
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
+            {/* Theme Toggle Button */}
+            <button
+              onClick={toggleTheme}
+              className={`p-2 rounded-lg border transition-all duration-200 active:scale-95 ${
+                isDark 
+                  ? 'border-[#1E293B] hover:border-[#38b1f7]/30 text-yellow-400 hover:bg-white/5' 
+                  : 'border-slate-200 hover:border-[#38b1f7]/30 text-slate-700 hover:bg-slate-100'
+              }`}
+              title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              aria-label="Toggle Theme"
+            >
+              {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+            </button>
+
+            {/* Refresh Button */}
             <button
               onClick={() => {
                 loadTickets(true);
                 if (selectedTicketId) loadTicketDetails(selectedTicketId);
               }}
-              className="p-2 rounded bg-slate-800/40 hover:bg-slate-800 border border-slate-700/30 text-[#94A3B8] hover:text-[#F8FAFC] transition-colors"
+              className={`p-2 rounded border transition-colors ${
+                isDark 
+                  ? 'bg-slate-800/40 hover:bg-slate-800 border-slate-700/30 text-[#94A3B8] hover:text-[#F8FAFC]' 
+                  : 'bg-slate-100 hover:bg-slate-200/80 border-slate-200 text-slate-600 hover:text-slate-900'
+              }`}
               title="Refresh Data"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${(loadingTickets || loadingDetails) ? "animate-spin text-[#5FC0F9]" : ""}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${(loadingTickets || loadingDetails) ? "animate-spin text-[#38b1f7]" : ""}`} />
             </button>
-            <div className="flex items-center space-x-2 px-3 py-1 rounded bg-green-950/40 border border-green-500/20 text-[#12B76A] text-[11px] font-semibold font-mono">
+            {/* <div className={`flex items-center space-x-2 px-3 py-1 rounded text-[11px] font-semibold font-mono border ${
+              isDark 
+                ? 'bg-green-950/40 border-green-500/20 text-[#12B76A]' 
+                : 'bg-green-50 border-green-200 text-[#027a48]'
+            }`}>
               <span className="w-1.5 h-1.5 rounded-full bg-[#12B76A] animate-pulse"></span>
               <span>API: Connected</span>
-            </div>
+            </div> */}
             {/* Small Mobile Logout */}
             <button
               onClick={() => logout()}
-              className="md:hidden text-xs font-bold px-3 py-1.5 rounded-lg bg-[#111827] border border-[#1E293B] text-red-400 hover:text-white"
+              className={`md:hidden text-xs font-bold px-3 py-1.5 rounded-lg border ${
+                isDark 
+                  ? 'bg-[#111827] border-[#1E293B] text-red-400 hover:text-white' 
+                  : 'bg-white border-slate-200 text-red-600 hover:bg-slate-50'
+              }`}
             >
               Logout
             </button>
@@ -481,60 +618,78 @@ export default function CustomerDashboard() {
             {activeTab === "dashboard" && (
               <>
                 {/* Welcome Announcement Board */}
-                <section className="glass-card p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <section className={`p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 transition-all duration-300 border ${
+                  isDark 
+                    ? 'glass-card bg-[#0F172A]/45 border-white/[0.06]' 
+                    : 'bg-white border-slate-200/80 shadow-sm rounded-2xl'
+                }`}>
                   <div className="space-y-2">
-                    <h2 className="text-xl md:text-2xl font-bold tracking-tight text-[#F8FAFC]">
-                      Welcome to OCS Customer Hub, <span className="text-[#5FC0F9]">{user.name}</span>
+                    <h2 className={`text-xl md:text-2xl font-bold tracking-tight transition-colors ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>
+                      Welcome to OCS Helpdesk, <span className="text-[#38b1f7]">{user.name}</span>
                     </h2>
-                    <p className="text-[#94A3B8] text-sm max-w-xl">
+                    <p className={`text-sm max-w-xl transition-colors ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>
                       Create, track, and discuss your support issues. Add detailed descriptions and chat in real-time with customer service representatives.
                     </p>
                   </div>
                   <button
                     onClick={() => setShowCreateModal(true)}
-                    className="btn-cyber flex items-center space-x-2"
+                    className={`btn-cyber flex items-center space-x-2 ${isDark ? 'text-black' : 'text-white'}`}
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>Create Ticket</span>
+                    <Plus className={`w-4 h-4 ${isDark ? 'text-[#005d89]' : 'text-white'}`} />
+                    <span className={isDark ? 'text-[#005d89]' : 'text-white'}>Create Ticket</span>
                   </button>
                 </section>
 
                 {/* Cards metrics system */}
                 <section className="grid md:grid-cols-3 gap-6">
                   {/* Customer profile details */}
-                  <div className="ocs-card p-6 flex flex-col justify-between min-h-[160px] bg-slate-900/60 backdrop-blur border-white/[0.03]">
+                  <div className={`p-6 flex flex-col justify-between min-h-[160px] border transition-colors duration-300 rounded-2xl ${
+                    isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
+                  }`}>
                     <div>
-                      <h3 className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-3">Customer Profile</h3>
+                      <h3 className={`text-[10px] font-bold uppercase tracking-wider mb-3 ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>Customer Profile</h3>
                       <div className="space-y-2 text-xs">
                         <div className="flex justify-between">
-                          <span className="text-[#94A3B8]">Account E-mail:</span>
-                          <span className="text-[#F8FAFC] font-medium truncate max-w-[160px]">{user.email}</span>
+                          <span className={`${isDark ? 'text-[#94A3B8]' : 'text-slate-400'}`}>Account E-mail:</span>
+                          <span className={`font-medium truncate max-w-[160px] ${isDark ? 'text-[#F8FAFC]' : 'text-slate-800'}`}>{user.email}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-[#94A3B8]">Registration Date:</span>
-                          <span className="text-[#F8FAFC] font-medium">{formatJoinedDate(user.createdAt)}</span>
+                          <span className={`${isDark ? 'text-[#94A3B8]' : 'text-slate-400'}`}>Registration Date:</span>
+                          <span className={`font-medium ${isDark ? 'text-[#F8FAFC]' : 'text-slate-800'}`}>{formatJoinedDate(user.createdAt)}</span>
                         </div>
                       </div>
                     </div>
-                    <div className="text-[10px] text-[#94A3B8] font-mono pt-4 border-t border-white/[0.03] truncate">
+                    <div className={`text-[10px] font-mono pt-4 border-t truncate ${
+                      isDark ? 'text-[#94A3B8] border-white/[0.03]' : 'text-slate-400 border-slate-100'
+                    }`}>
                       ID: {user.id}
                     </div>
                   </div>
 
                   {/* Active tickets */}
-                  <div className="ocs-card p-6 flex flex-col justify-between min-h-[160px] bg-slate-900/60 backdrop-blur border-white/[0.03]">
+                  <div className={`p-6 flex flex-col justify-between min-h-[160px] border transition-colors duration-300 rounded-2xl ${
+                    isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
+                  }`}>
                     <div>
                       <div className="flex justify-between items-center mb-3">
-                        <h3 className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">My Active Tickets</h3>
-                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${activeTicketsCount > 0 ? "bg-amber-950/40 text-amber-400 border-amber-500/20" : "bg-slate-800 text-slate-400 border-slate-700/30"}`}>
+                        <h3 className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>My Active Tickets</h3>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                          activeTicketsCount > 0 
+                            ? isDark ? "bg-amber-950/40 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-700 border-amber-200"
+                            : isDark ? "bg-slate-800 text-slate-400 border-slate-700/30" : "bg-slate-100 text-slate-400 border-slate-200"
+                        }`}>
                           {activeTicketsCount} Open
                         </span>
                       </div>
-                      <p className="text-3xl font-extrabold text-[#F8FAFC] tracking-tight">{activeTicketsCount}</p>
+                      <p className={`text-3xl font-extrabold tracking-tight ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>{activeTicketsCount}</p>
                     </div>
                     <button
                       onClick={() => setActiveTab("tickets")}
-                      className="text-[11px] font-bold text-[#5FC0F9] flex items-center space-x-1.5 hover:text-white pt-4 border-t border-white/[0.03] text-left w-full"
+                      className={`text-[11px] font-bold flex items-center space-x-1.5 pt-4 border-t text-left w-full transition-colors ${
+                        isDark 
+                          ? 'text-[#38b1f7] hover:text-white border-white/[0.03]' 
+                          : 'text-[#0d7fc0] hover:text-[#085f90] border-slate-100'
+                      }`}
                     >
                       <span>View active queues</span>
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -542,15 +697,21 @@ export default function CustomerDashboard() {
                   </div>
 
                   {/* Service resolution rate */}
-                  <div className="ocs-card p-6 flex flex-col justify-between min-h-[160px] bg-slate-900/60 backdrop-blur border-white/[0.03]">
+                  <div className={`p-6 flex flex-col justify-between min-h-[160px] border transition-colors duration-300 rounded-2xl ${
+                    isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
+                  }`}>
                     <div>
                       <div className="flex justify-between items-center mb-3">
-                        <h3 className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">Service Resolution</h3>
-                        <span className="text-xs font-mono px-2 py-0.5 rounded bg-green-950/40 text-[#12B76A] border border-green-500/20">Active</span>
+                        <h3 className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>Service Resolution</h3>
+                        <span className={`text-xs font-mono px-2 py-0.5 rounded border ${
+                          isDark ? 'bg-green-950/40 text-[#12B76A] border-green-500/20' : 'bg-green-50 text-green-700 border-green-200'
+                        }`}>Active</span>
                       </div>
-                      <p className="text-3xl font-extrabold text-[#12B76A] tracking-tight">{resolutionRate}%</p>
+                      <p className={`text-3xl font-extrabold tracking-tight ${isDark ? 'text-[#12B76A]' : 'text-green-600'}`}>{resolutionRate}%</p>
                     </div>
-                    <p className="text-[11px] text-[#94A3B8] leading-relaxed pt-4 border-t border-white/[0.03]">
+                    <p className={`text-[11px] leading-relaxed pt-4 border-t ${
+                      isDark ? 'text-[#94A3B8] border-white/[0.03]' : 'text-slate-500 border-slate-100'
+                    }`}>
                       Resolution check matches {resolvedTicketsCount} resolved out of {tickets.length} total tickets.
                     </p>
                   </div>
@@ -559,31 +720,41 @@ export default function CustomerDashboard() {
                 {/* Recent Tickets Block */}
                 <section className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#94A3B8]">Recent Support Requests</h3>
+                    <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>Recent Support Requests</h3>
                     <button
                       onClick={() => setActiveTab("tickets")}
-                      className="text-xs text-[#5FC0F9] hover:underline"
+                      className={`text-xs transition-colors ${
+                        isDark ? 'text-[#38b1f7] hover:text-white' : 'text-[#0d7fc0] hover:text-[#085f90] hover:underline'
+                      }`}
                     >
                       View All Tickets
                     </button>
                   </div>
 
-                  <div className="glass-card overflow-hidden">
+                  <div className={`overflow-hidden border transition-all duration-300 ${
+                    isDark 
+                      ? 'glass-card border-white/[0.06]' 
+                      : 'bg-white border-slate-200/80 shadow-sm rounded-2xl'
+                  }`}>
                     {loadingTickets ? (
                       <div className="p-8 space-y-4">
-                        <div className="h-6 w-full skeleton"></div>
-                        <div className="h-6 w-full skeleton"></div>
-                        <div className="h-6 w-full skeleton"></div>
+                        <div className={`h-6 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
+                        <div className={`h-6 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
+                        <div className={`h-6 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
                       </div>
                     ) : tickets.length === 0 ? (
-                      <div className="p-8 text-center text-slate-500 text-sm">
+                      <div className={`p-8 text-center text-sm ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
                         No support tickets submitted yet. Click &quot;Create Ticket&quot; to open your first ticket.
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="w-full text-left text-xs border-collapse">
                           <thead>
-                            <tr className="border-b border-[#1E293B] bg-slate-900/30 text-slate-400 font-mono uppercase tracking-wider">
+                            <tr className={`border-b font-mono uppercase tracking-wider transition-colors ${
+                              isDark 
+                                ? 'border-[#1E293B] bg-slate-900/30 text-slate-400' 
+                                : 'border-slate-200 bg-slate-50 text-slate-500'
+                            }`}>
                               <th className="p-4">Ticket</th>
                               <th className="p-4">Category</th>
                               <th className="p-4">Priority</th>
@@ -592,17 +763,27 @@ export default function CustomerDashboard() {
                               <th className="p-4 text-right">Actions</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-[#1E293B]">
+                          <tbody className={`divide-y transition-colors ${
+                            isDark ? 'divide-[#1E293B]' : 'divide-slate-100'
+                          }`}>
                             {tickets.slice(0, 5).map(t => (
-                              <tr key={t.id} className="hover:bg-slate-900/40 transition-colors group">
+                              <tr key={t.id} className={`transition-colors group ${
+                                isDark ? 'hover:bg-slate-900/40' : 'hover:bg-slate-50/70'
+                              }`}>
                                 <td className="p-4">
                                   <div>
-                                    <p className="font-semibold text-slate-200 group-hover:text-[#5FC0F9] transition-colors">{t.title}</p>
-                                    <p className="text-[10px] text-slate-400 truncate max-w-[240px] mt-0.5">{t.description}</p>
+                                    <p className={`font-semibold transition-colors ${
+                                      isDark 
+                                        ? 'text-slate-200 group-hover:text-[#38b1f7]' 
+                                        : 'text-slate-800 group-hover:text-[#0d7fc0]'
+                                    }`}>{t.title}</p>
+                                    <p className={`text-[10px] truncate max-w-[240px] mt-0.5 ${
+                                      isDark ? 'text-slate-400' : 'text-slate-500'
+                                    }`}>{t.description}</p>
                                   </div>
                                 </td>
                                 <td className="p-4">
-                                  <span className="text-slate-300 font-medium">{t.category?.name}</span>
+                                  <span className={`font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{t.category?.name}</span>
                                 </td>
                                 <td className="p-4">
                                   <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${getPriorityStyle(t.priority)}`}>
@@ -614,7 +795,7 @@ export default function CustomerDashboard() {
                                     {t.status}
                                   </span>
                                 </td>
-                                <td className="p-4 text-slate-400">
+                                <td className={`p-4 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                                   {new Date(t.updatedAt).toLocaleDateString()}
                                 </td>
                                 <td className="p-4 text-right">
@@ -623,7 +804,11 @@ export default function CustomerDashboard() {
                                       setActiveTab("tickets");
                                       setSelectedTicketId(t.id);
                                     }}
-                                    className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/50 rounded-lg transition-all"
+                                    className={`px-3 py-1 border rounded-lg transition-all ${
+                                      isDark 
+                                        ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700/50' 
+                                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                                    }`}
                                   >
                                     Discuss
                                   </button>
@@ -644,7 +829,7 @@ export default function CustomerDashboard() {
                 {/* Tickets list panel (7 cols if drawer is active, 12 if not) */}
                 <div className={`${selectedTicketId ? "lg:col-span-5" : "lg:col-span-12"} space-y-4 transition-all duration-300`}>
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#94A3B8]">My Tickets Pipeline</h3>
+                    <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>My Tickets Pipeline</h3>
                     <button
                       onClick={() => setShowCreateModal(true)}
                       className="btn-cyber h-9 text-xs px-4 py-0 flex items-center space-x-1.5 shadow-none"
@@ -657,12 +842,14 @@ export default function CustomerDashboard() {
                   <div className="space-y-3">
                     {loadingTickets ? (
                       <div className="space-y-3">
-                        <div className="h-24 w-full skeleton"></div>
-                        <div className="h-24 w-full skeleton"></div>
-                        <div className="h-24 w-full skeleton"></div>
+                        <div className={`h-24 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
+                        <div className={`h-24 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
+                        <div className={`h-24 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
                       </div>
                     ) : tickets.length === 0 ? (
-                      <div className="glass-card p-8 text-center text-slate-500 text-sm">
+                      <div className={`p-8 text-center text-sm border rounded-2xl ${
+                        isDark ? 'glass-card border-white/[0.06] text-slate-500' : 'bg-white border-slate-200 shadow-sm text-slate-400'
+                      }`}>
                         No support tickets found. Create a ticket to get started.
                       </div>
                     ) : (
@@ -670,25 +857,41 @@ export default function CustomerDashboard() {
                         <div
                           key={t.id}
                           onClick={() => setSelectedTicketId(t.id)}
-                          className={`glass-card p-5 cursor-pointer text-left transition-all ${
+                          className={`p-5 cursor-pointer text-left transition-all duration-200 border rounded-2xl ${
                             selectedTicketId === t.id
-                              ? "border-[#5FC0F9]/50 bg-slate-900/60 shadow-[0_0_15px_rgba(95,192,249,0.1)]"
-                              : "hover:border-[#5FC0F9]/20 hover:bg-slate-900/20"
+                              ? isDark
+                                ? "border-[#38b1f7]/50 bg-slate-900/60 shadow-[0_0_15px_rgba(56,177,247,0.08)]"
+                                : "border-[#38b1f7]/60 bg-white shadow-[0_4px_12px_rgba(56,177,247,0.08)]"
+                              : isDark
+                                ? "bg-[#0F172A]/45 border-white/[0.06] hover:border-[#38b1f7]/20 hover:bg-slate-900/20"
+                                : "bg-white border-slate-200/80 shadow-sm hover:border-[#38b1f7]/30 hover:bg-slate-50/50 hover:shadow-md"
                           }`}
                         >
                           <div className="flex items-start justify-between gap-4 mb-2">
-                            <h4 className="font-bold text-sm text-slate-100 truncate group-hover:text-[#5FC0F9]">{t.title}</h4>
+                            <h4 className={`font-bold text-sm truncate transition-colors ${
+                              selectedTicketId === t.id
+                                ? isDark ? "text-[#38b1f7]" : "text-[#0d7fc0]"
+                                : isDark ? "text-slate-100 hover:text-[#38b1f7]" : "text-slate-800 hover:text-[#0d7fc0]"
+                            }`}>{t.title}</h4>
                             <span className={`px-2 py-0.5 rounded text-[9px] font-bold border shrink-0 ${getStatusStyle(t.status)}`}>
                               {t.status}
                             </span>
                           </div>
                           
-                          <p className="text-xs text-slate-400 line-clamp-2 mb-4 leading-relaxed">
+                          <p className={`text-xs line-clamp-2 mb-4 leading-relaxed transition-colors ${
+                            isDark ? 'text-slate-400' : 'text-slate-500'
+                          }`}>
                             {t.description}
                           </p>
 
-                          <div className="flex items-center justify-between text-[10px] text-slate-400 pt-3 border-t border-white/[0.03]">
-                            <span className="font-semibold text-slate-300 bg-slate-800/40 px-2 py-0.5 rounded border border-slate-700/20">
+                          <div className={`flex items-center justify-between text-[10px] pt-3 border-t transition-colors ${
+                            isDark ? 'border-white/[0.03] text-slate-400' : 'border-slate-100 text-slate-500'
+                          }`}>
+                            <span className={`font-semibold px-2 py-0.5 rounded border transition-colors ${
+                              isDark 
+                                ? 'text-slate-300 bg-slate-800/40 border-slate-700/20' 
+                                : 'text-slate-600 bg-slate-100 border-slate-200/60'
+                            }`}>
                               {t.category?.name}
                             </span>
                             <div className="flex items-center space-x-3">
@@ -696,7 +899,7 @@ export default function CustomerDashboard() {
                                 {t.priority}
                               </span>
                               <span className="flex items-center space-x-1">
-                                <Calendar className="w-3 h-3 text-slate-500" />
+                                <Calendar className="w-3 h-3 text-slate-400" />
                                 <span>{new Date(t.createdAt).toLocaleDateString()}</span>
                               </span>
                             </div>
@@ -709,26 +912,32 @@ export default function CustomerDashboard() {
 
                 {/* Dynamic details thread panel (5 cols) */}
                 {selectedTicketId && (
-                  <div className="lg:col-span-7 glass-card h-[calc(100vh-160px)] flex flex-col transition-all duration-300">
+                  <div className={`lg:col-span-7 h-[calc(100vh-160px)] flex flex-col transition-all duration-300 border rounded-2xl overflow-hidden ${
+                    isDark 
+                      ? 'glass-card bg-[#0F172A]/45 border-white/[0.06]' 
+                      : 'bg-white border-slate-200/80 shadow-md'
+                  }`}>
                     {loadingDetails && !detailedTicket ? (
                       <div className="p-8 flex-grow space-y-4">
-                        <div className="h-8 w-1/3 skeleton"></div>
-                        <div className="h-4 w-1/2 skeleton"></div>
-                        <div className="h-32 w-full skeleton"></div>
+                        <div className={`h-8 w-1/3 ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
+                        <div className={`h-4 w-1/2 ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
+                        <div className={`h-32 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
                       </div>
                     ) : detailedTicket ? (
                       <>
                         {/* Header Details Panel */}
-                        <div className="p-5 border-b border-[#1E293B] bg-slate-900/40 flex items-center justify-between">
+                        <div className={`p-5 border-b flex items-center justify-between transition-colors ${
+                          isDark ? 'border-[#1E293B] bg-slate-900/40' : 'border-slate-200 bg-slate-50/50'
+                        }`}>
                           <div className="space-y-1">
                             <div className="flex items-center space-x-2">
-                              <h3 className="font-bold text-md text-[#F8FAFC] tracking-tight">{detailedTicket.title}</h3>
+                              <h3 className={`font-bold text-md tracking-tight ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>{detailedTicket.title}</h3>
                               <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${getStatusStyle(detailedTicket.status)}`}>
                                 {detailedTicket.status}
                               </span>
                             </div>
-                            <p className="text-[10px] text-slate-400">
-                              Opened: {new Date(detailedTicket.createdAt).toLocaleString()} | Category: <span className="text-[#5FC0F9] font-medium">{detailedTicket.category?.name}</span>
+                            <p className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                              Opened: {new Date(detailedTicket.createdAt).toLocaleString()} | Category: <span className={`font-semibold ${isDark ? 'text-[#38b1f7]' : 'text-[#0d7fc0]'}`}>{detailedTicket.category?.name}</span>
                             </p>
                           </div>
                           
@@ -736,7 +945,11 @@ export default function CustomerDashboard() {
                             {detailedTicket.status !== "RESOLVED" && detailedTicket.status !== "CLOSED" && (
                               <button
                                 onClick={handleResolveTicket}
-                                className="h-8 px-3 rounded-lg text-[10px] font-bold border border-green-500/20 text-green-400 hover:text-white hover:bg-green-950/30 transition-all flex items-center space-x-1"
+                                className={`h-8 px-3 rounded-lg text-[10px] font-bold border transition-all flex items-center space-x-1 ${
+                                  isDark 
+                                    ? 'border-green-500/20 text-green-400 hover:text-white hover:bg-green-950/30' 
+                                    : 'border-green-300 bg-green-50/40 text-green-700 hover:bg-green-100/60'
+                                }`}
                               >
                                 <CheckCircle className="w-3 h-3" />
                                 <span>Resolve Ticket</span>
@@ -744,7 +957,11 @@ export default function CustomerDashboard() {
                             )}
                             <button
                               onClick={() => setSelectedTicketId(null)}
-                              className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                              className={`p-1.5 rounded transition-colors ${
+                                isDark 
+                                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white' 
+                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border border-slate-200'
+                              }`}
                             >
                               <X className="w-4 h-4" />
                             </button>
@@ -752,14 +969,22 @@ export default function CustomerDashboard() {
                         </div>
 
                         {/* Message Threads area */}
-                        <div className="flex-grow overflow-y-auto p-5 space-y-4">
+                        <div className={`flex-grow overflow-y-auto p-5 space-y-4 ${
+                          isDark ? 'bg-slate-950/10' : 'bg-slate-50/20'
+                        }`}>
                           {/* Original Description ticket post */}
-                          <div className="p-4 rounded-xl bg-slate-900/70 border border-[#1E293B] space-y-2">
-                            <div className="flex items-center justify-between text-[10px] text-slate-400 border-b border-white/[0.03] pb-2">
-                              <span className="font-bold text-slate-300">{detailedTicket.customer?.name} (Customer)</span>
+                          <div className={`p-4 rounded-xl border space-y-2 ${
+                            isDark ? 'bg-slate-900/70 border-[#1E293B]' : 'bg-white border-slate-200/80 shadow-sm'
+                          }`}>
+                            <div className={`flex items-center justify-between text-[10px] border-b pb-2 ${
+                              isDark ? 'text-slate-400 border-white/[0.03]' : 'text-slate-500 border-slate-100'
+                            }`}>
+                              <span className={`font-bold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{detailedTicket.customer?.name} (Customer)</span>
                               <span>Initial Inquiry</span>
                             </div>
-                            <p className="text-xs leading-relaxed text-slate-200 whitespace-pre-wrap">{detailedTicket.description}</p>
+                            <p className={`text-xs leading-relaxed whitespace-pre-wrap ${
+                              isDark ? 'text-slate-200' : 'text-slate-700'
+                            }`}>{detailedTicket.description}</p>
                           </div>
 
                           {/* Message Loop */}
@@ -772,16 +997,24 @@ export default function CustomerDashboard() {
                                 key={msg.id}
                                 className={`flex flex-col space-y-1 max-w-[80%] ${isMe ? "ml-auto items-end" : "mr-auto items-start"}`}
                               >
-                                <div className={`p-4 rounded-xl text-xs leading-relaxed ${
+                                <div className={`p-4 rounded-xl text-xs leading-relaxed border ${
                                   isMe
-                                    ? "bg-[#5FC0F9]/10 text-slate-200 border border-[#5FC0F9]/20 rounded-tr-none"
+                                    ? isDark
+                                      ? "bg-[#38b1f7]/10 text-slate-200 border-[#38b1f7]/25 rounded-tr-none"
+                                      : "bg-[#38b1f7]/10 text-slate-800 border-[#38b1f7]/25 rounded-tr-none shadow-sm"
                                     : isStaff
-                                      ? "bg-[#10B981]/10 text-slate-200 border border-[#10B981]/20 rounded-tl-none"
-                                      : "bg-slate-900/60 text-slate-200 border border-[#1E293B] rounded-tl-none"
+                                      ? isDark
+                                        ? "bg-emerald-950/30 text-slate-200 border-emerald-500/20 rounded-tl-none"
+                                        : "bg-emerald-50 text-slate-800 border-emerald-200 rounded-tl-none"
+                                      : isDark
+                                        ? "bg-slate-900/60 text-slate-200 border-[#1E293B] rounded-tl-none"
+                                        : "bg-slate-100 text-slate-800 border-slate-200 rounded-tl-none"
                                 }`}>
                                   <p className="whitespace-pre-wrap">{msg.message}</p>
                                 </div>
-                                <span className="text-[9px] text-slate-500 px-1">
+                                <span className={`text-[9px] px-1 ${
+                                  isDark ? 'text-slate-500' : 'text-slate-400'
+                                }`}>
                                   {isMe ? "You" : `${msg.sender.name} (${msg.sender.role})`} • {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </span>
                               </div>
@@ -790,7 +1023,9 @@ export default function CustomerDashboard() {
                         </div>
 
                         {/* Send reply input form footer */}
-                        <div className="p-4 border-t border-[#1E293B] bg-slate-900/30">
+                        <div className={`p-4 border-t transition-colors ${
+                          isDark ? 'border-[#1E293B] bg-slate-900/30' : 'border-slate-200 bg-slate-50/60'
+                        }`}>
                           {detailedTicket.status === "CLOSED" ? (
                             <p className="text-center text-xs text-slate-500 py-2 font-mono flex items-center justify-center space-x-1.5">
                               <Lock className="w-3.5 h-3.5" />
@@ -803,7 +1038,11 @@ export default function CustomerDashboard() {
                                 value={newMessage}
                                 onChange={(e) => setNewMessage(e.target.value)}
                                 placeholder="Write your reply message details..."
-                                className="flex-grow glass-input text-xs"
+                                className={`flex-grow text-xs h-[48px] rounded-xl outline-none focus:ring-1 transition-all duration-200 ${
+                                  isDark
+                                    ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
+                                    : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
+                                }`}
                                 disabled={submittingMessage}
                                 style={{ paddingLeft: "16px" }}
                               />
@@ -819,7 +1058,9 @@ export default function CustomerDashboard() {
                         </div>
                       </>
                     ) : (
-                      <div className="p-8 text-center text-slate-500 text-sm flex-grow flex items-center justify-center">
+                      <div className={`p-8 text-center text-sm flex-grow flex items-center justify-center ${
+                        isDark ? 'text-slate-500' : 'text-slate-400'
+                      }`}>
                         Select a ticket to display conversation thread details.
                       </div>
                     )}
@@ -834,15 +1075,23 @@ export default function CustomerDashboard() {
       {/* 4. Ticket Creation Modal Overlay Dialog */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="glass-card w-full max-w-lg overflow-hidden animate-error-shake shadow-2xl border-white/[0.08]">
-            <div className="p-6 border-b border-[#1E293B] flex items-center justify-between">
+          <div className={`w-full max-w-lg overflow-hidden animate-error-shake shadow-2xl border transition-all duration-300 rounded-2xl ${
+            isDark ? 'glass-card border-white/[0.08]' : 'bg-white border-slate-200 shadow-2xl'
+          }`}>
+            <div className={`p-6 border-b flex items-center justify-between transition-colors ${
+              isDark ? 'border-[#1E293B] bg-slate-900/20' : 'border-slate-100 bg-slate-50/50'
+            }`}>
               <div>
-                <h3 className="font-bold text-md text-[#F8FAFC] tracking-tight">Create Support Ticket</h3>
-                <p className="text-[10px] text-slate-400">Describe the issue and categorize it for routing</p>
+                <h3 className={`font-bold text-md tracking-tight ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>Create Support Ticket</h3>
+                <p className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Describe the issue and categorize it for routing</p>
               </div>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                className={`p-1.5 rounded transition-colors border ${
+                  isDark 
+                    ? 'bg-slate-800 hover:bg-slate-700 border-slate-700/50 text-slate-400 hover:text-white' 
+                    : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-500'
+                }`}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -850,19 +1099,27 @@ export default function CustomerDashboard() {
 
             <form onSubmit={handleCreateTicket} className="p-6 space-y-4">
               {createError && (
-                <div className="p-3 bg-red-950/40 border border-red-500/20 rounded-lg text-xs text-red-400 font-mono">
+                <div className={`p-3 rounded-lg text-xs font-mono border ${
+                  isDark 
+                    ? 'bg-red-950/40 border-red-500/20 text-red-400' 
+                    : 'bg-red-50 border-red-200 text-red-700'
+                }`}>
                   {createError}
                 </div>
               )}
 
               {/* Title input */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ticket Title</label>
+                <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Ticket Title</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Incapable of logging into mobile account"
-                  className="ocs-input"
+                  className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full ${
+                    isDark
+                      ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
+                      : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
+                  }`}
                   value={createForm.title}
                   onChange={(e) => setCreateForm(prev => ({ ...prev, title: e.target.value }))}
                   disabled={submittingCreate}
@@ -873,19 +1130,23 @@ export default function CustomerDashboard() {
               <div className="grid grid-cols-2 gap-4">
                 {/* Category select dropdown */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Category</label>
+                  <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Category</label>
                   {loadingCategories ? (
-                    <div className="h-11 w-full skeleton"></div>
+                    <div className={`h-[44px] w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
                   ) : (
                     <select
-                      className="ocs-input"
+                      className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full cursor-pointer ${
+                        isDark
+                          ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
+                          : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
+                      }`}
                       value={createForm.categoryId}
                       onChange={(e) => setCreateForm(prev => ({ ...prev, categoryId: e.target.value }))}
                       disabled={submittingCreate}
                       style={{ paddingRight: "30px" }}
                     >
                       {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id} className="bg-[#020617] text-[#F8FAFC]">
+                        <option key={cat.id} value={cat.id} className={isDark ? "bg-[#020617] text-[#F8FAFC]" : "bg-white text-slate-900"}>
                           {cat.name}
                         </option>
                       ))}
@@ -895,29 +1156,37 @@ export default function CustomerDashboard() {
 
                 {/* Priority */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Priority Level</label>
+                  <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Priority Level</label>
                   <select
-                    className="ocs-input"
+                    className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full cursor-pointer ${
+                      isDark
+                        ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
+                        : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
+                    }`}
                     value={createForm.priority}
                     onChange={(e) => setCreateForm(prev => ({ ...prev, priority: e.target.value as "LOW" | "MEDIUM" | "HIGH" | "URGENT" }))}
                     disabled={submittingCreate}
                   >
-                    <option value="LOW" className="bg-[#020617] text-[#F8FAFC]">Low</option>
-                    <option value="MEDIUM" className="bg-[#020617] text-[#F8FAFC]">Medium</option>
-                    <option value="HIGH" className="bg-[#020617] text-[#F8FAFC]">High</option>
-                    <option value="URGENT" className="bg-[#020617] text-[#F8FAFC]">Urgent</option>
+                    <option value="LOW" className={isDark ? "bg-[#020617] text-[#F8FAFC]" : "bg-white text-slate-900"}>Low</option>
+                    <option value="MEDIUM" className={isDark ? "bg-[#020617] text-[#F8FAFC]" : "bg-white text-slate-900"}>Medium</option>
+                    <option value="HIGH" className={isDark ? "bg-[#020617] text-[#F8FAFC]" : "bg-white text-slate-900"}>High</option>
+                    <option value="URGENT" className={isDark ? "bg-[#020617] text-[#F8FAFC]" : "bg-white text-slate-900"}>Urgent</option>
                   </select>
                 </div>
               </div>
 
               {/* Description textarea */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Problem Description</label>
+                <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Problem Description</label>
                 <textarea
                   required
                   placeholder="Provide details about the issue you are experiencing..."
                   rows={4}
-                  className="w-full p-4 text-xs bg-slate-900 border border-[#1E293B] rounded-xl text-slate-100 focus:border-[#5FC0F9] focus:outline-none focus:ring-1 focus:ring-[#5FC0F9] resize-none"
+                  className={`w-full p-4 text-xs rounded-xl outline-none focus:ring-1 transition-all duration-200 resize-none ${
+                    isDark
+                      ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
+                      : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
+                  }`}
                   value={createForm.description}
                   onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
                   disabled={submittingCreate}
@@ -929,7 +1198,11 @@ export default function CustomerDashboard() {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="btn-ghost"
+                  className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors ${
+                    isDark 
+                      ? 'text-slate-300 hover:bg-slate-800' 
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
                   disabled={submittingCreate}
                 >
                   Cancel

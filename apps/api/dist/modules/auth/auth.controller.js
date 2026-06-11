@@ -40,6 +40,8 @@ exports.meHandler = meHandler;
 exports.logoutHandler = logoutHandler;
 exports.requestMagicLinkHandler = requestMagicLinkHandler;
 exports.magicLoginHandler = magicLoginHandler;
+exports.forgotPasswordHandler = forgotPasswordHandler;
+exports.resetPasswordHandler = resetPasswordHandler;
 const auth_schemas_js_1 = require("./auth.schemas.js");
 const AuthService = __importStar(require("./auth.service.js"));
 // ---------------------------------------------------------------------------
@@ -133,6 +135,32 @@ async function magicLoginHandler(req, res, next) {
     try {
         const { token } = auth_schemas_js_1.magicLoginSchema.parse(req.body);
         const result = await AuthService.magicLogin(token);
+        ok(res, result);
+    }
+    catch (err) {
+        next(err);
+    }
+}
+// ---------------------------------------------------------------------------
+// POST /api/auth/forgot-password
+// ---------------------------------------------------------------------------
+async function forgotPasswordHandler(req, res, next) {
+    try {
+        const input = auth_schemas_js_1.forgotPasswordSchema.parse(req.body);
+        const result = await AuthService.forgotPassword(input);
+        ok(res, result);
+    }
+    catch (err) {
+        next(err);
+    }
+}
+// ---------------------------------------------------------------------------
+// POST /api/auth/reset-password
+// ---------------------------------------------------------------------------
+async function resetPasswordHandler(req, res, next) {
+    try {
+        const input = auth_schemas_js_1.resetPasswordSchema.parse(req.body);
+        const result = await AuthService.resetPassword(input);
         ok(res, result);
     }
     catch (err) {

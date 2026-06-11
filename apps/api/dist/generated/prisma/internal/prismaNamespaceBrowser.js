@@ -48,7 +48,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.NullsOrder = exports.QueryMode = exports.SortOrder = exports.TicketMessageScalarFieldEnum = exports.TicketScalarFieldEnum = exports.CategoryScalarFieldEnum = exports.MagicTokenScalarFieldEnum = exports.RefreshTokenScalarFieldEnum = exports.UserScalarFieldEnum = exports.TransactionIsolationLevel = exports.ModelName = exports.AnyNull = exports.JsonNull = exports.DbNull = exports.NullTypes = exports.Decimal = void 0;
+exports.NullsOrder = exports.QueryMode = exports.SortOrder = exports.TicketMessageScalarFieldEnum = exports.TicketScalarFieldEnum = exports.CategoryScalarFieldEnum = exports.PasswordResetTokenScalarFieldEnum = exports.MagicTokenScalarFieldEnum = exports.RefreshTokenScalarFieldEnum = exports.UserScalarFieldEnum = exports.TransactionIsolationLevel = exports.ModelName = exports.AnyNull = exports.JsonNull = exports.DbNull = exports.NullTypes = exports.Decimal = void 0;
 const runtime = __importStar(require("@prisma/client/runtime/index-browser"));
 exports.Decimal = runtime.Decimal;
 exports.NullTypes = {
@@ -78,6 +78,7 @@ exports.ModelName = {
     User: 'User',
     RefreshToken: 'RefreshToken',
     MagicToken: 'MagicToken',
+    PasswordResetToken: 'PasswordResetToken',
     Category: 'Category',
     Ticket: 'Ticket',
     TicketMessage: 'TicketMessage'
@@ -114,6 +115,13 @@ exports.MagicTokenScalarFieldEnum = {
     token: 'token',
     email: 'email',
     name: 'name',
+    expiresAt: 'expiresAt',
+    createdAt: 'createdAt'
+};
+exports.PasswordResetTokenScalarFieldEnum = {
+    id: 'id',
+    token: 'token',
+    email: 'email',
     expiresAt: 'expiresAt',
     createdAt: 'createdAt'
 };

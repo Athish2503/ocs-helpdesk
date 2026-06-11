@@ -21,7 +21,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string; message?: string }>;
-  logout: () => Promise<void>;
+  logout: (redirectPath?: string) => Promise<void>;
   refreshUser: () => Promise<void>;
   sendMagicLink: (email: string, name?: string) => Promise<{ success: boolean; error?: string }>;
   loginWithMagicLink: (token: string) => Promise<{ success: boolean; error?: string; user?: User }>;
@@ -186,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = async () => {
+  const logout = async (redirectPath?: string) => {
     const refreshToken = getCookie("refreshToken");
     if (refreshToken) {
       try {
@@ -205,7 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     eraseCookie("accessToken");
     eraseCookie("refreshToken");
     setUser(null);
-    router.push("/login");
+    router.push(redirectPath ?? "/login");
   };
 
   const sendMagicLink = async (email: string, name?: string) => {

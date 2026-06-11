@@ -2,7 +2,7 @@
 
 import React, { useState, Suspense } from "react";
 import Link from "next/link";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { 
   Ticket,
   Lock, 
@@ -10,7 +10,6 @@ import {
   EyeOff, 
   AlertCircle, 
   Loader2,
-  CheckCircle2,
   ArrowRight,
   ShieldCheck,
   Check,
@@ -19,7 +18,6 @@ import {
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const token = searchParams.get("token");
 
   const [password, setPassword] = useState("");
@@ -72,7 +70,7 @@ function ResetPasswordForm() {
       if (!response.ok) {
         let errorMessage = resData.error?.message || "Failed to reset password. The link may have expired.";
         if (resData.error?.details && Array.isArray(resData.error.details)) {
-          errorMessage = resData.error.details.map((d: any) => d.message).join(". ");
+          errorMessage = resData.error.details.map((d: { message: string }) => d.message).join(". ");
         }
         setError(errorMessage);
         setIsSubmitting(false);
@@ -317,7 +315,7 @@ export default function ResetPasswordPage() {
               Set new password
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 mt-2 font-body">
-              Please choose a new, secure password that you haven't used before.
+              {"Please choose a new, secure password that you haven't used before."}
             </p>
           </div>
 

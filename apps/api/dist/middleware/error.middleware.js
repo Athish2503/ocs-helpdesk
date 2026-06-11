@@ -14,6 +14,7 @@ const zod_1 = require("zod");
 function errorHandler(err, _req, res, _next) {
     // ── Zod validation errors ────────────────────────────────────────────────
     if (err instanceof zod_1.ZodError) {
+        console.log("[ZodError] Validation failed details:", JSON.stringify(err.issues, null, 2));
         res.status(422).json({
             success: false,
             error: {

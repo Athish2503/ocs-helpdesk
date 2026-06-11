@@ -80,15 +80,17 @@ export async function middleware(request: NextRequest) {
   const userRole = decodedUser?.role || null;
 
   // 3. Define routes categories
-  const isAdminRoute = pathname.startsWith("/admin");
+  const isAdminRoute = pathname.startsWith("/admin") && pathname !== "/admin/login";
+  const isAdminAuthRoute = pathname === "/admin/login";
   const isCustomerRoute = pathname.startsWith("/customer");
   const isAuthRoute = pathname === "/login" || pathname === "/register";
 
   // 4. Implement redirection guards
   if (isAdminRoute || isCustomerRoute) {
     if (!isAuthenticated) {
-      // Not authenticated: redirect to login
-      const loginUrl = new URL("/login", request.url);
+      // Not authenticated: redirect to appropriate login
+      const redirectPath = pathname.startsWith("/admin") ? "/admin/login" : "/login";
+      const loginUrl = new URL(redirectPath, request.url);
       loginUrl.searchParams.set("redirect", pathname);
       const response = NextResponse.redirect(loginUrl);
       // Clean up stale cookies if any
@@ -108,7 +110,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (isAuthRoute && isAuthenticated) {
+  if ((isAuthRoute || isAdminAuthRoute) && isAuthenticated) {
     // Authenticated user trying to access login/register: redirect to their dashboard
     const dashboardPath = userRole === "ADMIN" ? "/admin/dashboard" : "/customer/dashboard";
     return NextResponse.redirect(new URL(dashboardPath, request.url));

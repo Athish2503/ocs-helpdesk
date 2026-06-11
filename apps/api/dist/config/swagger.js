@@ -14,7 +14,7 @@ const openApiSpecification = {
     },
     servers: [
         {
-            url: "http://localhost:4000",
+            url: process.env["BACKEND_URL"] || "http://localhost:4000",
             description: "Development Server",
         },
     ],

@@ -43,7 +43,7 @@ export default function ForgotPasswordPage() {
       if (!response.ok) {
         let errorMessage = resData.error?.message || "Failed to submit request. Please try again.";
         if (resData.error?.details && Array.isArray(resData.error.details)) {
-          errorMessage = resData.error.details.map((d: any) => d.message).join(". ");
+          errorMessage = resData.error.details.map((d: { message: string }) => d.message).join(". ");
         }
         setError(errorMessage);
         setIsSubmitting(false);
