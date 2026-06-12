@@ -251,10 +251,10 @@ export default function Home() {
         <section className="max-w-7xl mx-auto px-6 pt-16 pb-20 md:py-24 grid lg:grid-cols-12 gap-12 items-center">
           {/* Left Column: Hero Text */}
           <div className="lg:col-span-6 space-y-6 text-left">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-950/40 border border-[#38B1F7]/25 text-[#fff] text-[11px] font-semibold tracking-wide font-mono">
+            {/* <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-950/40 border border-[#38B1F7]/25 text-[#fff] text-[11px] font-semibold tracking-wide font-mono">
               <LifeBuoy className="w-3.5 h-3.5" />
               <span>Sprint 1 Operations Initialized</span>
-            </div>
+            </div> */}
             
             <h2 className={`text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight bg-clip-text text-transparent transition-all ${
               isDark 

@@ -37,6 +37,7 @@ exports.listUsersHandler = listUsersHandler;
 exports.getAgentsHandler = getAgentsHandler;
 exports.getUserByIdHandler = getUserByIdHandler;
 exports.updateUserHandler = updateUserHandler;
+exports.updateProfileHandler = updateProfileHandler;
 const users_schemas_js_1 = require("./users.schemas.js");
 const UsersService = __importStar(require("./users.service.js"));
 function ok(res, data) {
@@ -80,6 +81,17 @@ async function updateUserHandler(req, res, next) {
         const { id } = req.params;
         const input = users_schemas_js_1.updateUserSchema.parse(req.body);
         const user = await UsersService.updateUser(id, input);
+        ok(res, { user });
+    }
+    catch (err) {
+        next(err);
+    }
+}
+async function updateProfileHandler(req, res, next) {
+    try {
+        const userId = req.user.id;
+        const { name, password } = req.body;
+        const user = await UsersService.updateProfile(userId, { name, password });
         ok(res, { user });
     }
     catch (err) {

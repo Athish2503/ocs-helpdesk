@@ -6,6 +6,19 @@ export const createArticleSchema = z.object({
   isPublished: z.boolean().optional(),
   isInternal: z.boolean().optional(),
   categoryId: z.string().uuid().optional().nullable(),
+  tags: z.array(z.string().trim()).optional(),
+  source: z
+    .object({
+      type: z.string(),
+      id: z.string(),
+    })
+    .optional()
+    .nullable(),
+  metaTitle: z.string().trim().max(60).optional().nullable(),
+  metaDescription: z.string().trim().max(160).optional().nullable(),
+  keywords: z.string().trim().optional().nullable(),
+  canonicalUrl: z.string().trim().url().optional().nullable(),
+  ogImage: z.string().trim().url().optional().nullable(),
 });
 
 export const updateArticleSchema = z.object({
@@ -14,7 +27,37 @@ export const updateArticleSchema = z.object({
   isPublished: z.boolean().optional(),
   isInternal: z.boolean().optional(),
   categoryId: z.string().uuid().optional().nullable(),
+  tags: z.array(z.string().trim()).optional(),
+  metaTitle: z.string().trim().max(60).optional().nullable(),
+  metaDescription: z.string().trim().max(160).optional().nullable(),
+  keywords: z.string().trim().optional().nullable(),
+  canonicalUrl: z.string().trim().url().or(z.string().length(0)).optional().nullable(),
+  ogImage: z.string().trim().url().or(z.string().length(0)).optional().nullable(),
+});
+
+export const updateArticleSEOSchema = z.object({
+  metaTitle: z.string().trim().max(60).optional().nullable(),
+  metaDescription: z.string().trim().max(160).optional().nullable(),
+  keywords: z.string().trim().optional().nullable(),
+  canonicalUrl: z.string().trim().url().or(z.string().length(0)).optional().nullable(),
+  ogImage: z.string().trim().url().or(z.string().length(0)).optional().nullable(),
+});
+
+export const createCategorySchema = z.object({
+  name: z.string({ error: "Name is required" }).trim().min(2).max(100),
+  description: z.string().trim().optional().nullable(),
+  parentId: z.string().uuid().optional().nullable(),
+});
+
+export const updateCategorySchema = z.object({
+  name: z.string().trim().min(2).max(100).optional(),
+  description: z.string().trim().optional().nullable(),
+  parentId: z.string().uuid().optional().nullable(),
 });
 
 export type CreateArticleInput = z.infer<typeof createArticleSchema>;
 export type UpdateArticleInput = z.infer<typeof updateArticleSchema>;
+export type UpdateArticleSEOInput = z.infer<typeof updateArticleSEOSchema>;
+export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
+export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
+

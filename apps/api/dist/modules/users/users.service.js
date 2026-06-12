@@ -4,7 +4,9 @@ exports.listUsers = listUsers;
 exports.getUserById = getUserById;
 exports.updateUser = updateUser;
 exports.getAgents = getAgents;
+exports.updateProfile = updateProfile;
 const prisma_js_1 = require("../../config/prisma.js");
+const password_js_1 = require("../../utils/password.js");
 async function listUsers(query) {
     const where = {};
     if (query.search) {
@@ -86,5 +88,30 @@ async function getAgents() {
         },
         select: { id: true, name: true, email: true },
         orderBy: { name: "asc" },
+    });
+}
+async function updateProfile(id, input) {
+    // Verify user exists
+    await getUserById(id);
+    const data = {};
+    if (input.name) {
+        data.name = input.name;
+    }
+    if (input.password) {
+        data.passwordHash = await (0, password_js_1.hashPassword)(input.password);
+    }
+    return prisma_js_1.prisma.user.update({
+        where: { id },
+        data,
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            isActive: true,
+            emailVerified: true,
+            createdAt: true,
+            updatedAt: true,
+        },
     });
 }

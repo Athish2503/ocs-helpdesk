@@ -497,3 +497,19 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 0 10px rgba(95, 192, 249, 0.05);
 }
 
+/* Toast Animations */
+@keyframes toast-slide-in {
+  from {
+    transform: translateY(-1rem) scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: toast-slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+

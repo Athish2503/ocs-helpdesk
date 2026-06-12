@@ -49,3 +49,14 @@ export async function updateUserHandler(req: Request, res: Response, next: NextF
     next(err);
   }
 }
+
+export async function updateProfileHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user!.id;
+    const { name, password } = req.body;
+    const user = await UsersService.updateProfile(userId, { name, password });
+    ok(res, { user });
+  } catch (err) {
+    next(err);
+  }
+}

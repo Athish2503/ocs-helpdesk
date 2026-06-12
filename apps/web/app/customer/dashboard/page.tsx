@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "../../../context/AuthContext";
+import { useToast } from "../../../context/ToastContext";
 import { useState, useEffect, useCallback } from "react";
 import { fetchWithAuth } from "../../../lib/api";
 import {
@@ -15,9 +16,11 @@ import {
   BarChart2,
   Lock,
   ChevronRight,
+  ChevronLeft,
   RefreshCw,
   Sun,
   Moon,
+  Search,
 } from "lucide-react";
 
 interface Category {
@@ -62,8 +65,41 @@ interface Ticket {
   messages?: TicketMessage[];
 }
 
+interface KbArticle {
+  id: string;
+  title: string;
+  content: string;
+  totalReads: number;
+  createdAt: string;
+  author: { name: string };
+  category?: { name: string } | null;
+  tags?: string[];
+}
+
+interface KbCategory {
+  id: string;
+  name: string;
+  article_count?: number;
+}
+
 export default function CustomerDashboard() {
-  const { user, logout, loading } = useAuth();
+  const { user, logout, loading, refreshUser } = useAuth();
+  const toast = useToast();
+
+  // Sidebar collapsible state
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("customer_sidebar_collapsed");
+      return saved === "true";
+    }
+    return false;
+  });
+
+  const toggleSidebar = () => {
+    const next = !isSidebarCollapsed;
+    setIsSidebarCollapsed(next);
+    localStorage.setItem("customer_sidebar_collapsed", String(next));
+  };
   
   // Theme state
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -92,12 +128,35 @@ export default function CustomerDashboard() {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
     localStorage.setItem("theme", newTheme);
+    toast.info(`Switched to ${newTheme === 'dark' ? 'Dark' : 'Light'} Mode`);
   };
 
   const isDark = theme === 'dark';
   
   // Navigation tab state
-  const [activeTab, setActiveTab] = useState<"dashboard" | "tickets">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "tickets" | "kb" | "settings">("dashboard");
+
+  // Customer Knowledge Base States
+  const [kbArticles, setKbArticles] = useState<KbArticle[]>([]);
+  const [kbCategories, setKbCategories] = useState<KbCategory[]>([]);
+  const [loadingKb, setLoadingKb] = useState<boolean>(false);
+  const [searchKb, setSearchKb] = useState<string>("");
+  const [selectedKbCategory, setSelectedKbCategory] = useState<string | null>(null);
+  const [selectedArticle, setSelectedArticle] = useState<KbArticle | null>(null);
+
+  // Customer Profile Settings States
+  const [settingsForm, setSettingsForm] = useState({
+    name: "",
+    password: "",
+    confirmPassword: "",
+  });
+  const [submittingSettings, setSubmittingSettings] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setSettingsForm(prev => ({ ...prev, name: user.name }));
+    }
+  }, [user]);
 
   // Dynamic ticket states
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -222,12 +281,15 @@ export default function CustomerDashboard() {
           priority: "MEDIUM",
         });
         setShowCreateModal(false);
+        toast.success("Support ticket created successfully!");
       } else {
         setCreateError(resBody.error?.message || "Failed to create support ticket.");
+        toast.error(resBody.error?.message || "Failed to create ticket.");
       }
     } catch (err) {
       console.error("Ticket creation error:", err);
       setCreateError("Unable to connect to the server.");
+      toast.error("Unable to connect to the server.");
     } finally {
       setSubmittingCreate(false);
     }
@@ -252,9 +314,13 @@ export default function CustomerDashboard() {
         setNewMessage("");
         // Reload ticket lists in background to update sorting
         loadTickets(false);
+        toast.success("Reply message sent successfully!");
+      } else {
+        toast.error("Failed to send message reply.");
       }
     } catch (err) {
       console.error("Message send error:", err);
+      toast.error("Failed to send message.");
     } finally {
       setSubmittingMessage(false);
     }
@@ -277,9 +343,98 @@ export default function CustomerDashboard() {
         setTickets(prev =>
           prev.map(t => (t.id === selectedTicketId ? { ...t, status: "RESOLVED" } : t))
         );
+        toast.success("Ticket resolved successfully!");
+      } else {
+        toast.error("Failed to resolve ticket.");
       }
     } catch (err) {
       console.error("Resolve ticket error:", err);
+      toast.error("Failed to resolve ticket.");
+    }
+  };
+
+  // Load KB articles and categories
+  const loadKbData = useCallback(async () => {
+    try {
+      setLoadingKb(true);
+      const params = new URLSearchParams();
+      if (searchKb) params.append("search", searchKb);
+      if (selectedKbCategory) params.append("categoryId", selectedKbCategory);
+      params.append("isPublished", "true");
+      params.append("isInternal", "false");
+
+      const [artRes, catRes] = await Promise.all([
+        fetchWithAuth(`/kb?${params.toString()}`),
+        fetchWithAuth("/kb/categories"),
+      ]);
+
+      if (artRes.ok) {
+        const artBody = await artRes.json();
+        setKbArticles(artBody.data.articles || []);
+      }
+      if (catRes.ok) {
+        const catBody = await catRes.json();
+        setKbCategories(catBody.data.categories || []);
+      }
+    } catch (err) {
+      console.error("Failed to load KB data:", err);
+    } finally {
+      setLoadingKb(false);
+    }
+  }, [searchKb, selectedKbCategory]);
+
+  useEffect(() => {
+    if (activeTab === "kb") {
+      loadKbData();
+    }
+  }, [activeTab, loadKbData]);
+
+  // Click handler to view KB article details and record reads
+  const handleReadArticle = async (article: KbArticle) => {
+    setSelectedArticle(article);
+    try {
+      await fetchWithAuth(`/kb/public/articles/${article.id}/read`, {
+        method: "POST",
+        body: JSON.stringify({
+          utmSource: "customer_portal",
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to record read:", err);
+    }
+  };
+
+  // Handle Profile settings save
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (settingsForm.password && settingsForm.password !== settingsForm.confirmPassword) {
+      toast.error("Passwords do not match.");
+      return;
+    }
+
+    try {
+      setSubmittingSettings(true);
+      const res = await fetchWithAuth("/users/me/profile", {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: settingsForm.name,
+          password: settingsForm.password || undefined,
+        }),
+      });
+
+      if (res.ok) {
+        toast.success("Profile settings saved successfully!");
+        setSettingsForm(prev => ({ ...prev, password: "", confirmPassword: "" }));
+        await refreshUser();
+      } else {
+        const body = await res.json();
+        toast.error(body.error?.message || "Failed to update profile settings.");
+      }
+    } catch (err) {
+      console.error("Profile settings save error:", err);
+      toast.error("Failed to update profile settings.");
+    } finally {
+      setSubmittingSettings(false);
     }
   };
 
@@ -421,28 +576,49 @@ export default function CustomerDashboard() {
         isDark ? 'bg-indigo-500/10' : 'bg-indigo-500/3'
       }`}></div>
 
-      {/* 1. Sidebar Navigation (Width: 280px) */}
-      <aside className={`w-[280px] border-r p-6 flex flex-col justify-between hidden md:flex shrink-0 z-10 transition-colors duration-300 ${
+      {/* 1. Sidebar Navigation */}
+      <aside className={`border-r p-4 flex flex-col justify-between hidden md:flex shrink-0 z-25 transition-all duration-300 ease-in-out group/sidebar ${
+        isSidebarCollapsed 
+          ? "w-[76px] hover:w-[280px]" 
+          : "w-[280px]"
+      } ${
         isDark 
           ? 'bg-[#0F172A]/70 backdrop-blur-md border-[#1E293B] text-[#F8FAFC]' 
           : 'bg-white/80 backdrop-blur-md border-slate-200/80 text-slate-800'
       }`}>
         <div className="space-y-8">
           {/* Brand Logo Header */}
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-[#38b1f7] flex items-center justify-center shadow-[0_0_15px_rgba(56,177,247,0.4)]">
-              <span className="font-extrabold text-[#020617] text-md">Ω</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-lg bg-[#38b1f7] flex items-center justify-center shadow-[0_0_15px_rgba(56,177,247,0.4)] shrink-0">
+                <span className="font-extrabold text-[#020617] text-md">Ω</span>
+              </div>
+              <div className={`transition-all duration-300 ${
+                isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto" : "opacity-100 w-auto"
+              }`}>
+                <h2 className={`font-bold text-sm transition-colors whitespace-nowrap ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>OCS Helpdesk</h2>
+                <p className={`text-[9px] font-mono tracking-wider uppercase whitespace-nowrap ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>Portal Client</p>
+              </div>
             </div>
-            <div>
-              <h2 className={`font-bold text-sm transition-colors ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>OCS Helpdesk</h2>
-              <p className={`text-[9px] font-mono tracking-wider uppercase ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>Portal Client</p>
-            </div>
+            <button
+              onClick={toggleSidebar}
+              className={`p-1.5 rounded-lg border transition-all duration-200 active:scale-95 shrink-0 ${
+                isSidebarCollapsed ? "opacity-0 group-hover/sidebar:opacity-100" : "opacity-100"
+              } ${
+                isDark 
+                  ? 'border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white' 
+                  : 'border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+              }`}
+              title={isSidebarCollapsed ? "Expand Sidebar Lock" : "Collapse Sidebar"}
+            >
+              {isSidebarCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
+            </button>
           </div>
 
           {/* Nav List */}
           <nav className="space-y-1">
             <button
-              onClick={() => { setActiveTab("dashboard"); setSelectedTicketId(null); }}
+              onClick={() => { setActiveTab("dashboard"); setSelectedTicketId(null); setSelectedArticle(null); }}
               className={`w-full h-10 flex items-center justify-between px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
                 activeTab === "dashboard"
                   ? isDark
@@ -454,13 +630,15 @@ export default function CustomerDashboard() {
               }`}
             >
               <div className="flex items-center space-x-2.5">
-                <BarChart2 className="w-4 h-4" />
-                <span>Dashboard</span>
+                <BarChart2 className="w-4 h-4 shrink-0" />
+                <span className={`transition-all duration-300 ${
+                  isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
+                }`}>Dashboard</span>
               </div>
             </button>
             
             <button
-              onClick={() => { setActiveTab("tickets"); setSelectedTicketId(null); }}
+              onClick={() => { setActiveTab("tickets"); setSelectedTicketId(null); setSelectedArticle(null); }}
               className={`w-full h-10 flex items-center justify-between px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
                 activeTab === "tickets"
                   ? isDark
@@ -472,11 +650,15 @@ export default function CustomerDashboard() {
               }`}
             >
               <div className="flex items-center space-x-2.5">
-                <MessageSquare className="w-4 h-4" />
-                <span>My Tickets</span>
+                <MessageSquare className="w-4 h-4 shrink-0" />
+                <span className={`transition-all duration-300 ${
+                  isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
+                }`}>My Tickets</span>
               </div>
               {activeTicketsCount > 0 && (
-                <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold transition-all duration-300 ${
+                  isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto" : "opacity-100 w-auto"
+                } ${
                   isDark ? 'bg-[#38b1f7] text-[#020617]' : 'bg-[#38b1f7] text-white'
                 }`}>
                   {activeTicketsCount}
@@ -485,31 +667,42 @@ export default function CustomerDashboard() {
             </button>
 
             <button
-              disabled
-              className={`w-full h-10 flex items-center justify-between px-3 rounded-lg text-xs font-semibold tracking-wide cursor-not-allowed opacity-40 ${
-                isDark ? 'text-slate-500' : 'text-slate-400'
+              onClick={() => { setActiveTab("kb"); setSelectedTicketId(null); setSelectedArticle(null); }}
+              className={`w-full h-10 flex items-center justify-between px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                activeTab === "kb"
+                  ? isDark
+                    ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
+                    : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
+                  : isDark 
+                    ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               }`}
             >
               <div className="flex items-center space-x-2.5">
-                <BookOpen className="w-4 h-4" />
-                <span>Knowledge Base</span>
+                <BookOpen className="w-4 h-4 shrink-0" />
+                <span className={`transition-all duration-300 ${
+                  isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
+                }`}>Knowledge Base</span>
               </div>
-              <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded border ${
-                isDark ? 'bg-zinc-900 text-zinc-400 border-white/[0.03]' : 'bg-slate-100 text-slate-500 border-slate-200'
-              }`}>
-                Sprint 2
-              </span>
             </button>
 
             <button
-              disabled
-              className={`w-full h-10 flex items-center justify-between px-3 rounded-lg text-xs font-semibold tracking-wide cursor-not-allowed opacity-40 ${
-                isDark ? 'text-slate-500' : 'text-slate-400'
+              onClick={() => { setActiveTab("settings"); setSelectedTicketId(null); setSelectedArticle(null); }}
+              className={`w-full h-10 flex items-center justify-between px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                activeTab === "settings"
+                  ? isDark
+                    ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
+                    : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
+                  : isDark 
+                    ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               }`}
             >
               <div className="flex items-center space-x-2.5">
-                <Settings className="w-4 h-4" />
-                <span>Settings</span>
+                <Settings className="w-4 h-4 shrink-0" />
+                <span className={`transition-all duration-300 ${
+                  isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
+                }`}>Settings</span>
               </div>
             </button>
           </nav>
@@ -527,14 +720,18 @@ export default function CustomerDashboard() {
             }`}>
               {user.name.charAt(0).toUpperCase()}
             </div>
-            <div className="overflow-hidden">
-              <p className={`text-xs font-semibold truncate ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>{user.name}</p>
-              <p className={`text-[9px] font-mono uppercase tracking-wider ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>{user.role}</p>
+            <div className={`overflow-hidden transition-all duration-300 ${
+              isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto" : "opacity-100 w-auto"
+            }`}>
+              <p className={`text-xs font-semibold truncate whitespace-nowrap ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>{user.name}</p>
+              <p className={`text-[9px] font-mono uppercase tracking-wider whitespace-nowrap ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>{user.role}</p>
             </div>
           </div>
           <button
             onClick={() => logout()}
-            className={`w-full h-8 flex items-center justify-center text-[11px] font-bold rounded-lg transition-all duration-150 active:scale-98 ${
+            className={`w-full flex items-center justify-center text-[11px] font-bold rounded-lg transition-all duration-150 active:scale-98 ${
+              isSidebarCollapsed ? "opacity-0 h-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:h-8 py-0" : "opacity-100 h-8 py-2"
+            } ${
               isDark 
                 ? 'text-red-400 hover:text-white hover:bg-red-950/40 border border-red-500/20 hover:border-red-500/40' 
                 : 'text-red-600 hover:text-white hover:bg-red-600 border border-red-200 hover:border-red-600'
@@ -553,10 +750,22 @@ export default function CustomerDashboard() {
         }`}>
           <div>
             <h1 className={`font-bold text-lg tracking-tight ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>
-              {activeTab === "dashboard" ? "Dashboard Overview" : "My Support Tickets"}
+              {activeTab === "dashboard" 
+                ? "Dashboard Overview" 
+                : activeTab === "tickets"
+                ? "My Support Tickets"
+                : activeTab === "kb"
+                ? "Knowledge Base"
+                : "Profile Settings"}
             </h1>
             <p className={`text-[10px] ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>
-              {activeTab === "dashboard" ? "Metrics and active support overview" : "View, manage, and discuss your submitted issues"}
+              {activeTab === "dashboard" 
+                ? "Metrics and active support overview" 
+                : activeTab === "tickets"
+                ? "View, manage, and discuss your submitted issues"
+                : activeTab === "kb"
+                ? "Search and read troubleshooting guidelines and articles"
+                : "Manage your personal profile and account credentials"}
             </p>
           </div>
           <div className="flex items-center space-x-3">
@@ -1066,6 +1275,316 @@ export default function CustomerDashboard() {
                     )}
                   </div>
                 )}
+              </div>
+            )}
+
+            {activeTab === "kb" && (
+              <div className="space-y-6">
+                {selectedArticle ? (
+                  /* KB Article Reader View */
+                  <div className={`p-6 md:p-8 border rounded-2xl transition-all duration-300 ${
+                    isDark ? 'glass-card bg-[#0F172A]/45 border-white/[0.06]' : 'bg-white border-slate-200/80 shadow-md'
+                  }`}>
+                    <div className="flex items-center justify-between border-b pb-4 mb-6">
+                      <button
+                        onClick={() => setSelectedArticle(null)}
+                        className={`flex items-center space-x-1.5 px-3 py-1.5 border rounded-lg text-xs font-semibold transition-all ${
+                          isDark 
+                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700/50' 
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        <span>Back to Articles</span>
+                      </button>
+                      <div className="flex items-center space-x-2 text-[11px] text-slate-500 font-mono">
+                        <span>Reads: {selectedArticle.totalReads}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-2 flex-wrap gap-2">
+                        {selectedArticle.category?.name && (
+                          <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/20 px-2.5 py-0.5 rounded-full">
+                            {selectedArticle.category.name}
+                          </span>
+                        )}
+                        {selectedArticle.tags?.map((tag: string, index: number) => (
+                          <span key={index} className="text-[10px] font-bold text-slate-650 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-200 dark:border-slate-700/55">
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+
+                      <h2 className={`text-2xl md:text-3xl font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                        {selectedArticle.title}
+                      </h2>
+
+                      <p className="text-xs text-slate-400 font-mono">
+                        Published by {selectedArticle.author?.name || "Support"} on {new Date(selectedArticle.createdAt).toLocaleDateString()}
+                      </p>
+
+                      <div 
+                        className={`prose prose-sm dark:prose-invert max-w-none pt-4 border-t whitespace-pre-wrap leading-relaxed text-sm ${
+                          isDark ? 'text-slate-200 border-white/[0.05]' : 'text-slate-700 border-slate-100'
+                        }`}
+                        dangerouslySetInnerHTML={{ __html: selectedArticle.content }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  /* KB Browse View */
+                  <div className="grid lg:grid-cols-4 gap-6 items-start">
+                    {/* Left Column: Categories List */}
+                    <div className={`p-5 border rounded-2xl space-y-4 lg:col-span-1 transition-all ${
+                      isDark ? 'glass-card bg-[#0F172A]/45 border-white/[0.06]' : 'bg-white border-slate-200/80 shadow-sm'
+                    }`}>
+                      <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                        Categories
+                      </h3>
+                      <div className="space-y-1">
+                        <button
+                          onClick={() => setSelectedKbCategory(null)}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                            selectedKbCategory === null
+                              ? isDark
+                                ? "bg-[#38b1f7]/15 text-[#38b1f7] border border-[#38b1f7]/25"
+                                : "bg-[#38b1f7]/8 text-[#0d7fc0] border border-[#38b1f7]/20"
+                              : isDark 
+                                ? "text-slate-300 hover:bg-white/[0.03]" 
+                                : "text-slate-655 hover:bg-slate-50"
+                          }`}
+                        >
+                          All Categories
+                        </button>
+                        {kbCategories.map((cat) => (
+                          <button
+                            key={cat.id}
+                            onClick={() => setSelectedKbCategory(cat.id)}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-between ${
+                              selectedKbCategory === cat.id
+                                ? isDark
+                                  ? "bg-[#38b1f7]/15 text-[#38b1f7] border border-[#38b1f7]/25"
+                                  : "bg-[#38b1f7]/8 text-[#0d7fc0] border border-[#38b1f7]/20"
+                                : isDark 
+                                  ? "text-slate-300 hover:bg-white/[0.03]" 
+                                  : "text-slate-655 hover:bg-slate-50"
+                            }`}
+                          >
+                            <span>{cat.name}</span>
+                            <span className="text-[10px] opacity-60 font-mono">({cat.article_count || 0})</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Right Column: Search & Articles Grid */}
+                    <div className="lg:col-span-3 space-y-4">
+                      {/* Search Bar */}
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={searchKb}
+                          onChange={(e) => setSearchKb(e.target.value)}
+                          placeholder="Search for articles, topics, or error codes..."
+                          className={`w-full text-xs h-[48px] rounded-xl pl-10 pr-4 outline-none focus:ring-1 transition-all duration-200 ${
+                            isDark
+                              ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
+                              : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
+                          }`}
+                        />
+                        <Search className="absolute left-3.5 top-4 w-4 h-4 text-slate-400" />
+                      </div>
+
+                      {/* Articles Grid */}
+                      {loadingKb ? (
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div className={`h-40 rounded-2xl ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
+                          <div className={`h-40 rounded-2xl ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
+                        </div>
+                      ) : kbArticles.length === 0 ? (
+                        <div className={`p-8 text-center text-sm border rounded-2xl ${
+                          isDark ? 'glass-card border-white/[0.06] text-slate-500' : 'bg-white border-slate-200 shadow-sm text-slate-400'
+                        }`}>
+                          No articles found matching search criteria.
+                        </div>
+                      ) : (
+                        <div className="grid md:grid-cols-2 gap-4">
+                          {kbArticles.map((art) => (
+                            <div
+                              key={art.id}
+                              onClick={() => handleReadArticle(art)}
+                              className={`p-5 cursor-pointer text-left transition-all duration-200 border rounded-2xl flex flex-col justify-between h-[160px] ${
+                                isDark
+                                  ? "bg-[#0F172A]/45 border-white/[0.06] hover:border-[#38b1f7]/25 hover:bg-slate-900/20"
+                                  : "bg-white border-slate-200/80 shadow-sm hover:border-[#38b1f7]/30 hover:bg-slate-50/50 hover:shadow-md"
+                              }`}
+                            >
+                              <div>
+                                <div className="flex items-center space-x-1.5 mb-2">
+                                  {art.category?.name && (
+                                    <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/20 px-2.5 py-0.5 rounded-full">
+                                      {art.category.name}
+                                    </span>
+                                  )}
+                                </div>
+                                <h4 className={`font-bold text-sm line-clamp-2 transition-colors ${
+                                  isDark ? "text-slate-100 hover:text-[#38b1f7]" : "text-slate-800 hover:text-[#0d7fc0]"
+                                }`}>{art.title}</h4>
+                              </div>
+                              
+                              <div className="flex items-center justify-between text-[10px] text-slate-400 pt-3 border-t border-slate-100 dark:border-white/[0.03]">
+                                <span>By {art.author?.name}</span>
+                                <span>{art.totalReads || 0} reads</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "settings" && (
+              <div className="grid md:grid-cols-3 gap-6 items-start">
+                {/* Edit Form */}
+                <div className={`p-6 border rounded-2xl md:col-span-2 transition-all ${
+                  isDark ? 'glass-card bg-[#0F172A]/45 border-white/[0.06]' : 'bg-white border-slate-200/80 shadow-sm'
+                }`}>
+                  <h3 className={`text-md font-bold tracking-tight mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    Account Profile Settings
+                  </h3>
+                  
+                  <form onSubmit={handleUpdateProfile} className="space-y-4">
+                    {/* Name */}
+                    <div className="space-y-1.5">
+                      <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Full Name</label>
+                      <input
+                        type="text"
+                        required
+                        className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full ${
+                          isDark
+                            ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
+                            : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
+                        }`}
+                        value={settingsForm.name}
+                        onChange={(e) => setSettingsForm(prev => ({ ...prev, name: e.target.value }))}
+                        disabled={submittingSettings}
+                      />
+                    </div>
+
+                    {/* Email */}
+                    <div className="space-y-1.5">
+                      <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Email Address (Read Only)</label>
+                      <input
+                        type="email"
+                        disabled
+                        className={`text-sm h-[44px] rounded-xl outline-none px-4 w-full opacity-65 cursor-not-allowed ${
+                          isDark
+                            ? "bg-slate-950/40 border border-white/5 text-[#CBD5E1]"
+                            : "bg-slate-100 border border-slate-200 text-slate-500"
+                        }`}
+                        value={user?.email || ""}
+                      />
+                    </div>
+
+                    {/* New Password */}
+                    <div className="space-y-1.5">
+                      <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>New Password (Optional)</label>
+                      <input
+                        type="password"
+                        placeholder="Leave blank to keep current password"
+                        className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full ${
+                          isDark
+                            ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
+                            : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
+                        }`}
+                        value={settingsForm.password}
+                        onChange={(e) => setSettingsForm(prev => ({ ...prev, password: e.target.value }))}
+                        disabled={submittingSettings}
+                      />
+                    </div>
+
+                    {/* Confirm Password */}
+                    <div className="space-y-1.5">
+                      <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Confirm Password</label>
+                      <input
+                        type="password"
+                        placeholder="Verify your new password"
+                        className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full ${
+                          isDark
+                            ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
+                            : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
+                        }`}
+                        value={settingsForm.confirmPassword}
+                        onChange={(e) => setSettingsForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                        disabled={submittingSettings}
+                      />
+                    </div>
+
+                    <div className="pt-2">
+                      <button
+                        type="submit"
+                        disabled={submittingSettings}
+                        className="btn-cyber flex items-center space-x-2"
+                      >
+                        <span>{submittingSettings ? "Saving Settings..." : "Save Settings"}</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Right Metadata Details panel */}
+                <div className={`p-6 border rounded-2xl md:col-span-1 space-y-6 transition-all ${
+                  isDark ? 'glass-card bg-[#0F172A]/45 border-white/[0.06]' : 'bg-white border-slate-200/80 shadow-sm'
+                }`}>
+                  <div>
+                    <h4 className={`text-xs font-bold uppercase tracking-wider mb-3 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                      Profile Metadata
+                    </h4>
+                    <div className="space-y-3 text-xs font-mono">
+                      <div className="flex justify-between border-b pb-2 dark:border-white/[0.03] border-slate-150">
+                        <span className="text-slate-400">User Role:</span>
+                        <span className="text-emerald-500 font-bold">{user?.role}</span>
+                      </div>
+                      <div className="flex justify-between border-b pb-2 dark:border-white/[0.03] border-slate-150">
+                        <span className="text-slate-400">Joined On:</span>
+                        <span className={isDark ? "text-slate-200" : "text-slate-700"}>{user ? new Date(user.createdAt).toLocaleDateString() : ""}</span>
+                      </div>
+                      <div className="flex justify-between border-b pb-2 dark:border-white/[0.03] border-slate-150">
+                        <span className="text-slate-400">Verified:</span>
+                        <span className={user?.emailVerified ? "text-emerald-500 font-bold" : "text-amber-500 font-bold"}>
+                          {user?.emailVerified ? "Yes" : "No"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between flex-wrap gap-2 pt-1">
+                        <span className="text-slate-400">Account ID:</span>
+                        <span className="text-[9px] text-slate-500 break-all">{user?.id}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className={`text-xs font-bold uppercase tracking-wider mb-3 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                      Preferences
+                    </h4>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-slate-400">Dark Theme:</span>
+                      <button
+                        onClick={toggleTheme}
+                        className={`text-xs font-semibold px-3 py-1 border rounded-lg transition-all ${
+                          isDark 
+                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700/50' 
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        {isDark ? "Enabled" : "Disabled"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </main>

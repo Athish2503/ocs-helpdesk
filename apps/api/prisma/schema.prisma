@@ -41,6 +41,7 @@ model User {
   messages        TicketMessage[]
   teams          Team[]         @relation("TeamMembers")
   kbArticles     KnowledgeBaseArticle[] @relation("AuthorArticles")
+  kbVersions     KnowledgeBaseArticleVersion[] @relation("EditorVersions")
 
   @@map("users")
 }
@@ -96,8 +97,12 @@ enum TicketPriority {
 model Category {
   id          String   @id @default(uuid())
   name        String   @unique
+  slug        String?  @unique
   description String?
   isActive    Boolean  @default(true)
+  parentId    String?  @map("parent_id")
+  parent      Category?  @relation("CategoryParent", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryParent")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   tickets     Ticket[]
@@ -153,20 +158,178 @@ model Team {
 }
 
 model KnowledgeBaseArticle {
-  id          String   @id @default(uuid())
-  title       String
-  slug        String   @unique
-  content     String
-  isPublished Boolean  @default(false)
-  isInternal  Boolean  @default(false)
-  authorId    String
-  author      User     @relation("AuthorArticles", fields: [authorId], references: [id])
-  categoryId  String?
-  category    Category? @relation(fields: [categoryId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String   @id @default(uuid())
+  title            String
+  slug             String   @unique
+  content          String
+  isPublished      Boolean  @default(false) @map("is_published")
+  isInternal       Boolean  @default(false) @map("is_internal")
+  authorId         String   @map("author_id")
+  author           User     @relation("AuthorArticles", fields: [authorId], references: [id])
+  categoryId       String?  @map("category_id")
+  category         Category? @relation(fields: [categoryId], references: [id])
+  
+  // SEO overrides
+  metaTitle        String?  @map("meta_title") @db.VarChar(60)
+  metaDescription  String?  @map("meta_description") @db.VarChar(160)
+  keywords         String?
+  canonicalUrl     String?  @map("canonical_url") @db.VarChar(255)
+  ogImage          String?  @map("og_image") @db.VarChar(500)
+
+  // Analytics fields
+  totalReads       Int      @default(0) @map("total_reads")
+  uniqueReads      Int      @default(0) @map("unique_reads")
+  lastReadAt       DateTime? @map("last_read_at")
+
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  versions         KnowledgeBaseArticleVersion[]
+  sources          KnowledgeBaseSource[]
+  reads            KnowledgeBaseArticleRead[]
+  attachments      KnowledgeBaseArticleAttachment[]
+  tags             Tag[]    @relation("ArticleTags")
 
   @@map("knowledge_base_articles")
+}
+
+model Tag {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  articles  KnowledgeBaseArticle[] @relation("ArticleTags")
+
+  @@map("knowledge_tags")
+}
+
+model KnowledgeBaseArticleVersion {
+  id            String   @id @default(uuid())
+  articleId     String   @map("article_id")
+  article       KnowledgeBaseArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  versionNumber Int      @map("version_number")
+  title         String
+  content       String
+  changedBy     String   @map("changed_by")
+  editor        User     @relation("EditorVersions", fields: [changedBy], references: [id])
+  changeSummary String?  @map("change_summary")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("knowledge_versions")
+}
+
+model KnowledgeBaseSource {
+  id                String   @id @default(uuid())
+  articleId         String   @map("article_id")
+  article           KnowledgeBaseArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  sourceType        String   @map("source_type") // 'dcr', 'manual', 'import'
+  sourceReferenceId String?  @map("source_reference_id") // DCR ID if sourceType is 'dcr'
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@map("knowledge_sources")
+}
+
+model KnowledgeBaseArticleRead {
+  id                 String   @id @default(uuid())
+  articleId          String   @map("article_id")
+  article            KnowledgeBaseArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  sessionFingerprint String   @map("session_fingerprint") @db.VarChar(64)
+  ipHash             String   @map("ip_hash") @db.VarChar(64)
+  userAgent          String?  @map("user_agent")
+  referrer           String?  @map("referrer") @db.VarChar(500)
+  utmSource          String?  @map("utm_source") @db.VarChar(100)
+  utmMedium          String?  @map("utm_medium") @db.VarChar(100)
+  utmCampaign        String?  @map("utm_campaign") @db.VarChar(100)
+  readDuration       Int      @default(0) @map("read_duration")
+  scrollDepth        Int      @default(0) @map("scroll_depth")
+  isUnique           Boolean  @default(true) @map("is_unique")
+  readAt             DateTime @default(now()) @map("read_at")
+
+  @@map("knowledge_article_reads")
+}
+
+model KnowledgeBaseArticleAccessLog {
+  id               String   @id @default(uuid())
+  articleId        String?  @map("article_id")
+  articleSlug      String?  @map("article_slug") @db.VarChar(255)
+  ipAddress        String   @map("ip_address") @db.VarChar(45)
+  ipHash           String   @map("ip_hash") @db.VarChar(64)
+  userAgent        String?  @map("user_agent")
+  requestMethod    String   @default("GET") @map("request_method") @db.VarChar(10)
+  requestPath      String?  @map("request_path") @db.VarChar(500)
+  queryParams      String?  @map("query_params")
+  responseStatus   Int?     @map("response_status")
+  responseTimeMs   Int?     @map("response_time_ms")
+  isBot            Boolean  @default(false) @map("is_bot")
+  isSuspicious     Boolean  @default(false) @map("is_suspicious")
+  suspiciousReason String?  @map("suspicious_reason") @db.VarChar(255)
+  accessedAt       DateTime @default(now()) @map("accessed_at")
+
+  @@map("knowledge_article_access_log")
+}
+
+model KnowledgeBaseRateLimit {
+  id             String   @id @default(uuid())
+  ipAddress      String   @map("ip_address") @db.VarChar(45)
+  endpoint       String   @db.VarChar(100)
+  requestCount   Int      @default(1) @map("request_count")
+  windowStart    DateTime @default(now()) @map("window_start")
+  windowEnd      DateTime? @map("window_end")
+  isBlocked      Boolean  @default(false) @map("is_blocked")
+  violationCount Int      @default(0) @map("violation_count")
+  lastRequestAt  DateTime @default(now()) @updatedAt @map("last_request_at")
+
+  @@unique([ipAddress, endpoint, windowStart], name: "unique_ip_endpoint_window")
+  @@map("knowledge_rate_limits")
+}
+
+model KnowledgeBaseIPBlacklist {
+  id          String   @id @default(uuid())
+  ipAddress   String   @map("ip_address") @db.VarChar(45)
+  reason      String   @db.VarChar(255)
+  blockedBy   String   @default("SYSTEM") @map("blocked_by") @db.VarChar(32)
+  isPermanent Boolean  @default(false) @map("is_permanent")
+  blockedAt   DateTime @default(now()) @map("blocked_at")
+  expiresAt   DateTime? @map("expires_at")
+  unblockedAt DateTime? @map("unblocked_at")
+  notes       String?
+
+  @@map("knowledge_ip_blacklist")
+}
+
+model KnowledgeBaseSecurityEvent {
+  id             String   @id @default(uuid())
+  eventType      String   @map("event_type") // 'RATE_LIMIT_EXCEEDED', 'SQL_INJECTION_ATTEMPT', etc.
+  severity       String   @default("MEDIUM") @db.VarChar(10)
+  ipAddress      String   @map("ip_address") @db.VarChar(45)
+  userAgent      String?  @map("user_agent")
+  requestPath    String?  @map("request_path") @db.VarChar(500)
+  requestPayload String?  @map("request_payload")
+  description    String?
+  isResolved     Boolean  @default(false) @map("is_resolved")
+  resolvedBy     String?  @map("resolved_by") @db.VarChar(32)
+  resolvedAt     DateTime? @map("resolved_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("knowledge_security_events")
+}
+
+model KnowledgeBaseArticleAttachment {
+  id               String   @id @default(uuid())
+  articleId        String   @map("article_id")
+  article          KnowledgeBaseArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  filename         String   @db.VarChar(255)
+  originalFilename String   @map("original_filename") @db.VarChar(255)
+  filePath         String   @map("file_path") @db.VarChar(500)
+  fileSize         Int      @map("file_size")
+  mimeType         String   @map("mime_type") @db.VarChar(100)
+  width            Int?
+  height           Int?
+  uploadedBy       String   @map("uploaded_by") @db.VarChar(32)
+  isFeatured       Boolean  @default(false) @map("is_featured")
+  displayOrder     Int      @default(0) @map("display_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@map("knowledge_article_attachments")
 }
 
 

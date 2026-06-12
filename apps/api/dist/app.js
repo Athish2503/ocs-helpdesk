@@ -20,6 +20,7 @@ const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
+app.use("/uploads", express_1.default.static("uploads"));
 // Swagger documentation
 (0, swagger_js_1.setupSwagger)(app);
 // ---------------------------------------------------------------------------

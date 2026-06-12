@@ -7,6 +7,8 @@ const role_middleware_js_1 = require("../../middleware/role.middleware.js");
 const router = (0, express_1.Router)();
 // Secure all user routes
 router.use(auth_middleware_js_1.requireAuth);
+// Profile update accessible to any authenticated user
+router.patch("/me/profile", users_controller_js_1.updateProfileHandler);
 // Agents listing can be accessed by both admins and agents (e.g. for forwarding/assignment UI)
 router.get("/agents", (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), users_controller_js_1.getAgentsHandler);
 // Admin-only operations

@@ -48,7 +48,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.NullsOrder = exports.QueryMode = exports.SortOrder = exports.KnowledgeBaseArticleScalarFieldEnum = exports.TeamScalarFieldEnum = exports.TicketMessageScalarFieldEnum = exports.TicketScalarFieldEnum = exports.CategoryScalarFieldEnum = exports.PasswordResetTokenScalarFieldEnum = exports.MagicTokenScalarFieldEnum = exports.RefreshTokenScalarFieldEnum = exports.UserScalarFieldEnum = exports.TransactionIsolationLevel = exports.ModelName = exports.AnyNull = exports.JsonNull = exports.DbNull = exports.NullTypes = exports.Decimal = void 0;
+exports.NullsOrder = exports.QueryMode = exports.SortOrder = exports.KnowledgeBaseArticleAttachmentScalarFieldEnum = exports.KnowledgeBaseSecurityEventScalarFieldEnum = exports.KnowledgeBaseIPBlacklistScalarFieldEnum = exports.KnowledgeBaseRateLimitScalarFieldEnum = exports.KnowledgeBaseArticleAccessLogScalarFieldEnum = exports.KnowledgeBaseArticleReadScalarFieldEnum = exports.KnowledgeBaseSourceScalarFieldEnum = exports.KnowledgeBaseArticleVersionScalarFieldEnum = exports.TagScalarFieldEnum = exports.KnowledgeBaseArticleScalarFieldEnum = exports.TeamScalarFieldEnum = exports.TicketMessageScalarFieldEnum = exports.TicketScalarFieldEnum = exports.CategoryScalarFieldEnum = exports.PasswordResetTokenScalarFieldEnum = exports.MagicTokenScalarFieldEnum = exports.RefreshTokenScalarFieldEnum = exports.UserScalarFieldEnum = exports.TransactionIsolationLevel = exports.ModelName = exports.AnyNull = exports.JsonNull = exports.DbNull = exports.NullTypes = exports.Decimal = void 0;
 const runtime = __importStar(require("@prisma/client/runtime/index-browser"));
 exports.Decimal = runtime.Decimal;
 exports.NullTypes = {
@@ -83,7 +83,16 @@ exports.ModelName = {
     Ticket: 'Ticket',
     TicketMessage: 'TicketMessage',
     Team: 'Team',
-    KnowledgeBaseArticle: 'KnowledgeBaseArticle'
+    KnowledgeBaseArticle: 'KnowledgeBaseArticle',
+    Tag: 'Tag',
+    KnowledgeBaseArticleVersion: 'KnowledgeBaseArticleVersion',
+    KnowledgeBaseSource: 'KnowledgeBaseSource',
+    KnowledgeBaseArticleRead: 'KnowledgeBaseArticleRead',
+    KnowledgeBaseArticleAccessLog: 'KnowledgeBaseArticleAccessLog',
+    KnowledgeBaseRateLimit: 'KnowledgeBaseRateLimit',
+    KnowledgeBaseIPBlacklist: 'KnowledgeBaseIPBlacklist',
+    KnowledgeBaseSecurityEvent: 'KnowledgeBaseSecurityEvent',
+    KnowledgeBaseArticleAttachment: 'KnowledgeBaseArticleAttachment'
 };
 /*
  * Enums
@@ -130,8 +139,10 @@ exports.PasswordResetTokenScalarFieldEnum = {
 exports.CategoryScalarFieldEnum = {
     id: 'id',
     name: 'name',
+    slug: 'slug',
     description: 'description',
     isActive: 'isActive',
+    parentId: 'parentId',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
 };
@@ -171,8 +182,121 @@ exports.KnowledgeBaseArticleScalarFieldEnum = {
     isInternal: 'isInternal',
     authorId: 'authorId',
     categoryId: 'categoryId',
+    metaTitle: 'metaTitle',
+    metaDescription: 'metaDescription',
+    keywords: 'keywords',
+    canonicalUrl: 'canonicalUrl',
+    ogImage: 'ogImage',
+    totalReads: 'totalReads',
+    uniqueReads: 'uniqueReads',
+    lastReadAt: 'lastReadAt',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
+};
+exports.TagScalarFieldEnum = {
+    id: 'id',
+    name: 'name',
+    createdAt: 'createdAt'
+};
+exports.KnowledgeBaseArticleVersionScalarFieldEnum = {
+    id: 'id',
+    articleId: 'articleId',
+    versionNumber: 'versionNumber',
+    title: 'title',
+    content: 'content',
+    changedBy: 'changedBy',
+    changeSummary: 'changeSummary',
+    createdAt: 'createdAt'
+};
+exports.KnowledgeBaseSourceScalarFieldEnum = {
+    id: 'id',
+    articleId: 'articleId',
+    sourceType: 'sourceType',
+    sourceReferenceId: 'sourceReferenceId',
+    createdAt: 'createdAt'
+};
+exports.KnowledgeBaseArticleReadScalarFieldEnum = {
+    id: 'id',
+    articleId: 'articleId',
+    sessionFingerprint: 'sessionFingerprint',
+    ipHash: 'ipHash',
+    userAgent: 'userAgent',
+    referrer: 'referrer',
+    utmSource: 'utmSource',
+    utmMedium: 'utmMedium',
+    utmCampaign: 'utmCampaign',
+    readDuration: 'readDuration',
+    scrollDepth: 'scrollDepth',
+    isUnique: 'isUnique',
+    readAt: 'readAt'
+};
+exports.KnowledgeBaseArticleAccessLogScalarFieldEnum = {
+    id: 'id',
+    articleId: 'articleId',
+    articleSlug: 'articleSlug',
+    ipAddress: 'ipAddress',
+    ipHash: 'ipHash',
+    userAgent: 'userAgent',
+    requestMethod: 'requestMethod',
+    requestPath: 'requestPath',
+    queryParams: 'queryParams',
+    responseStatus: 'responseStatus',
+    responseTimeMs: 'responseTimeMs',
+    isBot: 'isBot',
+    isSuspicious: 'isSuspicious',
+    suspiciousReason: 'suspiciousReason',
+    accessedAt: 'accessedAt'
+};
+exports.KnowledgeBaseRateLimitScalarFieldEnum = {
+    id: 'id',
+    ipAddress: 'ipAddress',
+    endpoint: 'endpoint',
+    requestCount: 'requestCount',
+    windowStart: 'windowStart',
+    windowEnd: 'windowEnd',
+    isBlocked: 'isBlocked',
+    violationCount: 'violationCount',
+    lastRequestAt: 'lastRequestAt'
+};
+exports.KnowledgeBaseIPBlacklistScalarFieldEnum = {
+    id: 'id',
+    ipAddress: 'ipAddress',
+    reason: 'reason',
+    blockedBy: 'blockedBy',
+    isPermanent: 'isPermanent',
+    blockedAt: 'blockedAt',
+    expiresAt: 'expiresAt',
+    unblockedAt: 'unblockedAt',
+    notes: 'notes'
+};
+exports.KnowledgeBaseSecurityEventScalarFieldEnum = {
+    id: 'id',
+    eventType: 'eventType',
+    severity: 'severity',
+    ipAddress: 'ipAddress',
+    userAgent: 'userAgent',
+    requestPath: 'requestPath',
+    requestPayload: 'requestPayload',
+    description: 'description',
+    isResolved: 'isResolved',
+    resolvedBy: 'resolvedBy',
+    resolvedAt: 'resolvedAt',
+    createdAt: 'createdAt'
+};
+exports.KnowledgeBaseArticleAttachmentScalarFieldEnum = {
+    id: 'id',
+    articleId: 'articleId',
+    filename: 'filename',
+    originalFilename: 'originalFilename',
+    filePath: 'filePath',
+    fileSize: 'fileSize',
+    mimeType: 'mimeType',
+    width: 'width',
+    height: 'height',
+    uploadedBy: 'uploadedBy',
+    isFeatured: 'isFeatured',
+    displayOrder: 'displayOrder',
+    createdAt: 'createdAt'
 };
 exports.SortOrder = {
     asc: 'asc',

@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../../../context/AuthContext";
+import { useToast } from "../../../context/ToastContext";
 import { fetchWithAuth } from "../../../lib/api";
 import {
   Server,
@@ -18,7 +20,9 @@ import {
   Send,
   Sun,
   Moon,
-  RefreshCw
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 // Types matching database schema
@@ -87,6 +91,23 @@ interface KBArticle {
 
 export default function AdminDashboard() {
   const { user, logout, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const toast = useToast();
+
+  // Sidebar collapsible state
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("admin_sidebar_collapsed");
+      return saved === "true";
+    }
+    return false;
+  });
+
+  const toggleSidebar = () => {
+    const next = !isSidebarCollapsed;
+    setIsSidebarCollapsed(next);
+    localStorage.setItem("admin_sidebar_collapsed", String(next));
+  };
   
   // Theme state synced with local storage and window storage events
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -114,6 +135,7 @@ export default function AdminDashboard() {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
     localStorage.setItem("theme", newTheme);
+    toast.info(`Switched to ${newTheme === 'dark' ? 'Dark' : 'Light'} Mode`);
   };
 
   const isDark = theme === 'dark';
@@ -244,9 +266,13 @@ export default function AdminDashboard() {
         setSelectedTicket(prev => prev ? { ...prev, ...updated } : null);
         // Refresh ticket list
         setTickets(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t));
+        toast.success("Ticket details updated successfully!");
+      } else {
+        toast.error("Failed to update ticket details.");
       }
     } catch (err) {
       console.error(err);
+      toast.error("Failed to update ticket details.");
     }
   };
 
@@ -265,9 +291,13 @@ export default function AdminDashboard() {
         const newMessage = resData.data.message;
         setSelectedTicket(prev => prev ? { ...prev, messages: [...(prev.messages || []), newMessage] } : null);
         setTicketReply("");
+        toast.success("Reply message sent successfully!");
+      } else {
+        toast.error("Failed to send message reply.");
       }
     } catch (err) {
       console.error(err);
+      toast.error("Failed to send message.");
     }
   };
 
@@ -291,12 +321,14 @@ export default function AdminDashboard() {
         setNewTeamMembers([]);
         setShowCreateTeam(false);
         refreshAllData();
+        toast.success("Team created successfully!");
       } else {
         const errData = await res.json();
-        alert(errData.error?.message || "Error creating team");
+        toast.error(errData.error?.message || "Error creating team");
       }
     } catch (err) {
       console.error(err);
+      toast.error("Network error: Failed to create team.");
     }
   };
 
@@ -314,9 +346,13 @@ export default function AdminDashboard() {
       const res = await fetchWithAuth(`/teams/${teamId}`, { method: "DELETE" });
       if (res.ok) {
         refreshAllData();
+        toast.success("Team deleted successfully!");
+      } else {
+        toast.error("Failed to delete team.");
       }
     } catch (err) {
       console.error(err);
+      toast.error("Failed to delete team.");
     }
   };
 
@@ -331,9 +367,13 @@ export default function AdminDashboard() {
         const resData = await res.json();
         const updatedUser = resData.data.user;
         setUsers(prev => prev.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser } : u));
+        toast.success("User profile updated successfully!");
+      } else {
+        toast.error("Failed to update user profile.");
       }
     } catch (err) {
       console.error(err);
+      toast.error("Failed to update user profile.");
     }
   };
 
@@ -375,12 +415,14 @@ export default function AdminDashboard() {
         setKbArticleId(null);
         setKbEditing(false);
         refreshAllData();
+        toast.success("Knowledge Base article saved successfully!");
       } else {
         const errData = await res.json();
-        alert(errData.error?.message || "Error saving article");
+        toast.error(errData.error?.message || "Error saving article");
       }
     } catch (err) {
       console.error(err);
+      toast.error("Failed to save KB article.");
     }
   };
 
@@ -402,9 +444,13 @@ export default function AdminDashboard() {
       const res = await fetchWithAuth(`/kb/${articleId}`, { method: "DELETE" });
       if (res.ok) {
         refreshAllData();
+        toast.success("KB article deleted successfully!");
+      } else {
+        toast.error("Failed to delete KB article.");
       }
     } catch (err) {
       console.error(err);
+      toast.error("Failed to delete KB article.");
     }
   };
 
@@ -490,21 +536,42 @@ export default function AdminDashboard() {
         isDark ? 'bg-indigo-500/10' : 'bg-indigo-500/3'
       }`}></div>
 
-      {/* ── SIDEBAR NAVIGATION (Width: 280px) ─────────────────────────────────── */}
-      <aside className={`w-[280px] border-r p-6 flex flex-col justify-between hidden md:flex shrink-0 z-10 transition-colors duration-300 ${
+      {/* ── SIDEBAR NAVIGATION ─────────────────────────────────── */}
+      <aside className={`border-r p-4 flex flex-col justify-between hidden md:flex shrink-0 z-25 transition-all duration-300 ease-in-out group/sidebar ${
+        isSidebarCollapsed 
+          ? "w-[76px] hover:w-[280px]" 
+          : "w-[280px]"
+      } ${
         isDark 
           ? 'bg-[#0F172A]/70 backdrop-blur-md border-[#1E293B] text-[#F8FAFC]' 
           : 'bg-white/80 backdrop-blur-md border-slate-200/80 text-slate-800'
       }`}>
         <div className="space-y-8">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-[#38b1f7] flex items-center justify-center shadow-[0_0_15px_rgba(56,177,247,0.4)]">
-              <span className="font-extrabold text-[#020617] text-md">🛡️</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-lg bg-[#38b1f7] flex items-center justify-center shadow-[0_0_15px_rgba(56,177,247,0.4)] shrink-0">
+                <span className="font-extrabold text-[#020617] text-md">🛡️</span>
+              </div>
+              <div className={`transition-all duration-300 ${
+                isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto" : "opacity-100 w-auto"
+              }`}>
+                <h2 className={`font-bold text-sm transition-colors whitespace-nowrap ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>Admin Center</h2>
+                <p className={`text-[9px] font-mono tracking-wider uppercase whitespace-nowrap ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>OCS Operations</p>
+              </div>
             </div>
-            <div>
-              <h2 className={`font-bold text-sm transition-colors ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>Admin Center</h2>
-              <p className={`text-[9px] font-mono tracking-wider uppercase ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>OCS Operations</p>
-            </div>
+            <button
+              onClick={toggleSidebar}
+              className={`p-1.5 rounded-lg border transition-all duration-200 active:scale-95 shrink-0 ${
+                isSidebarCollapsed ? "opacity-0 group-hover/sidebar:opacity-100" : "opacity-100"
+              } ${
+                isDark 
+                  ? 'border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white' 
+                  : 'border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+              }`}
+              title={isSidebarCollapsed ? "Expand Sidebar Lock" : "Collapse Sidebar"}
+            >
+              {isSidebarCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
+            </button>
           </div>
 
           <nav className="space-y-1">
@@ -520,7 +587,10 @@ export default function AdminDashboard() {
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               }`}
             >
-              <Server className="w-4.5 h-4.5 mr-2.5" /> Console Desk
+              <Server className="w-4.5 h-4.5 mr-2.5 shrink-0" />
+              <span className={`transition-all duration-300 ${
+                isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
+              }`}>Console Desk</span>
             </button>
             <button
               onClick={() => { setActiveTab("tickets"); setKbEditing(false); }}
@@ -534,7 +604,10 @@ export default function AdminDashboard() {
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               }`}
             >
-              <Ticket className="w-4.5 h-4.5 mr-2.5" /> All Ticket Queue
+              <Ticket className="w-4.5 h-4.5 mr-2.5 shrink-0" />
+              <span className={`transition-all duration-300 ${
+                isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
+              }`}>All Ticket Queue</span>
             </button>
             <button
               onClick={() => { setActiveTab("teams"); setKbEditing(false); setSelectedTicket(null); }}
@@ -548,7 +621,10 @@ export default function AdminDashboard() {
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               }`}
             >
-              <Layers className="w-4.5 h-4.5 mr-2.5" /> Team control
+              <Layers className="w-4.5 h-4.5 mr-2.5 shrink-0" />
+              <span className={`transition-all duration-300 ${
+                isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
+              }`}>Team control</span>
             </button>
             {user.role === "ADMIN" && (
               <button
@@ -563,11 +639,14 @@ export default function AdminDashboard() {
                       : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 }`}
               >
-                <Users className="w-4.5 h-4.5 mr-2.5" /> User Directory
+                <Users className="w-4.5 h-4.5 mr-2.5 shrink-0" />
+                <span className={`transition-all duration-300 ${
+                  isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
+                }`}>User Directory</span>
               </button>
             )}
             <button
-              onClick={() => { setActiveTab("kb"); setKbEditing(false); setSelectedTicket(null); }}
+              onClick={() => router.push("/admin/dashboard/kb")}
               className={`w-full h-10 flex items-center px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
                 activeTab === "kb"
                   ? isDark
@@ -578,7 +657,10 @@ export default function AdminDashboard() {
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               }`}
             >
-              <BookOpen className="w-4.5 h-4.5 mr-2.5" /> Knowledge Base
+              <BookOpen className="w-4.5 h-4.5 mr-2.5 shrink-0" />
+              <span className={`transition-all duration-300 ${
+                isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
+              }`}>Knowledge Base</span>
             </button>
           </nav>
         </div>
@@ -595,14 +677,18 @@ export default function AdminDashboard() {
             }`}>
               {user.name.charAt(0).toUpperCase()}
             </div>
-            <div className="overflow-hidden">
-              <p className={`text-xs font-semibold truncate ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>{user.name}</p>
-              <p className={`text-[9px] font-mono uppercase tracking-wider ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>{user.role}</p>
+            <div className={`overflow-hidden transition-all duration-300 ${
+              isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto" : "opacity-100 w-auto"
+            }`}>
+              <p className={`text-xs font-semibold truncate whitespace-nowrap ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>{user.name}</p>
+              <p className={`text-[9px] font-mono uppercase tracking-wider whitespace-nowrap ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>{user.role}</p>
             </div>
           </div>
           <button
             onClick={() => logout("/admin/login")}
-            className={`w-full h-8 flex items-center justify-center text-[11px] font-bold rounded-lg transition-all duration-150 active:scale-98 ${
+            className={`w-full flex items-center justify-center text-[11px] font-bold rounded-lg transition-all duration-150 active:scale-98 ${
+              isSidebarCollapsed ? "opacity-0 h-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:h-8 py-0" : "opacity-100 h-8 py-2"
+            } ${
               isDark 
                 ? 'text-red-400 hover:text-white hover:bg-red-950/40 border border-red-500/20 hover:border-red-500/40' 
                 : 'text-red-650 hover:text-white hover:bg-red-600 border border-red-200 hover:border-red-600'

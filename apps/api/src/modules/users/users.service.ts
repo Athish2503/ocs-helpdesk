@@ -1,5 +1,6 @@
 import { prisma } from "../../config/prisma.js";
 import type { UpdateUserInput } from "./users.schemas.js";
+import { hashPassword } from "../../utils/password.js";
 
 export async function listUsers(query: { search?: string; role?: string; isActive?: string }) {
   const where: any = {};
@@ -92,5 +93,33 @@ export async function getAgents() {
     },
     select: { id: true, name: true, email: true },
     orderBy: { name: "asc" },
+  });
+}
+
+export async function updateProfile(id: string, input: { name?: string; password?: string }) {
+  // Verify user exists
+  await getUserById(id);
+
+  const data: any = {};
+  if (input.name) {
+    data.name = input.name;
+  }
+  if (input.password) {
+    data.passwordHash = await hashPassword(input.password);
+  }
+
+  return prisma.user.update({
+    where: { id },
+    data,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      isActive: true,
+      emailVerified: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 }
