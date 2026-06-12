@@ -39,15 +39,38 @@ export async function createTicket(input: CreateTicketInput, customerId: string)
 }
 
 /**
- * List tickets based on user role.
+ * List tickets based on user role and ABAC security.
  */
 export async function listTickets(user: UserContext) {
-  const isStaff = user.role === "ADMIN" || user.role === "AGENT";
+  const where: any = {};
+
+  if (user.role === "CUSTOMER") {
+    where.customerId = user.id;
+  } else if (user.role === "AGENT") {
+    // ABAC Filter: Agents can see tickets assigned to them, tickets in their teams, or unassigned tickets.
+    where.OR = [
+      { agentId: user.id },
+      {
+        team: {
+          members: {
+            some: { id: user.id },
+          },
+        },
+      },
+      { teamId: null },
+    ];
+  } // ADMIN role has no where constraints
 
   return prisma.ticket.findMany({
-    where: isStaff ? {} : { customerId: user.id },
+    where,
     include: {
       category: true,
+      team: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       customer: {
         select: {
           id: true,
@@ -70,13 +93,19 @@ export async function listTickets(user: UserContext) {
 }
 
 /**
- * Get ticket by ID with ownership verification.
+ * Get ticket by ID with ownership verification and ABAC checks.
  */
 export async function getTicketById(id: string, user: UserContext) {
   const ticket = await prisma.ticket.findUnique({
     where: { id },
     include: {
       category: true,
+      team: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       customer: {
         select: {
           id: true,
@@ -115,12 +144,34 @@ export async function getTicketById(id: string, user: UserContext) {
     throw error;
   }
 
-  // Check permissions
-  const isStaff = user.role === "ADMIN" || user.role === "AGENT";
-  if (!isStaff && ticket.customerId !== user.id) {
-    const error = new Error("Access denied to this ticket") as Error & { statusCode: number };
-    error.statusCode = 403;
-    throw error;
+  // ABAC Security Check
+  if (user.role === "CUSTOMER") {
+    if (ticket.customerId !== user.id) {
+      const error = new Error("Access denied to this ticket") as Error & { statusCode: number };
+      error.statusCode = 403;
+      throw error;
+    }
+  } else if (user.role === "AGENT") {
+    const isAssignedAgent = ticket.agentId === user.id;
+    let isTeamMember = false;
+
+    if (ticket.teamId) {
+      const teamMembership = await prisma.team.findFirst({
+        where: {
+          id: ticket.teamId,
+          members: { some: { id: user.id } },
+        },
+      });
+      isTeamMember = !!teamMembership;
+    }
+
+    const isUnassigned = !ticket.teamId;
+
+    if (!isAssignedAgent && !isTeamMember && !isUnassigned) {
+      const error = new Error("Access denied: You do not belong to the team assigned to this ticket") as Error & { statusCode: number };
+      error.statusCode = 403;
+      throw error;
+    }
   }
 
   return ticket;
@@ -129,11 +180,15 @@ export async function getTicketById(id: string, user: UserContext) {
 /**
  * Add a message reply to a ticket.
  */
-export async function addTicketMessage(ticketId: string, input: AddMessageInput, senderId: string, user: UserContext) {
-  // Verify ticket exists and user has access
-  const ticket = await getTicketById(ticketId, user);
+export async function addTicketMessage(
+  ticketId: string,
+  input: AddMessageInput,
+  senderId: string,
+  user: UserContext
+) {
+  // Verify ticket exists and user has access (triggers getTicketById checks)
+  await getTicketById(ticketId, user);
 
-  // Check if ticket is closed/resolved (allow reopen on message reply if needed, or block it. Let's allow and mark as open/in-progress if customer replies, or keep status as-is. Standard is: just add message and update ticket timestamp).
   const message = await prisma.ticketMessage.create({
     data: {
       ticketId,
@@ -162,14 +217,14 @@ export async function addTicketMessage(ticketId: string, input: AddMessageInput,
 }
 
 /**
- * Update ticket status or priority.
+ * Update ticket status, priority, team, or agent.
  */
 export async function updateTicket(id: string, input: UpdateTicketInput, user: UserContext) {
   const ticket = await getTicketById(id, user);
 
   const isStaff = user.role === "ADMIN" || user.role === "AGENT";
 
-  // Customer restriction: Customers can only resolve or close their own tickets
+  // Customer restrictions
   if (!isStaff) {
     if (input.priority) {
       const error = new Error("Customers cannot change ticket priority") as Error & { statusCode: number };
@@ -181,6 +236,11 @@ export async function updateTicket(id: string, input: UpdateTicketInput, user: U
       error.statusCode = 403;
       throw error;
     }
+    if (input.teamId || input.agentId) {
+      const error = new Error("Customers cannot assign teams or agents") as Error & { statusCode: number };
+      error.statusCode = 403;
+      throw error;
+    }
   }
 
   return prisma.ticket.update({
@@ -188,10 +248,22 @@ export async function updateTicket(id: string, input: UpdateTicketInput, user: U
     data: {
       ...(input.status ? { status: input.status } : {}),
       ...(input.priority ? { priority: input.priority } : {}),
+      ...(input.teamId !== undefined ? { teamId: input.teamId } : {}),
+      ...(input.agentId !== undefined ? { agentId: input.agentId } : {}),
     },
     include: {
       category: true,
+      team: {
+        select: { id: true, name: true },
+      },
       customer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      agent: {
         select: {
           id: true,
           name: true,

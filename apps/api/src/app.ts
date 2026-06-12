@@ -3,6 +3,9 @@ import cors from "cors";
 import authRouter from "./modules/auth/auth.routes.js";
 import categoriesRouter from "./modules/categories/categories.routes.js";
 import ticketsRouter from "./modules/tickets/tickets.routes.js";
+import usersRouter from "./modules/users/users.routes.js";
+import teamsRouter from "./modules/teams/teams.routes.js";
+import kbRouter from "./modules/kb/kb.routes.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import { setupSwagger } from "./config/swagger.js";
 
@@ -31,6 +34,9 @@ app.get("/health", (_, res) => {
 app.use("/api/auth", authRouter);
 app.use("/api/categories", categoriesRouter);
 app.use("/api/tickets", ticketsRouter);
+app.use("/api/users", usersRouter);
+app.use("/api/teams", teamsRouter);
+app.use("/api/kb", kbRouter);
 
 // ---------------------------------------------------------------------------
 // 404 handler — must be after all routes

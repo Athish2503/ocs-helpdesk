@@ -48,7 +48,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.NullsOrder = exports.QueryMode = exports.SortOrder = exports.TicketMessageScalarFieldEnum = exports.TicketScalarFieldEnum = exports.CategoryScalarFieldEnum = exports.PasswordResetTokenScalarFieldEnum = exports.MagicTokenScalarFieldEnum = exports.RefreshTokenScalarFieldEnum = exports.UserScalarFieldEnum = exports.TransactionIsolationLevel = exports.ModelName = exports.AnyNull = exports.JsonNull = exports.DbNull = exports.NullTypes = exports.Decimal = void 0;
+exports.NullsOrder = exports.QueryMode = exports.SortOrder = exports.KnowledgeBaseArticleScalarFieldEnum = exports.TeamScalarFieldEnum = exports.TicketMessageScalarFieldEnum = exports.TicketScalarFieldEnum = exports.CategoryScalarFieldEnum = exports.PasswordResetTokenScalarFieldEnum = exports.MagicTokenScalarFieldEnum = exports.RefreshTokenScalarFieldEnum = exports.UserScalarFieldEnum = exports.TransactionIsolationLevel = exports.ModelName = exports.AnyNull = exports.JsonNull = exports.DbNull = exports.NullTypes = exports.Decimal = void 0;
 const runtime = __importStar(require("@prisma/client/runtime/index-browser"));
 exports.Decimal = runtime.Decimal;
 exports.NullTypes = {
@@ -81,7 +81,9 @@ exports.ModelName = {
     PasswordResetToken: 'PasswordResetToken',
     Category: 'Category',
     Ticket: 'Ticket',
-    TicketMessage: 'TicketMessage'
+    TicketMessage: 'TicketMessage',
+    Team: 'Team',
+    KnowledgeBaseArticle: 'KnowledgeBaseArticle'
 };
 /*
  * Enums
@@ -142,6 +144,7 @@ exports.TicketScalarFieldEnum = {
     categoryId: 'categoryId',
     customerId: 'customerId',
     agentId: 'agentId',
+    teamId: 'teamId',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
 };
@@ -151,6 +154,25 @@ exports.TicketMessageScalarFieldEnum = {
     senderId: 'senderId',
     message: 'message',
     createdAt: 'createdAt'
+};
+exports.TeamScalarFieldEnum = {
+    id: 'id',
+    name: 'name',
+    description: 'description',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+};
+exports.KnowledgeBaseArticleScalarFieldEnum = {
+    id: 'id',
+    title: 'title',
+    slug: 'slug',
+    content: 'content',
+    isPublished: 'isPublished',
+    isInternal: 'isInternal',
+    authorId: 'authorId',
+    categoryId: 'categoryId',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
 };
 exports.SortOrder = {
     asc: 'asc',

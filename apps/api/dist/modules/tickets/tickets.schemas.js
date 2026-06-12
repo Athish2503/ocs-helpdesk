@@ -16,4 +16,6 @@ exports.addMessageSchema = zod_1.z.object({
 exports.updateTicketSchema = zod_1.z.object({
     status: TicketStatusEnum.optional(),
     priority: TicketPriorityEnum.optional(),
+    teamId: zod_1.z.string().uuid().nullable().optional(),
+    agentId: zod_1.z.string().uuid().nullable().optional(),
 });

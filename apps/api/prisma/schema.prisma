@@ -39,6 +39,8 @@ model User {
   customerTickets Ticket[]      @relation("CustomerTickets")
   agentTickets    Ticket[]      @relation("AgentTickets")
   messages        TicketMessage[]
+  teams          Team[]         @relation("TeamMembers")
+  kbArticles     KnowledgeBaseArticle[] @relation("AuthorArticles")
 
   @@map("users")
 }
@@ -99,6 +101,7 @@ model Category {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   tickets     Ticket[]
+  kbArticles  KnowledgeBaseArticle[]
 
   @@map("categories")
 }
@@ -115,6 +118,8 @@ model Ticket {
   customer    User           @relation("CustomerTickets", fields: [customerId], references: [id])
   agentId     String?
   agent       User?          @relation("AgentTickets", fields: [agentId], references: [id])
+  teamId      String?
+  team        Team?          @relation(fields: [teamId], references: [id])
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   messages    TicketMessage[]
@@ -132,6 +137,36 @@ model TicketMessage {
   createdAt DateTime @default(now())
 
   @@map("ticket_messages")
+}
+
+model Team {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     User[]   @relation("TeamMembers")
+  tickets     Ticket[]
+
+  @@map("teams")
+}
+
+model KnowledgeBaseArticle {
+  id          String   @id @default(uuid())
+  title       String
+  slug        String   @unique
+  content     String
+  isPublished Boolean  @default(false)
+  isInternal  Boolean  @default(false)
+  authorId    String
+  author      User     @relation("AuthorArticles", fields: [authorId], references: [id])
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("knowledge_base_articles")
 }
 
 

@@ -17,6 +17,8 @@ export const addMessageSchema = z.object({
 export const updateTicketSchema = z.object({
   status: TicketStatusEnum.optional(),
   priority: TicketPriorityEnum.optional(),
+  teamId: z.string().uuid().nullable().optional(),
+  agentId: z.string().uuid().nullable().optional(),
 });
 
 export type CreateTicketInput = z.infer<typeof createTicketSchema>;

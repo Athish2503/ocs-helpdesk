@@ -8,6 +8,9 @@ const cors_1 = __importDefault(require("cors"));
 const auth_routes_js_1 = __importDefault(require("./modules/auth/auth.routes.js"));
 const categories_routes_js_1 = __importDefault(require("./modules/categories/categories.routes.js"));
 const tickets_routes_js_1 = __importDefault(require("./modules/tickets/tickets.routes.js"));
+const users_routes_js_1 = __importDefault(require("./modules/users/users.routes.js"));
+const teams_routes_js_1 = __importDefault(require("./modules/teams/teams.routes.js"));
+const kb_routes_js_1 = __importDefault(require("./modules/kb/kb.routes.js"));
 const error_middleware_js_1 = require("./middleware/error.middleware.js");
 const swagger_js_1 = require("./config/swagger.js");
 const app = (0, express_1.default)();
@@ -31,6 +34,9 @@ app.get("/health", (_, res) => {
 app.use("/api/auth", auth_routes_js_1.default);
 app.use("/api/categories", categories_routes_js_1.default);
 app.use("/api/tickets", tickets_routes_js_1.default);
+app.use("/api/users", users_routes_js_1.default);
+app.use("/api/teams", teams_routes_js_1.default);
+app.use("/api/kb", kb_routes_js_1.default);
 // ---------------------------------------------------------------------------
 // 404 handler — must be after all routes
 // ---------------------------------------------------------------------------
