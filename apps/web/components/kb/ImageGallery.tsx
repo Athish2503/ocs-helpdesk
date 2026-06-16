@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Star, StarOff, Trash2, Copy, Check, ExternalLink } from "lucide-react";
 import { fetchWithAuth } from "../../lib/api";
+import { useDialog } from "../../context/DialogContext";
 
 interface Attachment {
   id: string;
@@ -31,6 +32,7 @@ export default function ImageGallery({
   onDeleteSuccess,
   onSetFeaturedSuccess,
 }: ImageGalleryProps) {
+  const dialog = useDialog();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
 
@@ -71,7 +73,8 @@ export default function ImageGallery({
   };
 
   const deleteImage = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this image?")) return;
+    const confirmed = await dialog.confirm("Are you sure you want to delete this image?", "Delete Image");
+    if (!confirmed) return;
     setIsProcessing(id);
     try {
       const response = await fetchWithAuth(`/kb/attachments/${id}`, {

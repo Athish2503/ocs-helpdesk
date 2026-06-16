@@ -9,10 +9,33 @@ const prisma_js_1 = require("../../config/prisma.js");
 /**
  * Create a new ticket for a customer.
  */
-async function createTicket(input, customerId) {
+async function createTicket(input, customerId, userRole) {
+    let categoryId = input.categoryId;
+    if (userRole === "CUSTOMER" || !categoryId) {
+        // Customers cannot select category. Default to "General Inquiry"
+        let generalCategory = await prisma_js_1.prisma.category.findFirst({
+            where: { name: "General Inquiry" },
+        });
+        if (!generalCategory) {
+            generalCategory = await prisma_js_1.prisma.category.create({
+                data: {
+                    name: "General Inquiry",
+                    slug: "general-inquiry",
+                    description: "Any general questions not covered by other categories.",
+                    isActive: true,
+                },
+            });
+        }
+        categoryId = generalCategory.id;
+    }
+    let priority = input.priority;
+    if (userRole === "CUSTOMER") {
+        // Customers cannot set priority level. Force to MEDIUM
+        priority = "MEDIUM";
+    }
     // Verify category exists and is active
     const category = await prisma_js_1.prisma.category.findUnique({
-        where: { id: input.categoryId },
+        where: { id: categoryId },
     });
     if (!category || !category.isActive) {
         const error = new Error("Invalid or inactive category selected");
@@ -23,9 +46,9 @@ async function createTicket(input, customerId) {
         data: {
             title: input.title,
             description: input.description,
-            priority: input.priority,
+            priority: priority || "MEDIUM",
             status: "OPEN",
-            categoryId: input.categoryId,
+            categoryId: categoryId,
             customerId,
         },
         include: {
@@ -207,8 +230,8 @@ async function updateTicket(id, input, user) {
             error.statusCode = 403;
             throw error;
         }
-        if (input.status && input.status !== "RESOLVED" && input.status !== "CLOSED") {
-            const error = new Error("Customers can only set status to RESOLVED or CLOSED");
+        if (input.status) {
+            const error = new Error("Customers cannot change ticket status");
             error.statusCode = 403;
             throw error;
         }

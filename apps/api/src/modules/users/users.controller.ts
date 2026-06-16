@@ -1,9 +1,19 @@
 import type { Request, Response, NextFunction } from "express";
-import { updateUserSchema } from "./users.schemas.js";
+import { createUserSchema, updateUserSchema } from "./users.schemas.js";
 import * as UsersService from "./users.service.js";
 
 function ok(res: Response, data: unknown) {
   res.status(200).json({ success: true, data });
+}
+
+export async function createUserHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const input = createUserSchema.parse(req.body);
+    const user = await UsersService.createUser(input);
+    ok(res, { user });
+  } catch (err) {
+    next(err);
+  }
 }
 
 export async function listUsersHandler(req: Request, res: Response, next: NextFunction) {

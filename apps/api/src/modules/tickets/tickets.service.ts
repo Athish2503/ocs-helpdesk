@@ -11,10 +11,37 @@ interface UserContext {
 /**
  * Create a new ticket for a customer.
  */
-export async function createTicket(input: CreateTicketInput, customerId: string) {
+export async function createTicket(input: CreateTicketInput, customerId: string, userRole: Role) {
+  let categoryId = input.categoryId;
+
+  if (userRole === "CUSTOMER" || !categoryId) {
+    // Customers cannot select category. Default to "General Inquiry"
+    let generalCategory = await prisma.category.findFirst({
+      where: { name: "General Inquiry" },
+    });
+
+    if (!generalCategory) {
+      generalCategory = await prisma.category.create({
+        data: {
+          name: "General Inquiry",
+          slug: "general-inquiry",
+          description: "Any general questions not covered by other categories.",
+          isActive: true,
+        },
+      });
+    }
+    categoryId = generalCategory.id;
+  }
+
+  let priority = input.priority;
+  if (userRole === "CUSTOMER") {
+    // Customers cannot set priority level. Force to MEDIUM
+    priority = "MEDIUM";
+  }
+
   // Verify category exists and is active
   const category = await prisma.category.findUnique({
-    where: { id: input.categoryId },
+    where: { id: categoryId },
   });
 
   if (!category || !category.isActive) {
@@ -27,9 +54,9 @@ export async function createTicket(input: CreateTicketInput, customerId: string)
     data: {
       title: input.title,
       description: input.description,
-      priority: input.priority,
+      priority: priority || "MEDIUM",
       status: "OPEN",
-      categoryId: input.categoryId,
+      categoryId: categoryId,
       customerId,
     },
     include: {
@@ -231,8 +258,8 @@ export async function updateTicket(id: string, input: UpdateTicketInput, user: U
       error.statusCode = 403;
       throw error;
     }
-    if (input.status && input.status !== "RESOLVED" && input.status !== "CLOSED") {
-      const error = new Error("Customers can only set status to RESOLVED or CLOSED") as Error & { statusCode: number };
+    if (input.status) {
+      const error = new Error("Customers cannot change ticket status") as Error & { statusCode: number };
       error.statusCode = 403;
       throw error;
     }

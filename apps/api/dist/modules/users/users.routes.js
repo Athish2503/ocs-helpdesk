@@ -12,6 +12,7 @@ router.patch("/me/profile", users_controller_js_1.updateProfileHandler);
 // Agents listing can be accessed by both admins and agents (e.g. for forwarding/assignment UI)
 router.get("/agents", (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), users_controller_js_1.getAgentsHandler);
 // Admin-only operations
+router.post("/", (0, role_middleware_js_1.requireRole)("ADMIN"), users_controller_js_1.createUserHandler);
 router.get("/", (0, role_middleware_js_1.requireRole)("ADMIN"), users_controller_js_1.listUsersHandler);
 router.get("/:id", (0, role_middleware_js_1.requireRole)("ADMIN"), users_controller_js_1.getUserByIdHandler);
 router.patch("/:id", (0, role_middleware_js_1.requireRole)("ADMIN"), users_controller_js_1.updateUserHandler);

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  createUserHandler,
   listUsersHandler,
   getAgentsHandler,
   getUserByIdHandler,
@@ -21,6 +22,7 @@ router.patch("/me/profile", updateProfileHandler);
 router.get("/agents", requireRole("ADMIN", "AGENT"), getAgentsHandler);
 
 // Admin-only operations
+router.post("/", requireRole("ADMIN"), createUserHandler);
 router.get("/", requireRole("ADMIN"), listUsersHandler);
 router.get("/:id", requireRole("ADMIN"), getUserByIdHandler);
 router.patch("/:id", requireRole("ADMIN"), updateUserHandler);

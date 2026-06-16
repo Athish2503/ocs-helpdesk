@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { fetchWithAuth } from "../../../../lib/api";
 import { useAuth } from "../../../../context/AuthContext";
+import { useDialog } from "../../../../context/DialogContext";
 import CategorySidebar from "../../../../components/kb/CategorySidebar";
 import AdvancedFilters from "../../../../components/kb/AdvancedFilters";
 import TagFilter from "../../../../components/kb/TagFilter";
@@ -42,6 +43,7 @@ interface Article {
 export default function KbManagementPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const dialog = useDialog();
   const [articles, setArticles] = useState<Article[]>([]);
   const [categories, setCategories] = useState([]);
   const [tags, setTags] = useState([]);
@@ -90,7 +92,8 @@ export default function KbManagementPage() {
   }, [search, selectedCategoryId, selectedTag, isPublished, isInternal]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this article? All version history and stats will be lost.")) return;
+    const confirmed = await dialog.confirm("Are you sure you want to delete this article? All version history and stats will be lost.", "Delete Article");
+    if (!confirmed) return;
     try {
       const response = await fetchWithAuth(`/kb/${id}`, { method: "DELETE" });
       if (response.ok) {

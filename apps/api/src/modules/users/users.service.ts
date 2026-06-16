@@ -1,5 +1,5 @@
 import { prisma } from "../../config/prisma.js";
-import type { UpdateUserInput } from "./users.schemas.js";
+import type { CreateUserInput, UpdateUserInput } from "./users.schemas.js";
 import { hashPassword } from "../../utils/password.js";
 
 export async function listUsers(query: { search?: string; role?: string; isActive?: string }) {
@@ -31,6 +31,9 @@ export async function listUsers(query: { search?: string; role?: string; isActiv
       emailVerified: true,
       createdAt: true,
       updatedAt: true,
+      teams: {
+        select: { id: true, name: true },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -63,13 +66,30 @@ export async function getUserById(id: string) {
   return user;
 }
 
-export async function updateUser(id: string, input: UpdateUserInput) {
-  // Verify existence
-  await getUserById(id);
+export async function createUser(input: CreateUserInput) {
+  const existing = await prisma.user.findUnique({ where: { email: input.email } });
+  if (existing) {
+    const error = new Error("An account with this email already exists") as Error & { statusCode: number };
+    error.statusCode = 409;
+    throw error;
+  }
 
-  return prisma.user.update({
-    where: { id },
-    data: input,
+  const passwordHash = await hashPassword(input.password);
+
+  return prisma.user.create({
+    data: {
+      name: input.name,
+      email: input.email,
+      passwordHash,
+      role: input.role,
+      emailVerified: true,
+      isActive: true,
+      teams: input.teamIds
+        ? {
+            connect: input.teamIds.map((id) => ({ id })),
+          }
+        : undefined,
+    },
     select: {
       id: true,
       name: true,
@@ -79,6 +99,45 @@ export async function updateUser(id: string, input: UpdateUserInput) {
       emailVerified: true,
       createdAt: true,
       updatedAt: true,
+      teams: {
+        select: { id: true, name: true },
+      },
+    },
+  });
+}
+
+export async function updateUser(id: string, input: UpdateUserInput) {
+  // Verify existence
+  await getUserById(id);
+
+  const data: any = { ...input };
+  if (input.password) {
+    data.passwordHash = await hashPassword(input.password);
+    delete data.password;
+  }
+
+  if (input.teamIds !== undefined) {
+    data.teams = {
+      set: input.teamIds.map((id) => ({ id })),
+    };
+    delete data.teamIds;
+  }
+
+  return prisma.user.update({
+    where: { id },
+    data,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      isActive: true,
+      emailVerified: true,
+      createdAt: true,
+      updatedAt: true,
+      teams: {
+        select: { id: true, name: true },
+      },
     },
   });
 }

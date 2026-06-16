@@ -7,7 +7,7 @@ const TicketPriorityEnum = zod_1.z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]);
 exports.createTicketSchema = zod_1.z.object({
     title: zod_1.z.string().min(3, "Title must be at least 3 characters").max(100, "Title must be at most 100 characters"),
     description: zod_1.z.string().min(10, "Description must be at least 10 characters"),
-    categoryId: zod_1.z.string().uuid("Invalid category ID"),
+    categoryId: zod_1.z.string().uuid("Invalid category ID").optional().nullable(),
     priority: TicketPriorityEnum.optional().default("MEDIUM"),
 });
 exports.addMessageSchema = zod_1.z.object({

@@ -33,6 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.createUserHandler = createUserHandler;
 exports.listUsersHandler = listUsersHandler;
 exports.getAgentsHandler = getAgentsHandler;
 exports.getUserByIdHandler = getUserByIdHandler;
@@ -42,6 +43,16 @@ const users_schemas_js_1 = require("./users.schemas.js");
 const UsersService = __importStar(require("./users.service.js"));
 function ok(res, data) {
     res.status(200).json({ success: true, data });
+}
+async function createUserHandler(req, res, next) {
+    try {
+        const input = users_schemas_js_1.createUserSchema.parse(req.body);
+        const user = await UsersService.createUser(input);
+        ok(res, { user });
+    }
+    catch (err) {
+        next(err);
+    }
 }
 async function listUsersHandler(req, res, next) {
     try {

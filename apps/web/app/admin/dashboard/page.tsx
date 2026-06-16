@@ -23,7 +23,9 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
+  Edit2,
 } from "lucide-react";
+import { useDialog } from "../../../context/DialogContext";
 
 // Types matching database schema
 interface Category {
@@ -53,6 +55,7 @@ interface UserProfile {
   isActive: boolean;
   emailVerified: boolean;
   createdAt: string;
+  teams?: { id: string; name: string }[];
 }
 
 interface TicketMessage {
@@ -93,6 +96,7 @@ export default function AdminDashboard() {
   const { user, logout, loading: authLoading } = useAuth();
   const router = useRouter();
   const toast = useToast();
+  const dialog = useDialog();
 
   // Sidebar collapsible state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -140,8 +144,8 @@ export default function AdminDashboard() {
 
   const isDark = theme === 'dark';
 
-  // Tab State: overview, tickets, teams, users, kb
-  const [activeTab, setActiveTab] = useState<"overview" | "tickets" | "teams" | "users" | "kb">("overview");
+  // Tab State: overview, tickets, teams, clients, admins, kb
+  const [activeTab, setActiveTab] = useState<"overview" | "tickets" | "teams" | "clients" | "admins" | "kb">("overview");
   
   // Data States
   const [tickets, setTickets] = useState<TicketData[]>([]);
@@ -164,6 +168,24 @@ export default function AdminDashboard() {
   const [newTeamName, setNewTeamName] = useState("");
   const [newTeamDesc, setNewTeamDesc] = useState("");
   const [newTeamMembers, setNewTeamMembers] = useState<string[]>([]);
+
+  // Edit Team states
+  const [showEditTeam, setShowEditTeam] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+  const [editTeamName, setEditTeamName] = useState("");
+  const [editTeamDesc, setEditTeamDesc] = useState("");
+  const [editTeamMembers, setEditTeamMembers] = useState<string[]>([]);
+
+  // User form and modal states
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [showEditUser, setShowEditUser] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [userFormName, setUserFormName] = useState("");
+  const [userFormEmail, setUserFormEmail] = useState("");
+  const [userFormPassword, setUserFormPassword] = useState("");
+  const [userFormRole, setUserFormRole] = useState<"CUSTOMER" | "AGENT" | "ADMIN">("CUSTOMER");
+  const [userFormIsActive, setUserFormIsActive] = useState(true);
+  const [userFormTeams, setUserFormTeams] = useState<string[]>([]);
   
   // KB Editor state
   const [kbEditing, setKbEditing] = useState<boolean>(false);
@@ -236,6 +258,24 @@ export default function AdminDashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  // Sync active tab from URL query params on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get("tab");
+      if (
+        tab === "overview" ||
+        tab === "tickets" ||
+        tab === "teams" ||
+        tab === "clients" ||
+        tab === "admins" ||
+        tab === "kb"
+      ) {
+        setActiveTab(tab);
+      }
+    }
+  }, []);
 
   // Handle ticket reload/detail view fetch
   const selectTicket = async (ticket: TicketData) => {
@@ -341,7 +381,11 @@ export default function AdminDashboard() {
 
   // Delete Team
   const handleDeleteTeam = async (teamId: string) => {
-    if (!confirm("Are you sure you want to delete this team? All assigned tickets will be unassigned.")) return;
+    const confirmed = await dialog.confirm(
+      "Are you sure you want to delete this team? All assigned tickets will be unassigned.",
+      "Delete Team"
+    );
+    if (!confirmed) return;
     try {
       const res = await fetchWithAuth(`/teams/${teamId}`, { method: "DELETE" });
       if (res.ok) {
@@ -353,6 +397,137 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error(err);
       toast.error("Failed to delete team.");
+    }
+  };
+
+  // Edit Team helpers
+  const handleEditTeamClick = (t: Team) => {
+    setSelectedTeam(t);
+    setEditTeamName(t.name);
+    setEditTeamDesc(t.description || "");
+    setEditTeamMembers(t.members.map((m) => m.id));
+    setShowEditTeam(true);
+  };
+
+  const handleEditTeam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTeam) return;
+    if (!editTeamName.trim()) {
+      toast.error("Team name is required.");
+      return;
+    }
+
+    try {
+      const res = await fetchWithAuth(`/teams/${selectedTeam.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: editTeamName,
+          description: editTeamDesc,
+          memberIds: editTeamMembers,
+        }),
+      });
+      if (res.ok) {
+        toast.success("Team updated successfully!");
+        setShowEditTeam(false);
+        setSelectedTeam(null);
+        refreshAllData();
+      } else {
+        const errData = await res.json();
+        toast.error(errData.error?.message || "Error updating team");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Network error: Failed to update team.");
+    }
+  };
+
+  // Create User
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userFormName.trim() || !userFormEmail.trim() || !userFormPassword.trim()) {
+      toast.error("Name, email, and password are required.");
+      return;
+    }
+
+    try {
+      const res = await fetchWithAuth("/users", {
+        method: "POST",
+        body: JSON.stringify({
+          name: userFormName,
+          email: userFormEmail,
+          password: userFormPassword,
+          role: userFormRole,
+          teamIds: (userFormRole === "AGENT" || userFormRole === "ADMIN") ? userFormTeams : [],
+        }),
+      });
+      if (res.ok) {
+        toast.success("User created successfully!");
+        setShowCreateUser(false);
+        // Reset form
+        setUserFormName("");
+        setUserFormEmail("");
+        setUserFormPassword("");
+        setUserFormRole("CUSTOMER");
+        setUserFormTeams([]);
+        refreshAllData();
+      } else {
+        const errData = await res.json();
+        toast.error(errData.error?.message || "Error creating user");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to create user.");
+    }
+  };
+
+  // Edit User
+  const handleEditUserClick = (u: UserProfile) => {
+    setSelectedUser(u);
+    setUserFormName(u.name);
+    setUserFormEmail(u.email);
+    setUserFormPassword(""); // Keep blank if unchanged
+    setUserFormRole(u.role);
+    setUserFormIsActive(u.isActive);
+    setUserFormTeams(u.teams ? u.teams.map(t => t.id) : []);
+    setShowEditUser(true);
+  };
+
+  const handleSaveEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUser) return;
+    if (!userFormName.trim() || !userFormEmail.trim()) {
+      toast.error("Name and email are required.");
+      return;
+    }
+
+    const payload: any = {
+      name: userFormName,
+      email: userFormEmail,
+      role: userFormRole,
+      isActive: userFormIsActive,
+      teamIds: (userFormRole === "AGENT" || userFormRole === "ADMIN") ? userFormTeams : [],
+    };
+    if (userFormPassword.trim()) {
+      payload.password = userFormPassword;
+    }
+
+    try {
+      const res = await fetchWithAuth(`/users/${selectedUser.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        toast.success("User updated successfully!");
+        setShowEditUser(false);
+        setSelectedUser(null);
+        refreshAllData();
+      } else {
+        const errData = await res.json();
+        toast.error(errData.error?.message || "Error updating user");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update user.");
     }
   };
 
@@ -439,7 +614,8 @@ export default function AdminDashboard() {
 
   // Delete KB Article
   const handleDeleteKB = async (articleId: string) => {
-    if (!confirm("Are you sure you want to delete this article?")) return;
+    const confirmed = await dialog.confirm("Are you sure you want to delete this article?", "Delete Article");
+    if (!confirmed) return;
     try {
       const res = await fetchWithAuth(`/kb/${articleId}`, { method: "DELETE" });
       if (res.ok) {
@@ -627,23 +803,42 @@ export default function AdminDashboard() {
               }`}>Team control</span>
             </button>
             {user.role === "ADMIN" && (
-              <button
-                onClick={() => { setActiveTab("users"); setKbEditing(false); setSelectedTicket(null); }}
-                className={`w-full h-10 flex items-center px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                  activeTab === "users"
-                    ? isDark
-                      ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
-                      : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
-                    : isDark 
-                      ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                }`}
-              >
-                <Users className="w-4.5 h-4.5 mr-2.5 shrink-0" />
-                <span className={`transition-all duration-300 ${
-                  isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
-                }`}>User Directory</span>
-              </button>
+              <>
+                <button
+                  onClick={() => { setActiveTab("clients"); setKbEditing(false); setSelectedTicket(null); }}
+                  className={`w-full h-10 flex items-center px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                    activeTab === "clients"
+                      ? isDark
+                        ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
+                        : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
+                      : isDark 
+                        ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
+                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  }`}
+                >
+                  <Users className="w-4.5 h-4.5 mr-2.5 shrink-0" />
+                  <span className={`transition-all duration-300 ${
+                    isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
+                  }`}>Client Accounts</span>
+                </button>
+                <button
+                  onClick={() => { setActiveTab("admins"); setKbEditing(false); setSelectedTicket(null); }}
+                  className={`w-full h-10 flex items-center px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                    activeTab === "admins"
+                      ? isDark
+                        ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
+                        : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
+                      : isDark 
+                        ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
+                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  }`}
+                >
+                  <ShieldAlert className="w-4.5 h-4.5 mr-2.5 shrink-0" />
+                  <span className={`transition-all duration-300 ${
+                    isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
+                  }`}>Staff Directory</span>
+                </button>
+              </>
             )}
             <button
               onClick={() => router.push("/admin/dashboard/kb")}
@@ -1289,12 +1484,22 @@ export default function AdminDashboard() {
                           <p className="text-[10px] text-slate-500 font-mono">Tickets: {t._count?.tickets ?? 0}</p>
                         </div>
                         {user.role === "ADMIN" && (
-                          <button
-                            onClick={() => handleDeleteTeam(t.id)}
-                            className="text-slate-500 hover:text-red-500 transition-colors p-1"
-                          >
-                            <Trash className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center space-x-1">
+                            <button
+                              onClick={() => handleEditTeamClick(t)}
+                              className="text-slate-500 hover:text-[#5FC0F9] transition-colors p-1"
+                              title="Edit Team"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTeam(t.id)}
+                              className="text-slate-500 hover:text-red-500 transition-colors p-1"
+                              title="Delete Team"
+                            >
+                              <Trash className="w-4 h-4" />
+                            </button>
+                          </div>
                         )}
                       </div>
 
@@ -1324,98 +1529,811 @@ export default function AdminDashboard() {
                   <p className="text-xs text-slate-500 font-mono">No operations teams constructed yet.</p>
                 )}
               </div>
+
+              {/* Edit Team Modal */}
+              {showEditTeam && selectedTeam && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                  <div className={`w-full max-w-md border rounded-2xl p-6 relative flex flex-col space-y-4 shadow-2xl transition-colors ${
+                    isDark ? 'bg-[#0F172A] border-[#1E293B] text-[#F8FAFC]' : 'bg-white border-slate-200 text-[#0F172A]'
+                  }`}>
+                    <button 
+                      onClick={() => { setShowEditTeam(false); setSelectedTeam(null); }}
+                      className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      <X className="absolute w-4 h-4 top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors" />
+                    </button>
+
+                    <div>
+                      <h4 className={`text-sm font-bold uppercase tracking-wider font-mono ${isDark ? 'text-[#5FC0F9]' : 'text-[#0d7fc0]'}`}>Modify Operations Team</h4>
+                      <p className="text-[10px] text-slate-500 font-mono">ID: {selectedTeam.id}</p>
+                    </div>
+
+                    <form onSubmit={handleEditTeam} className="space-y-4">
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Team Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={editTeamName}
+                          onChange={e => setEditTeamName(e.target.value)}
+                          placeholder="e.g. Billing Escalations"
+                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Description</label>
+                        <textarea
+                          value={editTeamDesc}
+                          onChange={e => setEditTeamDesc(e.target.value)}
+                          placeholder="Purpose / routing rules..."
+                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] h-20 border ${
+                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
+                          }`}
+                        />
+                      </div>
+
+                      {/* Select members checkboxes */}
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Select Team Members (Agents)</label>
+                        <div className={`grid grid-cols-2 gap-2 max-h-[120px] overflow-y-auto border p-2.5 rounded ${
+                          isDark ? 'bg-slate-900/40 border-[#334155]' : 'bg-slate-50 border-slate-200'
+                        }`}>
+                          {agents.map(a => (
+                            <label key={a.id} className={`flex items-center space-x-2 text-[10px] font-mono cursor-pointer select-none ${
+                              isDark ? 'text-slate-300' : 'text-slate-700'
+                            }`}>
+                              <input
+                                type="checkbox"
+                                checked={editTeamMembers.includes(a.id)}
+                                onChange={() => {
+                                  setEditTeamMembers(prev =>
+                                    prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id]
+                                  );
+                                }}
+                                className="rounded border-[#334155] text-[#5FC0F9] cursor-pointer"
+                              />
+                              <span className="truncate">{a.name}</span>
+                            </label>
+                          ))}
+                          {agents.length === 0 && (
+                            <p className="text-[9px] text-slate-500 font-mono col-span-2">No agents found.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end space-x-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => { setShowEditTeam(false); setSelectedTeam(null); }}
+                          className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-500 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-2 text-xs font-bold bg-[#5FC0F9] text-[#020617] rounded hover:bg-[#38B1F7] transition-colors cursor-pointer"
+                        >
+                          Save Changes
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* ─────────────────────────────────────────────────────────────────── */}
           {/* TAB 4: USER DIRECTORY                                              */}
           {/* ─────────────────────────────────────────────────────────────────── */}
-          {activeTab === "users" && user.role === "ADMIN" && (
-            <div className={`p-6 border rounded-xl space-y-6 transition-colors ${
-              isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
-            }`}>
-              <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-                <div>
-                  <h3 className={`text-sm font-bold uppercase tracking-wider ${isDark ? 'text-white' : 'text-slate-900'}`}>User Directory</h3>
-                  <p className="text-[10px] text-slate-500 font-mono">RBAC / account administration dashboard</p>
+          {/* ─────────────────────────────────────────────────────────────────── */}
+          {/* TAB 4: CLIENT ACCOUNTS                                             */}
+          {/* ─────────────────────────────────────────────────────────────────── */}
+          {activeTab === "clients" && user.role === "ADMIN" && (
+            <div className="space-y-6">
+              {/* Clients Toolbar */}
+              <div className={`p-6 border rounded-xl space-y-6 transition-colors ${
+                isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
+              }`}>
+                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                  <div>
+                    <h3 className={`text-sm font-bold uppercase tracking-wider ${isDark ? 'text-white' : 'text-slate-900'}`}>Client Accounts</h3>
+                    <p className="text-[10px] text-slate-500 font-mono">External support submitters and client organization profiles</p>
+                  </div>
+
+                  {/* Search & Actions */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 max-w-xl w-full">
+                    <div className="relative flex-grow">
+                      <input
+                        type="text"
+                        value={userSearch}
+                        onChange={e => setUserSearch(e.target.value)}
+                        placeholder="Search clients by name or email..."
+                        className={`w-full text-xs rounded pl-8 pr-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                          isDark 
+                            ? 'bg-slate-900 border-[#334155] text-white' 
+                            : 'bg-white border-slate-300 text-slate-800'
+                        }`}
+                      />
+                      <Search className="absolute left-2.5 top-2.5 text-slate-500 w-3.5 h-3.5" />
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setUserFormName("");
+                        setUserFormEmail("");
+                        setUserFormPassword("");
+                        setUserFormRole("CUSTOMER");
+                        setUserFormTeams([]);
+                        setShowCreateUser(true);
+                      }}
+                      className={`btn-cyber flex items-center justify-center px-4 py-2 text-xs font-mono font-bold shrink-0 ${
+                        isDark ? 'text-black' : 'text-white'
+                      }`}
+                    >
+                      <Plus className="w-4 h-4 mr-1.5" /> REGISTER NEW CLIENT
+                    </button>
+                  </div>
                 </div>
 
-                {/* Search */}
-                <div className="relative max-w-sm w-full">
-                  <input
-                    type="text"
-                    value={userSearch}
-                    onChange={e => setUserSearch(e.target.value)}
-                    placeholder="Search by name or email..."
-                    className={`w-full text-xs rounded pl-8 pr-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                      isDark 
-                        ? 'bg-slate-900 border-[#334155] text-white' 
-                        : 'bg-white border-slate-300 text-slate-800'
-                    }`}
-                  />
-                  <Search className="absolute left-2.5 top-2.5 text-slate-500 w-3.5 h-3.5" />
+                {/* Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs font-mono">
+                    <thead>
+                      <tr className={`border-b text-slate-500 font-bold uppercase text-[9px] ${
+                        isDark ? 'border-white/[0.05]' : 'border-slate-200'
+                      }`}>
+                        <th className="py-3 px-2">Name</th>
+                        <th className="py-3 px-2">Email</th>
+                        <th className="py-3 px-2">Access Status</th>
+                        <th className="py-3 px-2 text-right">Created At</th>
+                        <th className="py-3 px-2 text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${isDark ? 'divide-white/[0.03]' : 'divide-slate-100'}`}>
+                      {users
+                        .filter(u => u.role === "CUSTOMER")
+                        .filter(u => {
+                          if (!userSearch.trim()) return true;
+                          return (
+                            u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+                            u.email.toLowerCase().includes(userSearch.toLowerCase())
+                          );
+                        })
+                        .map(u => (
+                          <tr key={u.id} className={isDark ? 'hover:bg-white/[0.01]' : 'hover:bg-slate-50/50'}>
+                            <td className={`py-3.5 px-2 font-sans font-semibold ${isDark ? 'text-slate-200' : 'text-slate-850'}`}>{u.name}</td>
+                            <td className={`py-3.5 px-2 ${isDark ? 'text-slate-400' : 'text-slate-650'}`}>{u.email}</td>
+                            <td className="py-3.5 px-2">
+                              <button
+                                onClick={() => handleUpdateUser(u.id, { isActive: !u.isActive })}
+                                className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-colors ${
+                                  u.isActive 
+                                    ? isDark ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                                    : isDark ? "bg-red-950/40 text-red-400 border-red-500/20" : "bg-red-50 text-red-750 border-red-200"
+                                }`}
+                              >
+                                {u.isActive ? "ACTIVE" : "SUSPENDED"}
+                              </button>
+                            </td>
+                            <td className="py-3.5 px-2 text-right text-slate-500 text-[10px]">
+                              {new Date(u.createdAt).toLocaleDateString()}
+                            </td>
+                            <td className="py-3.5 px-2 text-center">
+                              <button
+                                onClick={() => handleEditUserClick(u)}
+                                className={`px-2.5 py-1 text-[10px] font-bold font-mono border rounded transition-colors ${
+                                  isDark 
+                                    ? 'bg-[#1E293B] border-[#334155] text-slate-300 hover:text-white hover:border-[#38b1f7]/55' 
+                                    : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
+                                }`}
+                              >
+                                EDIT
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      {users.filter(u => u.role === "CUSTOMER").filter(u => {
+                        if (!userSearch.trim()) return true;
+                        return u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase());
+                      }).length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="py-6 text-slate-500 text-center font-mono">No clients matched search criteria.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
-              {/* Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs font-mono">
-                  <thead>
-                    <tr className={`border-b text-slate-500 font-bold uppercase text-[9px] ${
-                      isDark ? 'border-white/[0.05]' : 'border-slate-200'
-                    }`}>
-                      <th className="py-3 px-2">Name</th>
-                      <th className="py-3 px-2">Email</th>
-                      <th className="py-3 px-2">Role Permissions</th>
-                      <th className="py-3 px-2">Access Status</th>
-                      <th className="py-3 px-2 text-right">Created At</th>
-                    </tr>
-                  </thead>
-                  <tbody className={`divide-y ${isDark ? 'divide-white/[0.03]' : 'divide-slate-100'}`}>
-                    {filteredUsers.map(u => (
-                      <tr key={u.id} className={isDark ? 'hover:bg-white/[0.01]' : 'hover:bg-slate-50/50'}>
-                        <td className={`py-3.5 px-2 font-sans font-semibold ${isDark ? 'text-slate-200' : 'text-slate-850'}`}>{u.name}</td>
-                        <td className={`py-3.5 px-2 ${isDark ? 'text-slate-400' : 'text-slate-650'}`}>{u.email}</td>
-                        <td className="py-3.5 px-2">
+              {/* Create Client Modal */}
+              {showCreateUser && userFormRole === "CUSTOMER" && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                  <div className={`w-full max-w-md border rounded-2xl p-6 relative flex flex-col space-y-4 shadow-2xl transition-colors ${
+                    isDark ? 'bg-[#0F172A] border-[#1E293B] text-[#F8FAFC]' : 'bg-white border-slate-200 text-[#0F172A]'
+                  }`}>
+                    <button 
+                      onClick={() => setShowCreateUser(false)}
+                      className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+
+                    <div>
+                      <h4 className={`text-sm font-bold uppercase tracking-wider font-mono ${isDark ? 'text-[#5FC0F9]' : 'text-[#0d7fc0]'}`}>Register Client Account</h4>
+                      <p className="text-[10px] text-slate-500 font-mono">Create new external customer profile</p>
+                    </div>
+
+                    <form onSubmit={handleCreateUser} className="space-y-4">
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={userFormName}
+                          onChange={e => setUserFormName(e.target.value)}
+                          placeholder="e.g. Alex Carter"
+                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Email Address</label>
+                        <input
+                          type="email"
+                          required
+                          value={userFormEmail}
+                          onChange={e => setUserFormEmail(e.target.value)}
+                          placeholder="alex@company.com"
+                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Password</label>
+                        <input
+                          type="password"
+                          required
+                          value={userFormPassword}
+                          onChange={e => setUserFormPassword(e.target.value)}
+                          placeholder="••••••"
+                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="flex justify-end space-x-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowCreateUser(false)}
+                          className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-500 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-2 text-xs font-bold bg-[#5FC0F9] text-[#020617] rounded hover:bg-[#38B1F7] transition-colors cursor-pointer"
+                        >
+                          Create Client
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Edit Client Modal */}
+              {showEditUser && selectedUser && selectedUser.role === "CUSTOMER" && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                  <div className={`w-full max-w-md border rounded-2xl p-6 relative flex flex-col space-y-4 shadow-2xl transition-colors ${
+                    isDark ? 'bg-[#0F172A] border-[#1E293B] text-[#F8FAFC]' : 'bg-white border-slate-200 text-[#0F172A]'
+                  }`}>
+                    <button 
+                      onClick={() => { setShowEditUser(false); setSelectedUser(null); }}
+                      className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+
+                    <div>
+                      <h4 className={`text-sm font-bold uppercase tracking-wider font-mono ${isDark ? 'text-[#5FC0F9]' : 'text-[#0d7fc0]'}`}>Modify Client Account</h4>
+                      <p className="text-[10px] text-slate-500 font-mono">ID: {selectedUser.id}</p>
+                    </div>
+
+                    <form onSubmit={handleSaveEditUser} className="space-y-4">
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={userFormName}
+                          onChange={e => setUserFormName(e.target.value)}
+                          placeholder="Name"
+                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Email Address</label>
+                        <input
+                          type="email"
+                          required
+                          value={userFormEmail}
+                          onChange={e => setUserFormEmail(e.target.value)}
+                          placeholder="Email"
+                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Update Password (Optional)</label>
+                        <input
+                          type="password"
+                          value={userFormPassword}
+                          onChange={e => setUserFormPassword(e.target.value)}
+                          placeholder="Leave blank to keep current password"
+                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Access Status</label>
+                        <select
+                          value={userFormIsActive ? "true" : "false"}
+                          onChange={e => setUserFormIsActive(e.target.value === "true")}
+                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
+                          }`}
+                        >
+                          <option value="true">ACTIVE</option>
+                          <option value="false">SUSPENDED</option>
+                        </select>
+                      </div>
+
+                      <div className="flex justify-end space-x-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => { setShowEditUser(false); setSelectedUser(null); }}
+                          className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-500 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-2 text-xs font-bold bg-[#5FC0F9] text-[#020617] rounded hover:bg-[#38B1F7] transition-colors cursor-pointer"
+                        >
+                          Save Changes
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ─────────────────────────────────────────────────────────────────── */}
+          {/* TAB 4.5: STAFF DIRECTORY                                           */}
+          {/* ─────────────────────────────────────────────────────────────────── */}
+          {activeTab === "admins" && user.role === "ADMIN" && (
+            <div className="space-y-6">
+              {/* Staff Toolbar */}
+              <div className={`p-6 border rounded-xl space-y-6 transition-colors ${
+                isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
+              }`}>
+                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                  <div>
+                    <h3 className={`text-sm font-bold uppercase tracking-wider ${isDark ? 'text-white' : 'text-slate-900'}`}>Staff Directory</h3>
+                    <p className="text-[10px] text-slate-500 font-mono">Operations, Agents, and System Administrators database</p>
+                  </div>
+
+                  {/* Search & Actions */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 max-w-xl w-full">
+                    <div className="relative flex-grow">
+                      <input
+                        type="text"
+                        value={userSearch}
+                        onChange={e => setUserSearch(e.target.value)}
+                        placeholder="Search staff by name or email..."
+                        className={`w-full text-xs rounded pl-8 pr-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                          isDark 
+                            ? 'bg-slate-900 border-[#334155] text-white' 
+                            : 'bg-white border-slate-300 text-slate-800'
+                        }`}
+                      />
+                      <Search className="absolute left-2.5 top-2.5 text-slate-500 w-3.5 h-3.5" />
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setUserFormName("");
+                        setUserFormEmail("");
+                        setUserFormPassword("");
+                        setUserFormRole("AGENT");
+                        setUserFormTeams([]);
+                        setShowCreateUser(true);
+                      }}
+                      className={`btn-cyber flex items-center justify-center px-4 py-2 text-xs font-mono font-bold shrink-0 ${
+                        isDark ? 'text-black' : 'text-white'
+                      }`}
+                    >
+                      <Plus className="w-4 h-4 mr-1.5" /> REGISTER NEW STAFF
+                    </button>
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs font-mono">
+                    <thead>
+                      <tr className={`border-b text-slate-500 font-bold uppercase text-[9px] ${
+                        isDark ? 'border-white/[0.05]' : 'border-slate-200'
+                      }`}>
+                        <th className="py-3 px-2">Name</th>
+                        <th className="py-3 px-2">Email</th>
+                        <th className="py-3 px-2">Role Permissions</th>
+                        <th className="py-3 px-2">Teams</th>
+                        <th className="py-3 px-2">Access Status</th>
+                        <th className="py-3 px-2 text-right">Created At</th>
+                        <th className="py-3 px-2 text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${isDark ? 'divide-white/[0.03]' : 'divide-slate-100'}`}>
+                      {users
+                        .filter(u => u.role === "AGENT" || u.role === "ADMIN")
+                        .filter(u => {
+                          if (!userSearch.trim()) return true;
+                          return (
+                            u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+                            u.email.toLowerCase().includes(userSearch.toLowerCase())
+                          );
+                        })
+                        .map(u => (
+                          <tr key={u.id} className={isDark ? 'hover:bg-white/[0.01]' : 'hover:bg-slate-50/50'}>
+                            <td className={`py-3.5 px-2 font-sans font-semibold ${isDark ? 'text-slate-200' : 'text-slate-850'}`}>{u.name}</td>
+                            <td className={`py-3.5 px-2 ${isDark ? 'text-slate-400' : 'text-slate-650'}`}>{u.email}</td>
+                            <td className="py-3.5 px-2">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                u.role === "ADMIN" 
+                                  ? isDark ? "bg-purple-950/40 text-purple-400 border-purple-500/20" : "bg-purple-50 text-purple-700 border-purple-200"
+                                  : isDark ? "bg-[#38b1f7]/20 text-[#38b1f7] border-[#38b1f7]/20" : "bg-[#38b1f7]/10 text-[#0d7fc0] border-[#38b1f7]/20"
+                              }`}>
+                                {u.role}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-2">
+                              <div className="flex flex-wrap gap-1 max-w-[200px]">
+                                {u.teams && u.teams.length > 0 ? (
+                                  u.teams.map(t => (
+                                    <span key={t.id} className={`text-[9px] font-mono px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                                      isDark ? 'bg-slate-900 border-white/[0.05] text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'
+                                    }`}>
+                                      {t.name}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-slate-500 text-[10px] italic">-</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-2">
+                              <button
+                                onClick={() => handleUpdateUser(u.id, { isActive: !u.isActive })}
+                                className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-colors ${
+                                  u.isActive 
+                                    ? isDark ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                                    : isDark ? "bg-red-950/40 text-red-400 border-red-500/20" : "bg-red-50 text-red-750 border-red-200"
+                                }`}
+                              >
+                                {u.isActive ? "ACTIVE" : "SUSPENDED"}
+                              </button>
+                            </td>
+                            <td className="py-3.5 px-2 text-right text-slate-500 text-[10px]">
+                              {new Date(u.createdAt).toLocaleDateString()}
+                            </td>
+                            <td className="py-3.5 px-2 text-center">
+                              <button
+                                onClick={() => handleEditUserClick(u)}
+                                className={`px-2.5 py-1 text-[10px] font-bold font-mono border rounded transition-colors ${
+                                  isDark 
+                                    ? 'bg-[#1E293B] border-[#334155] text-slate-300 hover:text-white hover:border-[#38b1f7]/55' 
+                                    : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
+                                }`}
+                              >
+                                EDIT
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      {users.filter(u => u.role === "AGENT" || u.role === "ADMIN").filter(u => {
+                        if (!userSearch.trim()) return true;
+                        return u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase());
+                      }).length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="py-6 text-slate-500 text-center font-mono">No staff profiles matched search criteria.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Create Staff Modal */}
+              {showCreateUser && (userFormRole === "AGENT" || userFormRole === "ADMIN") && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                  <div className={`w-full max-w-md border rounded-2xl p-6 relative flex flex-col space-y-4 shadow-2xl transition-colors ${
+                    isDark ? 'bg-[#0F172A] border-[#1E293B] text-[#F8FAFC]' : 'bg-white border-slate-200 text-[#0F172A]'
+                  }`}>
+                    <button 
+                      onClick={() => setShowCreateUser(false)}
+                      className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+
+                    <div>
+                      <h4 className={`text-sm font-bold uppercase tracking-wider font-mono ${isDark ? 'text-[#5FC0F9]' : 'text-[#0d7fc0]'}`}>Register Staff Account</h4>
+                      <p className="text-[10px] text-slate-500 font-mono">Create new system administrator or agent profile</p>
+                    </div>
+
+                    <form onSubmit={handleCreateUser} className="space-y-4">
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={userFormName}
+                          onChange={e => setUserFormName(e.target.value)}
+                          placeholder="e.g. Alex Carter"
+                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Email Address</label>
+                        <input
+                          type="email"
+                          required
+                          value={userFormEmail}
+                          onChange={e => setUserFormEmail(e.target.value)}
+                          placeholder="alex@company.com"
+                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Password</label>
+                        <input
+                          type="password"
+                          required
+                          value={userFormPassword}
+                          onChange={e => setUserFormPassword(e.target.value)}
+                          placeholder="••••••"
+                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Role Permissions</label>
+                        <select
+                          value={userFormRole}
+                          onChange={e => setUserFormRole(e.target.value as any)}
+                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
+                          }`}
+                        >
+                          <option value="AGENT">AGENT (Support Representative)</option>
+                          <option value="ADMIN">ADMIN (Full Operations Access)</option>
+                        </select>
+                      </div>
+
+                      {/* Team assignment */}
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Assign Operations Teams</label>
+                        <div className={`grid grid-cols-2 gap-2 max-h-[100px] overflow-y-auto border p-2 rounded ${
+                          isDark ? 'bg-slate-900/40 border-[#334155]' : 'bg-slate-50 border-slate-200'
+                        }`}>
+                          {teams.map(t => (
+                            <label key={t.id} className={`flex items-center space-x-2 text-[10px] font-mono cursor-pointer select-none ${
+                              isDark ? 'text-slate-300' : 'text-slate-700'
+                            }`}>
+                              <input
+                                type="checkbox"
+                                checked={userFormTeams.includes(t.id)}
+                                onChange={() => {
+                                  setUserFormTeams(prev =>
+                                    prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                                  );
+                                }}
+                                className="rounded border-[#334155] text-[#5FC0F9] cursor-pointer"
+                              />
+                              <span className="truncate">{t.name}</span>
+                            </label>
+                          ))}
+                          {teams.length === 0 && (
+                            <p className="text-[9px] text-slate-500 font-mono col-span-2">No teams found.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end space-x-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowCreateUser(false)}
+                          className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-500 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-2 text-xs font-bold bg-[#5FC0F9] text-[#020617] rounded hover:bg-[#38B1F7] transition-colors cursor-pointer"
+                        >
+                          Create Staff Account
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Edit Staff Modal */}
+              {showEditUser && selectedUser && (selectedUser.role === "AGENT" || selectedUser.role === "ADMIN") && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                  <div className={`w-full max-w-md border rounded-2xl p-6 relative flex flex-col space-y-4 shadow-2xl transition-colors ${
+                    isDark ? 'bg-[#0F172A] border-[#1E293B] text-[#F8FAFC]' : 'bg-white border-slate-200 text-[#0F172A]'
+                  }`}>
+                    <button 
+                      onClick={() => { setShowEditUser(false); setSelectedUser(null); }}
+                      className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+
+                    <div>
+                      <h4 className={`text-sm font-bold uppercase tracking-wider font-mono ${isDark ? 'text-[#5FC0F9]' : 'text-[#0d7fc0]'}`}>Modify Staff Profile</h4>
+                      <p className="text-[10px] text-slate-500 font-mono">ID: {selectedUser.id}</p>
+                    </div>
+
+                    <form onSubmit={handleSaveEditUser} className="space-y-4">
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={userFormName}
+                          onChange={e => setUserFormName(e.target.value)}
+                          placeholder="Name"
+                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Email Address</label>
+                        <input
+                          type="email"
+                          required
+                          value={userFormEmail}
+                          onChange={e => setUserFormEmail(e.target.value)}
+                          placeholder="Email"
+                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Update Password (Optional)</label>
+                        <input
+                          type="password"
+                          value={userFormPassword}
+                          onChange={e => setUserFormPassword(e.target.value)}
+                          placeholder="Leave blank to keep current password"
+                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Role Permissions</label>
                           <select
-                            value={u.role}
-                            onChange={e => handleUpdateUser(u.id, { role: e.target.value })}
-                            className={`rounded text-[10px] px-2 py-0.5 focus:outline-none border ${
-                              isDark 
-                                ? 'bg-[#0F172A] border-[#334155] text-slate-200' 
-                                : 'bg-white border-slate-300 text-slate-800'
+                            value={userFormRole}
+                            onChange={e => setUserFormRole(e.target.value as any)}
+                            className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                              isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
                             }`}
                           >
-                            <option value="CUSTOMER">CUSTOMER</option>
                             <option value="AGENT">AGENT</option>
                             <option value="ADMIN">ADMIN</option>
                           </select>
-                        </td>
-                        <td className="py-3.5 px-2">
-                          <button
-                            onClick={() => handleUpdateUser(u.id, { isActive: !u.isActive })}
-                            className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-colors ${
-                              u.isActive 
-                                ? isDark ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                                : isDark ? "bg-red-950/40 text-red-400 border-red-500/20" : "bg-red-50 text-red-750 border-red-200"
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Access Status</label>
+                          <select
+                            value={userFormIsActive ? "true" : "false"}
+                            onChange={e => setUserFormIsActive(e.target.value === "true")}
+                            className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
+                              isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
                             }`}
                           >
-                            {u.isActive ? "ACTIVE" : "SUSPENDED"}
-                          </button>
-                        </td>
-                        <td className="py-3.5 px-2 text-right text-slate-500 text-[10px]">
-                          {new Date(u.createdAt).toLocaleDateString()}
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredUsers.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="py-6 text-slate-500 text-center font-mono">No users matched search criteria.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                            <option value="true">ACTIVE</option>
+                            <option value="false">SUSPENDED</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Team assignment */}
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Assign Operations Teams</label>
+                        <div className={`grid grid-cols-2 gap-2 max-h-[100px] overflow-y-auto border p-2 rounded ${
+                          isDark ? 'bg-slate-900/40 border-[#334155]' : 'bg-slate-50 border-slate-200'
+                        }`}>
+                          {teams.map(t => (
+                            <label key={t.id} className={`flex items-center space-x-2 text-[10px] font-mono cursor-pointer select-none ${
+                              isDark ? 'text-slate-300' : 'text-slate-700'
+                            }`}>
+                              <input
+                                type="checkbox"
+                                checked={userFormTeams.includes(t.id)}
+                                onChange={() => {
+                                  setUserFormTeams(prev =>
+                                    prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                                  );
+                                }}
+                                className="rounded border-[#334155] text-[#5FC0F9] cursor-pointer"
+                              />
+                              <span className="truncate">{t.name}</span>
+                            </label>
+                          ))}
+                          {teams.length === 0 && (
+                            <p className="text-[9px] text-slate-500 font-mono col-span-2">No teams found.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end space-x-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => { setShowEditUser(false); setSelectedUser(null); }}
+                          className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-500 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-2 text-xs font-bold bg-[#5FC0F9] text-[#020617] rounded hover:bg-[#38B1F7] transition-colors cursor-pointer"
+                        >
+                          Save Changes
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

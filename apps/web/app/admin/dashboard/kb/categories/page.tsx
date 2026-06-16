@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Folder, FolderOpen, Plus, Edit2, Trash2, ArrowRight } from "lucide-react";
 import { fetchWithAuth } from "../../../../../lib/api";
+import { useDialog } from "../../../../../context/DialogContext";
 
 interface Category {
   id: string;
@@ -40,6 +41,7 @@ function buildCategoryTree(categories: Category[]): CategoryNode[] {
 
 export default function CategoryManagementPage() {
   const router = useRouter();
+  const dialog = useDialog();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -112,7 +114,8 @@ export default function CategoryManagementPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure? Articles in this category will be unassigned (orphan categories).")) return;
+    const confirmed = await dialog.confirm("Are you sure? Articles in this category will be unassigned (orphan categories).", "Delete Category");
+    if (!confirmed) return;
     try {
       const response = await fetchWithAuth(`/kb/categories/${id}`, {
         method: "DELETE",

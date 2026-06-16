@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.listUsers = listUsers;
 exports.getUserById = getUserById;
+exports.createUser = createUser;
 exports.updateUser = updateUser;
 exports.getAgents = getAgents;
 exports.updateProfile = updateProfile;
@@ -60,12 +61,46 @@ async function getUserById(id) {
     }
     return user;
 }
+async function createUser(input) {
+    const existing = await prisma_js_1.prisma.user.findUnique({ where: { email: input.email } });
+    if (existing) {
+        const error = new Error("An account with this email already exists");
+        error.statusCode = 409;
+        throw error;
+    }
+    const passwordHash = await (0, password_js_1.hashPassword)(input.password);
+    return prisma_js_1.prisma.user.create({
+        data: {
+            name: input.name,
+            email: input.email,
+            passwordHash,
+            role: input.role,
+            emailVerified: true,
+            isActive: true,
+        },
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            isActive: true,
+            emailVerified: true,
+            createdAt: true,
+            updatedAt: true,
+        },
+    });
+}
 async function updateUser(id, input) {
     // Verify existence
     await getUserById(id);
+    const data = { ...input };
+    if (input.password) {
+        data.passwordHash = await (0, password_js_1.hashPassword)(input.password);
+        delete data.password;
+    }
     return prisma_js_1.prisma.user.update({
         where: { id },
-        data: input,
+        data,
         select: {
             id: true,
             name: true,

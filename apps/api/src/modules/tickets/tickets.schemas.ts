@@ -6,7 +6,7 @@ const TicketPriorityEnum = z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]);
 export const createTicketSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters").max(100, "Title must be at most 100 characters"),
   description: z.string().min(10, "Description must be at least 10 characters"),
-  categoryId: z.string().uuid("Invalid category ID"),
+  categoryId: z.string().uuid("Invalid category ID").optional().nullable(),
   priority: TicketPriorityEnum.optional().default("MEDIUM"),
 });
 

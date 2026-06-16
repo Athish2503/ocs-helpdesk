@@ -257,7 +257,7 @@ export default function CustomerDashboard() {
   // Submit Ticket Creation
   const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!createForm.title || !createForm.description || !createForm.categoryId) {
+    if (!createForm.title || !createForm.description) {
       setCreateError("Please fill out all fields.");
       return;
     }
@@ -267,7 +267,10 @@ export default function CustomerDashboard() {
       setCreateError(null);
       const res = await fetchWithAuth("/tickets", {
         method: "POST",
-        body: JSON.stringify(createForm),
+        body: JSON.stringify({
+          title: createForm.title.trim(),
+          description: createForm.description.trim(),
+        }),
       });
 
       const resBody = await res.json();
@@ -277,7 +280,7 @@ export default function CustomerDashboard() {
         setCreateForm({
           title: "",
           description: "",
-          categoryId: categories[0]?.id || "",
+          categoryId: "",
           priority: "MEDIUM",
         });
         setShowCreateModal(false);
@@ -326,32 +329,7 @@ export default function CustomerDashboard() {
     }
   };
 
-  // Resolve / Close ticket quick action
-  const handleResolveTicket = async () => {
-    if (!selectedTicketId) return;
 
-    try {
-      const res = await fetchWithAuth(`/tickets/${selectedTicketId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "RESOLVED" }),
-      });
-
-      if (res.ok) {
-        const resBody = await res.json();
-        setDetailedTicket(resBody.data.ticket as Ticket);
-        // Sync list
-        setTickets(prev =>
-          prev.map(t => (t.id === selectedTicketId ? { ...t, status: "RESOLVED" } : t))
-        );
-        toast.success("Ticket resolved successfully!");
-      } else {
-        toast.error("Failed to resolve ticket.");
-      }
-    } catch (err) {
-      console.error("Resolve ticket error:", err);
-      toast.error("Failed to resolve ticket.");
-    }
-  };
 
   // Load KB articles and categories
   const loadKbData = useCallback(async () => {
@@ -1038,13 +1016,13 @@ export default function CustomerDashboard() {
                 {/* Tickets list panel (7 cols if drawer is active, 12 if not) */}
                 <div className={`${selectedTicketId ? "lg:col-span-5" : "lg:col-span-12"} space-y-4 transition-all duration-300`}>
                   <div className="flex items-center justify-between">
-                    <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>My Tickets Pipeline</h3>
+                    <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>My Tickets </h3>
                     <button
                       onClick={() => setShowCreateModal(true)}
                       className="btn-cyber h-9 text-xs px-4 py-0 flex items-center space-x-1.5 shadow-none"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>New Ticket</span>
+                      <span className="text-white">New Ticket</span>
                     </button>
                   </div>
 
@@ -1151,19 +1129,7 @@ export default function CustomerDashboard() {
                           </div>
                           
                           <div className="flex items-center space-x-2">
-                            {detailedTicket.status !== "RESOLVED" && detailedTicket.status !== "CLOSED" && (
-                              <button
-                                onClick={handleResolveTicket}
-                                className={`h-8 px-3 rounded-lg text-[10px] font-bold border transition-all flex items-center space-x-1 ${
-                                  isDark 
-                                    ? 'border-green-500/20 text-green-400 hover:text-white hover:bg-green-950/30' 
-                                    : 'border-green-300 bg-green-50/40 text-green-700 hover:bg-green-100/60'
-                                }`}
-                              >
-                                <CheckCircle className="w-3 h-3" />
-                                <span>Resolve Ticket</span>
-                              </button>
-                            )}
+
                             <button
                               onClick={() => setSelectedTicketId(null)}
                               className={`p-1.5 rounded transition-colors ${
@@ -1645,54 +1611,6 @@ export default function CustomerDashboard() {
                 />
               </div>
 
-              {/* Dropdowns */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Category select dropdown */}
-                <div className="space-y-1.5">
-                  <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Category</label>
-                  {loadingCategories ? (
-                    <div className={`h-[44px] w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
-                  ) : (
-                    <select
-                      className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full cursor-pointer ${
-                        isDark
-                          ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
-                          : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
-                      }`}
-                      value={createForm.categoryId}
-                      onChange={(e) => setCreateForm(prev => ({ ...prev, categoryId: e.target.value }))}
-                      disabled={submittingCreate}
-                      style={{ paddingRight: "30px" }}
-                    >
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id} className={isDark ? "bg-[#020617] text-[#F8FAFC]" : "bg-white text-slate-900"}>
-                          {cat.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-
-                {/* Priority */}
-                <div className="space-y-1.5">
-                  <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Priority Level</label>
-                  <select
-                    className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full cursor-pointer ${
-                      isDark
-                        ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
-                        : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
-                    }`}
-                    value={createForm.priority}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, priority: e.target.value as "LOW" | "MEDIUM" | "HIGH" | "URGENT" }))}
-                    disabled={submittingCreate}
-                  >
-                    <option value="LOW" className={isDark ? "bg-[#020617] text-[#F8FAFC]" : "bg-white text-slate-900"}>Low</option>
-                    <option value="MEDIUM" className={isDark ? "bg-[#020617] text-[#F8FAFC]" : "bg-white text-slate-900"}>Medium</option>
-                    <option value="HIGH" className={isDark ? "bg-[#020617] text-[#F8FAFC]" : "bg-white text-slate-900"}>High</option>
-                    <option value="URGENT" className={isDark ? "bg-[#020617] text-[#F8FAFC]" : "bg-white text-slate-900"}>Urgent</option>
-                  </select>
-                </div>
-              </div>
 
               {/* Description textarea */}
               <div className="space-y-1.5">
