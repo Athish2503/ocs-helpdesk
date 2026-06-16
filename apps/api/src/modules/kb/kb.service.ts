@@ -327,14 +327,23 @@ export async function listCategories() {
 export async function createCategory(input: CreateCategoryInput) {
   const slug = slugify(input.name) || "category";
 
-  return prisma.category.create({
-    data: {
-      name: input.name,
-      slug,
-      description: input.description || null,
-      parentId: input.parentId || null,
-    },
-  });
+  try {
+    return await prisma.category.create({
+      data: {
+        name: input.name,
+        slug,
+        description: input.description || null,
+        parentId: input.parentId || null,
+      },
+    });
+  } catch (err: any) {
+    if (err.code === "P2002") {
+      const error = new Error("A category with this name already exists") as any;
+      error.statusCode = 409;
+      throw error;
+    }
+    throw err;
+  }
 }
 
 export async function updateCategory(id: string, input: UpdateCategoryInput) {
@@ -343,10 +352,19 @@ export async function updateCategory(id: string, input: UpdateCategoryInput) {
     data.slug = slugify(input.name) || "category";
   }
 
-  return prisma.category.update({
-    where: { id },
-    data,
-  });
+  try {
+    return await prisma.category.update({
+      where: { id },
+      data,
+    });
+  } catch (err: any) {
+    if (err.code === "P2002") {
+      const error = new Error("A category with this name already exists") as any;
+      error.statusCode = 409;
+      throw error;
+    }
+    throw err;
+  }
 }
 
 export async function deleteCategory(id: string) {

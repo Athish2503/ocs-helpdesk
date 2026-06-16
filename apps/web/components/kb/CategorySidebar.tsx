@@ -3,6 +3,9 @@
 import React, { useState } from "react";
 import { Folder, FolderOpen, ChevronDown, ChevronRight } from "lucide-react";
 
+import { useAuth } from "../../context/AuthContext";
+import { useRouter } from "next/navigation";
+
 interface Category {
   id: string;
   name: string;
@@ -49,6 +52,10 @@ export default function CategorySidebar({
 }: CategorySidebarProps) {
   const tree = buildCategoryTree(categories);
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
+  const { user } = useAuth();
+  const router = useRouter();
+
+  const canManage = user && (user.role === "ADMIN" || user.role === "AGENT");
 
   const toggleExpand = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -117,14 +124,26 @@ export default function CategorySidebar({
     <div className="w-full flex flex-col gap-1.5">
       <div className="flex items-center justify-between px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
         <span>Categories</span>
-        {selectedCategoryId && (
-          <button
-            onClick={() => onSelectCategory(null)}
-            className="text-blue-600 dark:text-blue-400 hover:underline normal-case font-semibold"
-          >
-            Clear
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => router.push("/admin/dashboard/kb/categories")}
+              className="text-blue-600 dark:text-blue-400 hover:underline normal-case font-semibold text-xs"
+            >
+              Manage
+            </button>
+          )}
+          {selectedCategoryId && (
+            <button
+              type="button"
+              onClick={() => onSelectCategory(null)}
+              className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-350 normal-case font-semibold text-xs"
+            >
+              Clear
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col gap-0.5">

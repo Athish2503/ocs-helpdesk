@@ -299,24 +299,44 @@ async function listCategories() {
 }
 async function createCategory(input) {
     const slug = slugify(input.name) || "category";
-    return prisma_js_1.prisma.category.create({
-        data: {
-            name: input.name,
-            slug,
-            description: input.description || null,
-            parentId: input.parentId || null,
-        },
-    });
+    try {
+        return await prisma_js_1.prisma.category.create({
+            data: {
+                name: input.name,
+                slug,
+                description: input.description || null,
+                parentId: input.parentId || null,
+            },
+        });
+    }
+    catch (err) {
+        if (err.code === "P2002") {
+            const error = new Error("A category with this name already exists");
+            error.statusCode = 409;
+            throw error;
+        }
+        throw err;
+    }
 }
 async function updateCategory(id, input) {
     const data = { ...input };
     if (input.name) {
         data.slug = slugify(input.name) || "category";
     }
-    return prisma_js_1.prisma.category.update({
-        where: { id },
-        data,
-    });
+    try {
+        return await prisma_js_1.prisma.category.update({
+            where: { id },
+            data,
+        });
+    }
+    catch (err) {
+        if (err.code === "P2002") {
+            const error = new Error("A category with this name already exists");
+            error.statusCode = 409;
+            throw error;
+        }
+        throw err;
+    }
 }
 async function deleteCategory(id) {
     return prisma_js_1.prisma.category.delete({

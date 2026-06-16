@@ -58,6 +58,15 @@ function optionalAuth(req: Request, res: Response, next: NextFunction): void {
 
 const router = Router();
 
+// --- CATEGORY ROUTING ---
+router.get("/categories", optionalAuth, listCategoriesHandler);
+router.post("/categories", requireAuth, requireRole("ADMIN", "AGENT"), createCategoryHandler);
+router.patch("/categories/:id", requireAuth, requireRole("ADMIN", "AGENT"), updateCategoryHandler);
+router.delete("/categories/:id", requireAuth, requireRole("ADMIN", "AGENT"), deleteCategoryHandler);
+
+// --- TAG ROUTING ---
+router.get("/tags", optionalAuth, listTagsHandler);
+
 // --- PUBLIC ROUTING ---
 router.get("/public/sitemap.xml", getPublicSitemapHandler);
 router.get(
@@ -79,15 +88,6 @@ router.get("/:idOrSlug", optionalAuth, getArticleByIdOrSlugHandler);
 router.post("/", requireAuth, requireRole("ADMIN", "AGENT"), createArticleHandler);
 router.patch("/:id", requireAuth, requireRole("ADMIN", "AGENT"), updateArticleHandler);
 router.delete("/:id", requireAuth, requireRole("ADMIN", "AGENT"), deleteArticleHandler);
-
-// --- CATEGORY ROUTING ---
-router.get("/categories", optionalAuth, listCategoriesHandler);
-router.post("/categories", requireAuth, requireRole("ADMIN", "AGENT"), createCategoryHandler);
-router.patch("/categories/:id", requireAuth, requireRole("ADMIN", "AGENT"), updateCategoryHandler);
-router.delete("/categories/:id", requireAuth, requireRole("ADMIN", "AGENT"), deleteCategoryHandler);
-
-// --- TAG ROUTING ---
-router.get("/tags", optionalAuth, listTagsHandler);
 
 // --- VERSION ROUTING ---
 router.get("/articles/:articleId/versions", requireAuth, requireRole("ADMIN", "AGENT"), listVersionsHandler);

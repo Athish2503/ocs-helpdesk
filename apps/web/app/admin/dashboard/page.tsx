@@ -6,177 +6,166 @@ import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../context/ToastContext";
 import { fetchWithAuth } from "../../../lib/api";
 import {
-  Server,
-  ShieldAlert,
+  LayoutDashboard,
+  Ticket,
   Users,
   Layers,
   BookOpen,
-  Ticket,
   Plus,
-  Trash,
+  Trash2,
   X,
   Search,
   AlertCircle,
   Send,
-  Sun,
-  Moon,
-  RefreshCw,
-  ChevronLeft,
-  ChevronRight,
   Edit2,
+  CheckCircle,
+  Clock,
+  CircleDot,
+  MinusCircle,
+  ArrowUpCircle,
+  ArrowUp,
+  Minus,
+  ChevronDown,
+  MessageSquare,
 } from "lucide-react";
 import { useDialog } from "../../../context/DialogContext";
+import AdminShell, { AdminShellSkeleton } from "../../../components/admin/AdminShell";
 
-// Types matching database schema
-interface Category {
-  id: string;
-  name: string;
-}
-
+// ── Types ──────────────────────────────────────────────────────────
+interface Category { id: string; name: string; }
 interface Team {
-  id: string;
-  name: string;
-  description: string | null;
+  id: string; name: string; description: string | null;
   members: { id: string; name: string; email: string; role: string }[];
   _count?: { tickets: number };
 }
-
-interface Agent {
-  id: string;
-  name: string;
-  email: string;
-}
-
+interface Agent { id: string; name: string; email: string; }
 interface UserProfile {
-  id: string;
-  name: string;
-  email: string;
+  id: string; name: string; email: string;
   role: "CUSTOMER" | "ADMIN" | "AGENT";
-  isActive: boolean;
-  emailVerified: boolean;
-  createdAt: string;
+  isActive: boolean; emailVerified: boolean; createdAt: string;
   teams?: { id: string; name: string }[];
 }
-
 interface TicketMessage {
-  id: string;
-  message: string;
-  createdAt: string;
+  id: string; message: string; createdAt: string;
   sender: { id: string; name: string; email: string; role: string };
 }
-
 interface TicketData {
-  id: string;
-  title: string;
-  description: string;
+  id: string; title: string; description: string;
   status: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
   priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string; updatedAt: string;
   category: Category;
   customer: { id: string; name: string; email: string };
   agent: { id: string; name: string; email: string } | null;
   team: { id: string; name: string } | null;
   messages?: TicketMessage[];
 }
-
 interface KBArticle {
-  id: string;
-  title: string;
-  slug: string;
-  content: string;
-  isPublished: boolean;
-  isInternal: boolean;
-  createdAt: string;
+  id: string; title: string; slug: string; content: string;
+  isPublished: boolean; isInternal: boolean; createdAt: string;
   author: { id: string; name: string };
   category: Category | null;
 }
 
+// ── Status / Priority Helpers ──────────────────────────────────────
+function statusBadgeClass(status: string) {
+  switch (status) {
+    case "OPEN": return "admin-badge admin-badge-open";
+    case "IN_PROGRESS": return "admin-badge admin-badge-in-progress";
+    case "RESOLVED": return "admin-badge admin-badge-resolved";
+    case "CLOSED": return "admin-badge admin-badge-closed";
+    default: return "admin-badge admin-badge-closed";
+  }
+}
+function priorityBadgeClass(priority: string) {
+  switch (priority) {
+    case "URGENT": return "admin-badge admin-badge-urgent";
+    case "HIGH": return "admin-badge admin-badge-high";
+    case "MEDIUM": return "admin-badge admin-badge-medium";
+    case "LOW": return "admin-badge admin-badge-low";
+    default: return "admin-badge admin-badge-low";
+  }
+}
+function StatusIcon({ status }: { status: string }) {
+  const cls = "w-3 h-3";
+  switch (status) {
+    case "OPEN": return <CircleDot className={`${cls} text-blue-500`} />;
+    case "IN_PROGRESS": return <Clock className={`${cls} text-amber-500`} />;
+    case "RESOLVED": return <CheckCircle className={`${cls} text-green-500`} />;
+    default: return <MinusCircle className={`${cls} text-slate-400`} />;
+  }
+}
+
+// ── Main Component ─────────────────────────────────────────────────
 export default function AdminDashboard() {
   const { user, logout, loading: authLoading } = useAuth();
   const router = useRouter();
   const toast = useToast();
   const dialog = useDialog();
 
-  // Sidebar collapsible state
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("admin_sidebar_collapsed");
-      return saved === "true";
-    }
-    return false;
-  });
-
-  const toggleSidebar = () => {
-    const next = !isSidebarCollapsed;
-    setIsSidebarCollapsed(next);
-    localStorage.setItem("admin_sidebar_collapsed", String(next));
-  };
-  
-  // Theme state synced with local storage and window storage events
+  // Theme
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== "undefined") {
-      const savedTheme = localStorage.getItem("theme");
-      if (savedTheme === "dark" || savedTheme === "light") {
-        return savedTheme;
-      }
+      const s = localStorage.getItem("theme");
+      if (s === "dark" || s === "light") return s;
     }
     return "light";
   });
-
   useEffect(() => {
-    const handleStorage = () => {
-      const savedTheme = localStorage.getItem("theme");
-      if (savedTheme === "dark" || savedTheme === "light") {
-        setTheme(savedTheme);
-      }
+    const handler = () => {
+      const s = localStorage.getItem("theme");
+      if (s === "dark" || s === "light") setTheme(s);
     };
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, []);
+  const toggleTheme = () => {
+    const n = theme === "light" ? "dark" : "light";
+    setTheme(n);
+    localStorage.setItem("theme", n);
+    toast.info(`Switched to ${n === "dark" ? "Dark" : "Light"} Mode`);
+  };
+  const isDark = theme === "dark";
+
+  // Active Tab
+  const [activeTab, setActiveTab] = useState<"overview" | "tickets" | "teams" | "clients" | "admins" | "kb">("overview");
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search).get("tab");
+      if (p === "overview" || p === "tickets" || p === "teams" || p === "clients" || p === "admins" || p === "kb") {
+        setActiveTab(p);
+      }
+    }
   }, []);
 
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    toast.info(`Switched to ${newTheme === 'dark' ? 'Dark' : 'Light'} Mode`);
-  };
-
-  const isDark = theme === 'dark';
-
-  // Tab State: overview, tickets, teams, clients, admins, kb
-  const [activeTab, setActiveTab] = useState<"overview" | "tickets" | "teams" | "clients" | "admins" | "kb">("overview");
-  
-  // Data States
+  // Data
   const [tickets, setTickets] = useState<TicketData[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [kbArticles, setKbArticles] = useState<KBArticle[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  
-  // Fetch / Loading states
   const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Selected resource for details/modals
+
+  // Ticket state
   const [selectedTicket, setSelectedTicket] = useState<TicketData | null>(null);
   const [ticketReply, setTicketReply] = useState("");
-  
-  // Modals & Creation state
+  const [ticketStatusFilter, setTicketStatusFilter] = useState("ALL");
+  const [ticketPriorityFilter, setTicketPriorityFilter] = useState("ALL");
+
+  // Team state
   const [showCreateTeam, setShowCreateTeam] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
   const [newTeamDesc, setNewTeamDesc] = useState("");
   const [newTeamMembers, setNewTeamMembers] = useState<string[]>([]);
-
-  // Edit Team states
   const [showEditTeam, setShowEditTeam] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [editTeamName, setEditTeamName] = useState("");
   const [editTeamDesc, setEditTeamDesc] = useState("");
   const [editTeamMembers, setEditTeamMembers] = useState<string[]>([]);
 
-  // User form and modal states
+  // User state
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [showEditUser, setShowEditUser] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
@@ -186,9 +175,10 @@ export default function AdminDashboard() {
   const [userFormRole, setUserFormRole] = useState<"CUSTOMER" | "AGENT" | "ADMIN">("CUSTOMER");
   const [userFormIsActive, setUserFormIsActive] = useState(true);
   const [userFormTeams, setUserFormTeams] = useState<string[]>([]);
-  
-  // KB Editor state
-  const [kbEditing, setKbEditing] = useState<boolean>(false);
+  const [userSearch, setUserSearch] = useState("");
+
+  // KB state
+  const [kbEditing, setKbEditing] = useState(false);
   const [kbArticleId, setKbArticleId] = useState<string | null>(null);
   const [kbTitle, setKbTitle] = useState("");
   const [kbContent, setKbContent] = useState("");
@@ -196,2369 +186,1376 @@ export default function AdminDashboard() {
   const [kbIsInternal, setKbIsInternal] = useState(false);
   const [kbCategoryId, setKbCategoryId] = useState("");
 
-  // Search/Filters states
-  const [ticketStatusFilter, setTicketStatusFilter] = useState("ALL");
-  const [ticketPriorityFilter, setTicketPriorityFilter] = useState("ALL");
-  const [userSearch, setUserSearch] = useState("");
-
-  // Fetch all administrative data from backend
+  // ── Data Fetching ────────────────────────────────────────────────
   const refreshAllData = async () => {
     setDataLoading(true);
     setError(null);
     try {
-      const ticketsRes = await fetchWithAuth("/tickets");
-      if (ticketsRes.ok) {
-        const res = await ticketsRes.json();
-        setTickets(res.data.tickets);
-      }
-
-      const teamsRes = await fetchWithAuth("/teams");
-      if (teamsRes.ok) {
-        const res = await teamsRes.json();
-        setTeams(res.data.teams);
-      }
-
-      const agentsRes = await fetchWithAuth("/users/agents");
-      if (agentsRes.ok) {
-        const res = await agentsRes.json();
-        setAgents(res.data.agents);
-      }
-
-      const kbRes = await fetchWithAuth("/kb");
-      if (kbRes.ok) {
-        const res = await kbRes.json();
-        setKbArticles(res.data.articles);
-      }
-
-      const catRes = await fetchWithAuth("/categories");
+      const [ticketsRes, teamsRes, agentsRes, kbRes, catRes] = await Promise.all([
+        fetchWithAuth("/tickets"),
+        fetchWithAuth("/teams"),
+        fetchWithAuth("/users/agents"),
+        fetchWithAuth("/kb"),
+        fetchWithAuth("/categories"),
+      ]);
+      if (ticketsRes.ok) setTickets((await ticketsRes.json()).data.tickets);
+      if (teamsRes.ok) setTeams((await teamsRes.json()).data.teams);
+      if (agentsRes.ok) setAgents((await agentsRes.json()).data.agents);
+      if (kbRes.ok) setKbArticles((await kbRes.json()).data.articles);
       if (catRes.ok) {
-        const res = await catRes.json();
-        setCategories(res.data.categories || res.data); // handles array returns
+        const r = await catRes.json();
+        setCategories(r.data.categories || r.data);
       }
-
-      // Only Admins can view users directory
       if (user?.role === "ADMIN") {
         const usersRes = await fetchWithAuth("/users");
-        if (usersRes.ok) {
-          const res = await usersRes.json();
-          setUsers(res.data.users);
-        }
+        if (usersRes.ok) setUsers((await usersRes.json()).data.users);
       }
     } catch (err) {
       console.error(err);
-      setError("Network error: Failed to pull data streams from API.");
+      setError("Failed to load data. Please refresh.");
     } finally {
       setDataLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (user) {
-      refreshAllData();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  useEffect(() => { if (user) refreshAllData(); }, [user]); // eslint-disable-line
 
-  // Sync active tab from URL query params on mount
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const tab = params.get("tab");
-      if (
-        tab === "overview" ||
-        tab === "tickets" ||
-        tab === "teams" ||
-        tab === "clients" ||
-        tab === "admins" ||
-        tab === "kb"
-      ) {
-        setActiveTab(tab);
-      }
-    }
-  }, []);
-
-  // Handle ticket reload/detail view fetch
+  // ── Ticket Actions ───────────────────────────────────────────────
   const selectTicket = async (ticket: TicketData) => {
     setSelectedTicket(ticket);
     setTicketReply("");
     try {
       const res = await fetchWithAuth(`/tickets/${ticket.id}`);
-      if (res.ok) {
-        const resData = await res.json();
-        setSelectedTicket(resData.data.ticket);
-      }
-    } catch (err) {
-      console.error(err);
-    }
+      if (res.ok) setSelectedTicket((await res.json()).data.ticket);
+    } catch (err) { console.error(err); }
   };
 
-  // Ticket status / priority updates
   const updateTicketDetails = async (updates: { status?: string; priority?: string; teamId?: string | null; agentId?: string | null }) => {
     if (!selectedTicket) return;
     try {
-      const res = await fetchWithAuth(`/tickets/${selectedTicket.id}`, {
-        method: "PATCH",
-        body: JSON.stringify(updates),
-      });
+      const res = await fetchWithAuth(`/tickets/${selectedTicket.id}`, { method: "PATCH", body: JSON.stringify(updates) });
       if (res.ok) {
-        const resData = await res.json();
-        const updated = resData.data.ticket;
+        const updated = (await res.json()).data.ticket;
         setSelectedTicket(prev => prev ? { ...prev, ...updated } : null);
-        // Refresh ticket list
         setTickets(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t));
-        toast.success("Ticket details updated successfully!");
-      } else {
-        toast.error("Failed to update ticket details.");
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to update ticket details.");
-    }
+        toast.success("Ticket updated.");
+      } else toast.error("Failed to update ticket.");
+    } catch { toast.error("Failed to update ticket."); }
   };
 
-  // Send a reply to ticket
   const submitTicketReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTicket || !ticketReply.trim()) return;
-
     try {
-      const res = await fetchWithAuth(`/tickets/${selectedTicket.id}/messages`, {
-        method: "POST",
-        body: JSON.stringify({ message: ticketReply }),
-      });
+      const res = await fetchWithAuth(`/tickets/${selectedTicket.id}/messages`, { method: "POST", body: JSON.stringify({ message: ticketReply }) });
       if (res.ok) {
-        const resData = await res.json();
-        const newMessage = resData.data.message;
-        setSelectedTicket(prev => prev ? { ...prev, messages: [...(prev.messages || []), newMessage] } : null);
+        const newMsg = (await res.json()).data.message;
+        setSelectedTicket(prev => prev ? { ...prev, messages: [...(prev.messages || []), newMsg] } : null);
         setTicketReply("");
-        toast.success("Reply message sent successfully!");
-      } else {
-        toast.error("Failed to send message reply.");
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to send message.");
-    }
+        toast.success("Reply sent.");
+      } else toast.error("Failed to send reply.");
+    } catch { toast.error("Failed to send reply."); }
   };
 
-  // Create Team
+  // ── Team Actions ─────────────────────────────────────────────────
   const handleCreateTeam = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTeamName.trim()) return;
-
     try {
-      const res = await fetchWithAuth("/teams", {
-        method: "POST",
-        body: JSON.stringify({
-          name: newTeamName,
-          description: newTeamDesc,
-          memberIds: newTeamMembers,
-        }),
-      });
+      const res = await fetchWithAuth("/teams", { method: "POST", body: JSON.stringify({ name: newTeamName, description: newTeamDesc, memberIds: newTeamMembers }) });
       if (res.ok) {
-        setNewTeamName("");
-        setNewTeamDesc("");
-        setNewTeamMembers([]);
-        setShowCreateTeam(false);
-        refreshAllData();
-        toast.success("Team created successfully!");
-      } else {
-        const errData = await res.json();
-        toast.error(errData.error?.message || "Error creating team");
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Network error: Failed to create team.");
-    }
+        setNewTeamName(""); setNewTeamDesc(""); setNewTeamMembers([]); setShowCreateTeam(false);
+        refreshAllData(); toast.success("Team created.");
+      } else toast.error((await res.json()).error?.message || "Error creating team");
+    } catch { toast.error("Failed to create team."); }
   };
 
-  // Toggle agent in team checklist
-  const toggleTeamMemberSelection = (agentId: string) => {
-    setNewTeamMembers(prev =>
-      prev.includes(agentId) ? prev.filter(id => id !== agentId) : [...prev, agentId]
-    );
-  };
+  const toggleTeamMemberSelection = (agentId: string) =>
+    setNewTeamMembers(prev => prev.includes(agentId) ? prev.filter(id => id !== agentId) : [...prev, agentId]);
 
-  // Delete Team
   const handleDeleteTeam = async (teamId: string) => {
-    const confirmed = await dialog.confirm(
-      "Are you sure you want to delete this team? All assigned tickets will be unassigned.",
-      "Delete Team"
-    );
+    const confirmed = await dialog.confirm("Delete this team? Assigned tickets will be unassigned.", "Delete Team");
     if (!confirmed) return;
     try {
       const res = await fetchWithAuth(`/teams/${teamId}`, { method: "DELETE" });
-      if (res.ok) {
-        refreshAllData();
-        toast.success("Team deleted successfully!");
-      } else {
-        toast.error("Failed to delete team.");
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to delete team.");
-    }
+      if (res.ok) { refreshAllData(); toast.success("Team deleted."); }
+      else toast.error("Failed to delete team.");
+    } catch { toast.error("Failed to delete team."); }
   };
 
-  // Edit Team helpers
   const handleEditTeamClick = (t: Team) => {
-    setSelectedTeam(t);
-    setEditTeamName(t.name);
-    setEditTeamDesc(t.description || "");
-    setEditTeamMembers(t.members.map((m) => m.id));
-    setShowEditTeam(true);
+    setSelectedTeam(t); setEditTeamName(t.name); setEditTeamDesc(t.description || "");
+    setEditTeamMembers(t.members.map(m => m.id)); setShowEditTeam(true);
   };
 
   const handleEditTeam = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedTeam) return;
-    if (!editTeamName.trim()) {
-      toast.error("Team name is required.");
-      return;
-    }
-
+    if (!selectedTeam || !editTeamName.trim()) { toast.error("Team name is required."); return; }
     try {
-      const res = await fetchWithAuth(`/teams/${selectedTeam.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          name: editTeamName,
-          description: editTeamDesc,
-          memberIds: editTeamMembers,
-        }),
-      });
-      if (res.ok) {
-        toast.success("Team updated successfully!");
-        setShowEditTeam(false);
-        setSelectedTeam(null);
-        refreshAllData();
-      } else {
-        const errData = await res.json();
-        toast.error(errData.error?.message || "Error updating team");
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Network error: Failed to update team.");
-    }
+      const res = await fetchWithAuth(`/teams/${selectedTeam.id}`, { method: "PATCH", body: JSON.stringify({ name: editTeamName, description: editTeamDesc, memberIds: editTeamMembers }) });
+      if (res.ok) { toast.success("Team updated."); setShowEditTeam(false); setSelectedTeam(null); refreshAllData(); }
+      else toast.error((await res.json()).error?.message || "Error updating team");
+    } catch { toast.error("Failed to update team."); }
   };
 
-  // Create User
+  // ── User Actions ─────────────────────────────────────────────────
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userFormName.trim() || !userFormEmail.trim() || !userFormPassword.trim()) {
-      toast.error("Name, email, and password are required.");
-      return;
-    }
-
+    if (!userFormName.trim() || !userFormEmail.trim() || !userFormPassword.trim()) { toast.error("Name, email, and password are required."); return; }
     try {
-      const res = await fetchWithAuth("/users", {
-        method: "POST",
-        body: JSON.stringify({
-          name: userFormName,
-          email: userFormEmail,
-          password: userFormPassword,
-          role: userFormRole,
-          teamIds: (userFormRole === "AGENT" || userFormRole === "ADMIN") ? userFormTeams : [],
-        }),
-      });
+      const res = await fetchWithAuth("/users", { method: "POST", body: JSON.stringify({ name: userFormName, email: userFormEmail, password: userFormPassword, role: userFormRole, teamIds: (userFormRole === "AGENT" || userFormRole === "ADMIN") ? userFormTeams : [] }) });
       if (res.ok) {
-        toast.success("User created successfully!");
-        setShowCreateUser(false);
-        // Reset form
-        setUserFormName("");
-        setUserFormEmail("");
-        setUserFormPassword("");
-        setUserFormRole("CUSTOMER");
-        setUserFormTeams([]);
+        toast.success("User created."); setShowCreateUser(false);
+        setUserFormName(""); setUserFormEmail(""); setUserFormPassword(""); setUserFormRole("CUSTOMER"); setUserFormTeams([]);
         refreshAllData();
-      } else {
-        const errData = await res.json();
-        toast.error(errData.error?.message || "Error creating user");
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to create user.");
-    }
+      } else toast.error((await res.json()).error?.message || "Error creating user");
+    } catch { toast.error("Failed to create user."); }
   };
 
-  // Edit User
   const handleEditUserClick = (u: UserProfile) => {
-    setSelectedUser(u);
-    setUserFormName(u.name);
-    setUserFormEmail(u.email);
-    setUserFormPassword(""); // Keep blank if unchanged
-    setUserFormRole(u.role);
-    setUserFormIsActive(u.isActive);
-    setUserFormTeams(u.teams ? u.teams.map(t => t.id) : []);
+    setSelectedUser(u); setUserFormName(u.name); setUserFormEmail(u.email); setUserFormPassword("");
+    setUserFormRole(u.role); setUserFormIsActive(u.isActive); setUserFormTeams(u.teams ? u.teams.map(t => t.id) : []);
     setShowEditUser(true);
   };
 
   const handleSaveEditUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedUser) return;
-    if (!userFormName.trim() || !userFormEmail.trim()) {
-      toast.error("Name and email are required.");
-      return;
-    }
-
-    const payload: any = {
-      name: userFormName,
-      email: userFormEmail,
-      role: userFormRole,
-      isActive: userFormIsActive,
-      teamIds: (userFormRole === "AGENT" || userFormRole === "ADMIN") ? userFormTeams : [],
-    };
-    if (userFormPassword.trim()) {
-      payload.password = userFormPassword;
-    }
-
+    if (!selectedUser || !userFormName.trim() || !userFormEmail.trim()) { toast.error("Name and email are required."); return; }
+    const payload: any = { name: userFormName, email: userFormEmail, role: userFormRole, isActive: userFormIsActive, teamIds: (userFormRole === "AGENT" || userFormRole === "ADMIN") ? userFormTeams : [] };
+    if (userFormPassword.trim()) payload.password = userFormPassword;
     try {
-      const res = await fetchWithAuth(`/users/${selectedUser.id}`, {
-        method: "PATCH",
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) {
-        toast.success("User updated successfully!");
-        setShowEditUser(false);
-        setSelectedUser(null);
-        refreshAllData();
-      } else {
-        const errData = await res.json();
-        toast.error(errData.error?.message || "Error updating user");
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to update user.");
-    }
+      const res = await fetchWithAuth(`/users/${selectedUser.id}`, { method: "PATCH", body: JSON.stringify(payload) });
+      if (res.ok) { toast.success("User updated."); setShowEditUser(false); setSelectedUser(null); refreshAllData(); }
+      else toast.error((await res.json()).error?.message || "Error updating user");
+    } catch { toast.error("Failed to update user."); }
   };
 
-  // Update User role/status
   const handleUpdateUser = async (userId: string, updates: { role?: string; isActive?: boolean }) => {
     try {
-      const res = await fetchWithAuth(`/users/${userId}`, {
-        method: "PATCH",
-        body: JSON.stringify(updates),
-      });
+      const res = await fetchWithAuth(`/users/${userId}`, { method: "PATCH", body: JSON.stringify(updates) });
       if (res.ok) {
-        const resData = await res.json();
-        const updatedUser = resData.data.user;
-        setUsers(prev => prev.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser } : u));
-        toast.success("User profile updated successfully!");
-      } else {
-        toast.error("Failed to update user profile.");
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to update user profile.");
-    }
+        const updated = (await res.json()).data.user;
+        setUsers(prev => prev.map(u => u.id === updated.id ? { ...u, ...updated } : u));
+        toast.success("User updated.");
+      } else toast.error("Failed to update user.");
+    } catch { toast.error("Failed to update user."); }
   };
 
-  // Save KB Article (Create/Update)
+  // ── KB Actions ───────────────────────────────────────────────────
   const handleSaveKB = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!kbTitle.trim() || !kbContent.trim()) return;
-
-    const payload = {
-      title: kbTitle,
-      content: kbContent,
-      isPublished: kbIsPublished,
-      isInternal: kbIsInternal,
-      categoryId: kbCategoryId || null,
-    };
-
+    const payload = { title: kbTitle, content: kbContent, isPublished: kbIsPublished, isInternal: kbIsInternal, categoryId: kbCategoryId || null };
     try {
-      let res;
-      if (kbArticleId) {
-        // Edit mode
-        res = await fetchWithAuth(`/kb/${kbArticleId}`, {
-          method: "PATCH",
-          body: JSON.stringify(payload),
-        });
-      } else {
-        // Create mode
-        res = await fetchWithAuth("/kb", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
-      }
-
+      const res = kbArticleId
+        ? await fetchWithAuth(`/kb/${kbArticleId}`, { method: "PATCH", body: JSON.stringify(payload) })
+        : await fetchWithAuth("/kb", { method: "POST", body: JSON.stringify(payload) });
       if (res.ok) {
-        setKbTitle("");
-        setKbContent("");
-        setKbIsPublished(false);
-        setKbIsInternal(false);
-        setKbCategoryId("");
-        setKbArticleId(null);
-        setKbEditing(false);
-        refreshAllData();
-        toast.success("Knowledge Base article saved successfully!");
-      } else {
-        const errData = await res.json();
-        toast.error(errData.error?.message || "Error saving article");
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to save KB article.");
-    }
+        setKbTitle(""); setKbContent(""); setKbIsPublished(false); setKbIsInternal(false); setKbCategoryId(""); setKbArticleId(null); setKbEditing(false);
+        refreshAllData(); toast.success("KB article saved.");
+      } else toast.error((await res.json()).error?.message || "Error saving article");
+    } catch { toast.error("Failed to save article."); }
   };
 
-  // Edit KB Article loader
-  const startEditKB = (article: KBArticle) => {
-    setKbArticleId(article.id);
-    setKbTitle(article.title);
-    setKbContent(article.content);
-    setKbIsPublished(article.isPublished);
-    setKbIsInternal(article.isInternal);
-    setKbCategoryId(article.category?.id || "");
+  const startEditKB = (art: KBArticle) => {
+    setKbArticleId(art.id); setKbTitle(art.title); setKbContent(art.content);
+    setKbIsPublished(art.isPublished); setKbIsInternal(art.isInternal); setKbCategoryId(art.category?.id || "");
     setKbEditing(true);
   };
 
-  // Delete KB Article
   const handleDeleteKB = async (articleId: string) => {
-    const confirmed = await dialog.confirm("Are you sure you want to delete this article?", "Delete Article");
+    const confirmed = await dialog.confirm("Delete this article permanently?", "Delete Article");
     if (!confirmed) return;
     try {
       const res = await fetchWithAuth(`/kb/${articleId}`, { method: "DELETE" });
-      if (res.ok) {
-        refreshAllData();
-        toast.success("KB article deleted successfully!");
-      } else {
-        toast.error("Failed to delete KB article.");
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to delete KB article.");
-    }
+      if (res.ok) { refreshAllData(); toast.success("Article deleted."); }
+      else toast.error("Failed to delete article.");
+    } catch { toast.error("Failed to delete article."); }
   };
 
-  // ── SKELETON LOADING STATE (Unified with design variables) ───────────────────
+  // ── Loading skeleton ─────────────────────────────────────────────
   if (authLoading || !user) {
     const isDarkTheme = typeof window !== "undefined" && localStorage.getItem("theme") === "dark";
-    const sk = isDarkTheme ? "skeleton" : "skeleton-light";
-    
-    return (
-      <div className={`min-h-screen flex font-body select-none transition-colors duration-300 ${
-        isDarkTheme ? 'bg-[#020617] text-[#F8FAFC]' : 'bg-[#F8FAFC] text-[#0F172A]'
-      }`}>
-        {/* Sidebar Skeleton */}
-        <aside className={`w-[280px] border-r p-6 flex flex-col justify-between hidden md:flex shrink-0 ${
-          isDarkTheme ? 'bg-[#0F172A]/70 border-[#1E293B]' : 'bg-white border-slate-200/80'
-        }`}>
-          <div className="space-y-8">
-            <div className="flex items-center space-x-3">
-              <div className={`w-8 h-8 rounded-lg ${sk}`}></div>
-              <div className={`h-5 w-24 ${sk}`}></div>
-            </div>
-            <div className="space-y-4">
-              <div className={`h-10 w-full ${sk}`}></div>
-              <div className={`h-10 w-full ${sk}`}></div>
-              <div className={`h-10 w-full ${sk}`}></div>
-            </div>
-          </div>
-          <div className={`h-12 w-full ${sk}`}></div>
-        </aside>
-
-        {/* Content Shell Skeleton */}
-        <div className="flex-1 flex flex-col">
-          {/* Top Bar Skeleton */}
-          <header className={`h-[72px] border-b px-8 flex items-center justify-between ${
-            isDarkTheme ? 'bg-[#0F172A]/70 border-[#1E293B]' : 'bg-white border-slate-200/80'
-          }`}>
-            <div className={`h-6 w-48 ${sk}`}></div>
-            <div className={`h-8 w-24 ${sk}`}></div>
-          </header>
-
-          {/* Main Dashboard Space Skeleton */}
-          <main className="flex-grow p-8 max-w-[1440px] w-full mx-auto space-y-6">
-            <div className={`h-32 w-full ${sk}`}></div>
-            <div className="grid md:grid-cols-3 gap-6">
-              <div className={`h-44 w-full ${sk}`}></div>
-              <div className={`h-44 w-full ${sk}`}></div>
-              <div className={`h-44 w-full ${sk}`}></div>
-            </div>
-          </main>
-        </div>
-      </div>
-    );
+    return <AdminShellSkeleton isDark={isDarkTheme} />;
   }
 
-  // Filtered tickets
+  // Derived data
   const filteredTickets = tickets.filter(t => {
     if (ticketStatusFilter !== "ALL" && t.status !== ticketStatusFilter) return false;
     if (ticketPriorityFilter !== "ALL" && t.priority !== ticketPriorityFilter) return false;
     return true;
   });
 
-  // Filtered users
-  const filteredUsers = users.filter(u => {
-    if (!userSearch.trim()) return true;
-    return (
-      u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.email.toLowerCase().includes(userSearch.toLowerCase())
-    );
-  });
+  const tabTitles: Record<string, { title: string; description: string }> = {
+    overview: { title: "Overview", description: "Operational summary & quick actions" },
+    tickets: { title: "Ticket Queue", description: "Manage and assign support requests" },
+    teams: { title: "Teams", description: "Organize agents into support groups" },
+    clients: { title: "Client Accounts", description: "External customer profiles" },
+    admins: { title: "Staff Directory", description: "Agents, admins, and permissions" },
+    kb: { title: "Knowledge Base", description: "Self-service articles & documentation" },
+  };
+
+  const current = tabTitles[activeTab] || tabTitles.overview;
 
   return (
-    <div className={`min-h-screen flex font-body selection:bg-[#38b1f7]/30 relative overflow-hidden transition-colors duration-300 ${
-      isDark ? 'bg-[#020617] text-[#F8FAFC]' : 'bg-[#F8FAFC] text-[#0F172A]'
-    }`}>
-      {/* Background cyber grid and glow orbs */}
-      <div className={`absolute inset-0 grid-bg pointer-events-none z-0 transition-opacity duration-300 ${
-        isDark ? 'opacity-40' : 'opacity-10'
-      }`}></div>
-      <div className={`absolute top-[-10%] right-[-10%] w-[500px] h-[500px] z-0 animate-float-1 pointer-events-none rounded-full blur-[100px] ${
-        isDark ? 'bg-[#38b1f7]/15' : 'bg-[#38b1f7]/5'
-      }`}></div>
-      <div className={`absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] z-0 animate-float-2 pointer-events-none rounded-full blur-[100px] ${
-        isDark ? 'bg-indigo-500/10' : 'bg-indigo-500/3'
-      }`}></div>
+    <AdminShell
+      user={user}
+      onLogout={() => logout("/admin/login")}
+      activeTab={activeTab}
+      onTabChange={(tab) => {
+        setActiveTab(tab as any);
+        setSelectedTicket(null);
+        setKbEditing(false);
+      }}
+      headerTitle={current.title}
+      headerDescription={current.description}
+      isLoading={dataLoading}
+      onRefresh={refreshAllData}
+      isDark={isDark}
+      onToggleTheme={toggleTheme}
+    >
+      <div className="p-6 md:p-8 max-w-[1440px] w-full mx-auto space-y-6 admin-fade-in">
 
-      {/* ── SIDEBAR NAVIGATION ─────────────────────────────────── */}
-      <aside className={`border-r p-4 flex flex-col justify-between hidden md:flex shrink-0 z-25 transition-all duration-300 ease-in-out group/sidebar ${
-        isSidebarCollapsed 
-          ? "w-[76px] hover:w-[280px]" 
-          : "w-[280px]"
-      } ${
-        isDark 
-          ? 'bg-[#0F172A]/70 backdrop-blur-md border-[#1E293B] text-[#F8FAFC]' 
-          : 'bg-white/80 backdrop-blur-md border-slate-200/80 text-slate-800'
-      }`}>
-        <div className="space-y-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-lg bg-[#38b1f7] flex items-center justify-center shadow-[0_0_15px_rgba(56,177,247,0.4)] shrink-0">
-                <span className="font-extrabold text-[#020617] text-md">🛡️</span>
-              </div>
-              <div className={`transition-all duration-300 ${
-                isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto" : "opacity-100 w-auto"
-              }`}>
-                <h2 className={`font-bold text-sm transition-colors whitespace-nowrap ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>Admin Center</h2>
-                <p className={`text-[9px] font-mono tracking-wider uppercase whitespace-nowrap ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>OCS Operations</p>
-              </div>
-            </div>
-            <button
-              onClick={toggleSidebar}
-              className={`p-1.5 rounded-lg border transition-all duration-200 active:scale-95 shrink-0 ${
-                isSidebarCollapsed ? "opacity-0 group-hover/sidebar:opacity-100" : "opacity-100"
-              } ${
-                isDark 
-                  ? 'border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white' 
-                  : 'border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-900'
-              }`}
-              title={isSidebarCollapsed ? "Expand Sidebar Lock" : "Collapse Sidebar"}
-            >
-              {isSidebarCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
+        {/* ── Error Banner ───────────────────────────────────────── */}
+        {error && (
+          <div className={`flex items-center gap-3 p-4 rounded-xl border text-sm ${isDark ? "bg-red-950/30 border-red-500/25 text-red-300" : "bg-red-50 border-red-200 text-red-700"}`}>
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
+            <button onClick={() => setError(null)} className="ml-auto shrink-0 opacity-60 hover:opacity-100">
+              <X className="w-4 h-4" />
             </button>
           </div>
+        )}
 
-          <nav className="space-y-1">
-            <button
-              onClick={() => { setActiveTab("overview"); setKbEditing(false); setSelectedTicket(null); }}
-              className={`w-full h-10 flex items-center px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                activeTab === "overview"
-                  ? isDark
-                    ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
-                    : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
-                  : isDark 
-                    ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            >
-              <Server className="w-4.5 h-4.5 mr-2.5 shrink-0" />
-              <span className={`transition-all duration-300 ${
-                isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
-              }`}>Console Desk</span>
-            </button>
-            <button
-              onClick={() => { setActiveTab("tickets"); setKbEditing(false); }}
-              className={`w-full h-10 flex items-center px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                activeTab === "tickets"
-                  ? isDark
-                    ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
-                    : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
-                  : isDark 
-                    ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            >
-              <Ticket className="w-4.5 h-4.5 mr-2.5 shrink-0" />
-              <span className={`transition-all duration-300 ${
-                isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
-              }`}>All Ticket Queue</span>
-            </button>
-            <button
-              onClick={() => { setActiveTab("teams"); setKbEditing(false); setSelectedTicket(null); }}
-              className={`w-full h-10 flex items-center px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                activeTab === "teams"
-                  ? isDark
-                    ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
-                    : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
-                  : isDark 
-                    ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            >
-              <Layers className="w-4.5 h-4.5 mr-2.5 shrink-0" />
-              <span className={`transition-all duration-300 ${
-                isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
-              }`}>Team control</span>
-            </button>
-            {user.role === "ADMIN" && (
-              <>
-                <button
-                  onClick={() => { setActiveTab("clients"); setKbEditing(false); setSelectedTicket(null); }}
-                  className={`w-full h-10 flex items-center px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                    activeTab === "clients"
-                      ? isDark
-                        ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
-                        : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
-                      : isDark 
-                        ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
-                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                >
-                  <Users className="w-4.5 h-4.5 mr-2.5 shrink-0" />
-                  <span className={`transition-all duration-300 ${
-                    isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
-                  }`}>Client Accounts</span>
-                </button>
-                <button
-                  onClick={() => { setActiveTab("admins"); setKbEditing(false); setSelectedTicket(null); }}
-                  className={`w-full h-10 flex items-center px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                    activeTab === "admins"
-                      ? isDark
-                        ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
-                        : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
-                      : isDark 
-                        ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
-                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                >
-                  <ShieldAlert className="w-4.5 h-4.5 mr-2.5 shrink-0" />
-                  <span className={`transition-all duration-300 ${
-                    isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
-                  }`}>Staff Directory</span>
-                </button>
-              </>
-            )}
-            <button
-              onClick={() => router.push("/admin/dashboard/kb")}
-              className={`w-full h-10 flex items-center px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                activeTab === "kb"
-                  ? isDark
-                    ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
-                    : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
-                  : isDark 
-                    ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            >
-              <BookOpen className="w-4.5 h-4.5 mr-2.5 shrink-0" />
-              <span className={`transition-all duration-300 ${
-                isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
-              }`}>Knowledge Base</span>
-            </button>
-          </nav>
-        </div>
-
-        {/* Sidebar Bottom Profile */}
-        <div className={`p-3 rounded-xl border flex flex-col space-y-3 transition-colors ${
-          isDark ? 'bg-[#111827]/80 border-[#1E293B]' : 'bg-slate-50 border-slate-200/80'
-        }`}>
-          <div className="flex items-center space-x-3 overflow-hidden">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 border ${
-              isDark 
-                ? 'bg-[#38b1f7]/20 border-[#38b1f7]/20 text-[#38b1f7]' 
-                : 'bg-[#38b1f7]/10 border-[#38b1f7]/20 text-[#0d7fc0]'
-            }`}>
-              {user.name.charAt(0).toUpperCase()}
+        {/* ══════════════════════════════════════════════════════════
+            TAB: OVERVIEW
+        ══════════════════════════════════════════════════════════ */}
+        {activeTab === "overview" && (
+          <div className="space-y-6">
+            {/* Stat Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard
+                label="Total Tickets"
+                value={tickets.length}
+                icon={<Ticket className="w-5 h-5" />}
+                iconBg="bg-blue-50 text-blue-600"
+                iconBgDark="bg-blue-500/10 text-blue-400"
+                isDark={isDark}
+              />
+              <StatCard
+                label="Pending"
+                value={tickets.filter(t => t.status === "OPEN" || t.status === "IN_PROGRESS").length}
+                icon={<Clock className="w-5 h-5" />}
+                iconBg="bg-amber-50 text-amber-600"
+                iconBgDark="bg-amber-500/10 text-amber-400"
+                isDark={isDark}
+                highlight
+              />
+              <StatCard
+                label="Active Teams"
+                value={teams.length}
+                icon={<Layers className="w-5 h-5" />}
+                iconBg="bg-indigo-50 text-indigo-600"
+                iconBgDark="bg-indigo-500/10 text-indigo-400"
+                isDark={isDark}
+              />
+              <StatCard
+                label="KB Articles"
+                value={kbArticles.length}
+                icon={<BookOpen className="w-5 h-5" />}
+                iconBg="bg-emerald-50 text-emerald-600"
+                iconBgDark="bg-emerald-500/10 text-emerald-400"
+                isDark={isDark}
+              />
             </div>
-            <div className={`overflow-hidden transition-all duration-300 ${
-              isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto" : "opacity-100 w-auto"
-            }`}>
-              <p className={`text-xs font-semibold truncate whitespace-nowrap ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>{user.name}</p>
-              <p className={`text-[9px] font-mono uppercase tracking-wider whitespace-nowrap ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>{user.role}</p>
-            </div>
-          </div>
-          <button
-            onClick={() => logout("/admin/login")}
-            className={`w-full flex items-center justify-center text-[11px] font-bold rounded-lg transition-all duration-150 active:scale-98 ${
-              isSidebarCollapsed ? "opacity-0 h-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:h-8 py-0" : "opacity-100 h-8 py-2"
-            } ${
-              isDark 
-                ? 'text-red-400 hover:text-white hover:bg-red-950/40 border border-red-500/20 hover:border-red-500/40' 
-                : 'text-red-650 hover:text-white hover:bg-red-600 border border-red-200 hover:border-red-600'
-            }`}
-          >
-            Logout Session
-          </button>
-        </div>
-      </aside>
 
-      {/* ── MAIN WORKSPACE SHELL ────────────────────────────────────────────── */}
-      <div className="flex-grow flex flex-col overflow-hidden z-10">
-        
-        {/* Header (Top Bar) */}
-        <header className={`h-[72px] backdrop-blur-md border-b px-8 flex items-center justify-between shrink-0 transition-colors duration-300 ${
-          isDark ? 'bg-[#0F172A]/70 border-[#1E293B]' : 'bg-white/80 border-slate-200/80'
-        }`}>
-          <div>
-            <h1 className={`font-bold text-lg tracking-tight capitalize ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>
-              {activeTab} panel
-            </h1>
-            <p className={`text-[10px] ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>
-              Administrative dashboard & operational center
-            </p>
-          </div>
-          <div className="flex items-center space-x-3">
-            {/* Theme Toggle Button */}
-            <button
-              onClick={toggleTheme}
-              className={`p-2 rounded-lg border transition-all duration-200 active:scale-95 ${
-                isDark 
-                  ? 'border-[#1E293B] hover:border-[#38b1f7]/30 text-yellow-400 hover:bg-white/5' 
-                  : 'border-slate-200 hover:border-[#38b1f7]/30 text-slate-700 hover:bg-slate-100'
-              }`}
-              title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
-              aria-label="Toggle Theme"
-            >
-              {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-            </button>
-
-            {/* Sync Console / Refresh Button */}
-            <button
-              onClick={refreshAllData}
-              disabled={dataLoading}
-              className={`p-2 rounded border transition-colors ${
-                isDark 
-                  ? 'bg-slate-800/40 hover:bg-slate-800 border-slate-700/30 text-[#94A3B8] hover:text-[#F8FAFC]' 
-                  : 'bg-slate-100 hover:bg-slate-200/80 border-slate-200 text-slate-600 hover:text-slate-900'
-              }`}
-              title="Sync Console"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${dataLoading ? "animate-spin text-[#38b1f7]" : ""}`} />
-            </button>
-            
-            {/* Mobile Logout */}
-            <button
-              onClick={() => logout("/admin/login")}
-              className={`md:hidden text-xs font-bold px-3 py-1.5 rounded-lg border ${
-                isDark 
-                  ? 'bg-[#111827] border-[#1E293B] text-red-400 hover:text-white' 
-                  : 'bg-white border-slate-200 text-red-600 hover:bg-slate-50'
-              }`}
-            >
-              Logout
-            </button>
-          </div>
-        </header>
-
-        {/* Dynamic Workspace Scroll View */}
-        <main className="flex-grow overflow-y-auto p-6 md:p-8 max-w-[1440px] w-full mx-auto space-y-6">
-          {error && (
-            <div className={`p-4 rounded-xl border text-xs font-semibold flex items-start space-x-2.5 shadow-lg ${
-              isDark 
-                ? 'bg-red-950/40 border-red-500/30 text-red-300' 
-                : 'bg-red-50 border-red-200 text-red-700'
-            }`}>
-              <ShieldAlert className={`w-5 h-5 flex-shrink-0 mt-0.5 ${isDark ? 'text-red-400' : 'text-red-500'}`} />
-              <span className="font-mono">{error}</span>
-            </div>
-          )}
-
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {/* TAB 1: OVERVIEW                                                    */}
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {activeTab === "overview" && (
-            <div className="space-y-6">
-              {/* Stats Grid */}
-              <section className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                {/* Total Tickets */}
-                <div className={`p-6 border rounded-xl flex items-center justify-between transition-colors ${
-                  isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
-                }`}>
-                  <div>
-                    <h3 className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>Total Tickets</h3>
-                    <p className={`text-3xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>{tickets.length}</p>
-                  </div>
-                  <Ticket className="w-8 h-8 text-[#38B1F7]" />
+            {/* Overview grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              {/* Unassigned Queue */}
+              <div className={`lg:col-span-2 admin-card p-5 space-y-4 ${isDark ? "admin-dark" : ""}`}>
+                <div className="flex items-center justify-between">
+                  <h2 className={`text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Unassigned Queue</h2>
+                  <span className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                    {tickets.filter(t => !t.agent).length} unassigned
+                  </span>
                 </div>
-                
-                {/* Pending (Open) */}
-                <div className={`p-6 border rounded-xl flex items-center justify-between transition-colors ${
-                  isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
-                }`}>
-                  <div>
-                    <h3 className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>Pending (Open)</h3>
-                    <p className="text-3xl font-extrabold text-[#5FC0F9]">
-                      {tickets.filter(t => t.status === "OPEN" || t.status === "IN_PROGRESS").length}
-                    </p>
-                  </div>
-                  <AlertCircle className="w-8 h-8 text-[#5FC0F9]" />
-                </div>
-
-                {/* Active Teams */}
-                <div className={`p-6 border rounded-xl flex items-center justify-between transition-colors ${
-                  isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
-                }`}>
-                  <div>
-                    <h3 className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>Active Teams</h3>
-                    <p className={`text-3xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>{teams.length}</p>
-                  </div>
-                  <Layers className="w-8 h-8 text-indigo-400" />
-                </div>
-
-                {/* KB Articles */}
-                <div className={`p-6 border rounded-xl flex items-center justify-between transition-colors ${
-                  isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
-                }`}>
-                  <div>
-                    <h3 className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>KB Articles</h3>
-                    <p className={`text-3xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>{kbArticles.length}</p>
-                  </div>
-                  <BookOpen className="w-8 h-8 text-emerald-400" />
-                </div>
-              </section>
-
-              {/* Layout details */}
-              <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Unassigned Support Queue */}
-                <div className={`p-6 border rounded-xl lg:col-span-2 space-y-4 transition-colors ${
-                  isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
-                }`}>
-                  <h3 className={`text-sm font-bold uppercase tracking-wider ${isDark ? 'text-white' : 'text-slate-900'}`}>Unassigned Support Queue</h3>
-                  <div className={`divide-y max-h-[300px] overflow-y-auto ${isDark ? 'divide-white/[0.05]' : 'divide-slate-100'}`}>
-                    {tickets.filter(t => !t.agent).length === 0 ? (
-                      <p className={`text-xs py-4 font-mono ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>No tickets currently unassigned.</p>
-                    ) : (
-                      tickets.filter(t => !t.agent).map(t => (
-                        <div
-                          key={t.id}
-                          onClick={() => { setActiveTab("tickets"); selectTicket(t); }}
-                          className={`py-3 flex items-center justify-between px-2 rounded cursor-pointer transition-colors ${
-                            isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-slate-50'
-                          }`}
-                        >
-                          <div className="space-y-1">
-                            <h4 className={`text-xs font-semibold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{t.title}</h4>
-                            <div className="flex items-center space-x-3 text-[10px] text-slate-500 font-mono">
-                              <span>CAT: {t.category.name}</span>
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] ${
-                                t.priority === "URGENT" 
-                                  ? isDark ? "bg-red-950/40 text-red-400 border border-red-500/20" : "bg-red-50 text-red-700 border border-red-200"
-                                  : isDark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-600"
-                              }`}>{t.priority}</span>
-                            </div>
-                          </div>
-                          <span className="text-[10px] text-slate-500 font-mono">{new Date(t.createdAt).toLocaleDateString()}</span>
+                <div className={`divide-y overflow-y-auto max-h-72 ${isDark ? "divide-white/[0.04]" : "divide-slate-100"}`}>
+                  {tickets.filter(t => !t.agent).length === 0 ? (
+                    <EmptyState icon={<CheckCircle className="w-8 h-8" />} title="All caught up!" description="No unassigned tickets right now." isDark={isDark} />
+                  ) : tickets.filter(t => !t.agent).map(t => (
+                    <div
+                      key={t.id}
+                      onClick={() => { setActiveTab("tickets"); selectTicket(t); }}
+                      className={`flex items-center justify-between py-3 px-2 rounded-lg cursor-pointer transition-colors ${isDark ? "hover:bg-white/[0.03]" : "hover:bg-slate-50"}`}
+                    >
+                      <div className="space-y-1 min-w-0 flex-1 mr-4">
+                        <p className={`text-sm font-medium truncate ${isDark ? "text-slate-200" : "text-slate-800"}`}>{t.title}</p>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}>{t.category.name}</span>
+                          <span className={priorityBadgeClass(t.priority)}>{t.priority}</span>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* System Identity */}
-                <div className={`p-6 border rounded-xl space-y-4 transition-colors ${
-                  isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
-                }`}>
-                  <h3 className={`text-sm font-bold uppercase tracking-wider font-mono ${isDark ? 'text-white' : 'text-slate-900'}`}>System Identity</h3>
-                  <div className="space-y-4 text-xs font-mono">
-                    <div className={`p-3 border rounded-lg space-y-2 ${
-                      isDark ? 'bg-white/[0.02] border-white/[0.05]' : 'bg-slate-50 border-slate-200'
-                    }`}>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Identity:</span>
-                        <span className={`font-bold ${isDark ? 'text-[#5FC0F9]' : 'text-[#0d7fc0]'}`}>{user.name}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">User Role:</span>
-                        <span className="text-emerald-400 font-bold">{user.role}</span>
-                      </div>
-                      <div className="flex justify-between flex-wrap gap-2">
-                        <span className="text-slate-500">Node Cluster:</span>
-                        <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>express_pnpm_node20</span>
-                      </div>
+                      <span className={`text-xs shrink-0 ${isDark ? "text-slate-500" : "text-slate-400"}`}>{new Date(t.createdAt).toLocaleDateString()}</span>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              </section>
+              </div>
+
+              {/* System Info */}
+              <div className={`admin-card p-5 space-y-4 ${isDark ? "admin-dark" : ""}`}>
+                <h2 className={`text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Session Info</h2>
+                <div className="space-y-3">
+                  {[
+                    { label: "Logged in as", value: user.name },
+                    { label: "Role", value: user.role },
+                    { label: "Resolved today", value: tickets.filter(t => t.status === "RESOLVED").length.toString() },
+                    { label: "Published articles", value: kbArticles.filter(a => a.isPublished).length.toString() },
+                  ].map(item => (
+                    <div key={item.label} className={`flex justify-between items-center py-2 border-b text-sm last:border-0 ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
+                      <span className={isDark ? "text-slate-500" : "text-slate-400"}>{item.label}</span>
+                      <span className={`font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {/* TAB 2: TICKETS                                                     */}
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {activeTab === "tickets" && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-              
-              {/* Ticket Queue List */}
-              <div className={`p-6 border rounded-xl lg:col-span-2 space-y-6 transition-colors ${
-                isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
-              }`}>
-                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-                  <h3 className={`text-sm font-bold uppercase tracking-wider ${isDark ? 'text-white' : 'text-slate-900'}`}>Helpdesk Dispatch</h3>
-                  <div className="flex items-center space-x-3">
-                    <select
-                      value={ticketStatusFilter}
-                      onChange={e => setTicketStatusFilter(e.target.value)}
-                      className={`text-xs rounded px-2.5 py-1.5 focus:outline-none focus:border-[#5FC0F9] border ${
-                        isDark 
-                          ? 'bg-[#0F172A] border-[#334155] text-slate-200' 
-                          : 'bg-white border-slate-300 text-slate-800'
-                      }`}
-                    >
-                      <option value="ALL">All Statuses</option>
-                      <option value="OPEN">Open</option>
-                      <option value="IN_PROGRESS">In Progress</option>
-                      <option value="RESOLVED">Resolved</option>
-                      <option value="CLOSED">Closed</option>
-                    </select>
-                    <select
-                      value={ticketPriorityFilter}
-                      onChange={e => setTicketPriorityFilter(e.target.value)}
-                      className={`text-xs rounded px-2.5 py-1.5 focus:outline-none focus:border-[#5FC0F9] border ${
-                        isDark 
-                          ? 'bg-[#0F172A] border-[#334155] text-slate-200' 
-                          : 'bg-white border-slate-300 text-slate-800'
-                      }`}
-                    >
-                      <option value="ALL">All Priorities</option>
-                      <option value="LOW">Low</option>
-                      <option value="MEDIUM">Medium</option>
-                      <option value="HIGH">High</option>
-                      <option value="URGENT">Urgent</option>
-                    </select>
-                  </div>
-                </div>
+        {/* ══════════════════════════════════════════════════════════
+            TAB: TICKETS
+        ══════════════════════════════════════════════════════════ */}
+        {activeTab === "tickets" && (
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
 
-                <div className={`overflow-x-auto divide-y ${isDark ? 'divide-white/[0.05]' : 'divide-slate-100'}`}>
-                  {filteredTickets.length === 0 ? (
-                    <p className={`text-xs py-6 font-mono ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>No tickets matched active filters.</p>
-                  ) : (
-                    filteredTickets.map(t => (
-                      <div
-                        key={t.id}
-                        onClick={() => selectTicket(t)}
-                        className={`py-3.5 px-3 flex items-center justify-between cursor-pointer rounded-lg transition-colors border ${
-                          selectedTicket?.id === t.id 
-                            ? isDark ? "bg-[#1E293B] border-[#334155]" : "bg-blue-50/50 border-[#38b1f7]/30"
-                            : "border-transparent"
-                        } ${isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-slate-50'}`}
-                      >
-                        <div className="space-y-1.5 max-w-[70%]">
-                          <h4 className={`text-xs font-semibold truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{t.title}</h4>
-                          <div className="flex items-center flex-wrap gap-2 text-[9px] text-slate-500 font-mono">
-                            <span className={`px-1.5 py-0.5 rounded border ${
-                              t.status === "OPEN" 
-                                ? isDark ? "bg-blue-950/50 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-700 border-blue-200"
-                                : t.status === "IN_PROGRESS"
-                                ? isDark ? "bg-amber-950/50 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-700 border-amber-200"
-                                : t.status === "RESOLVED"
-                                ? isDark ? "bg-green-950/50 text-green-400 border-green-500/20" : "bg-green-50 text-green-700 border-green-200"
-                                : isDark ? "bg-slate-800 text-slate-400 border-slate-700/30" : "bg-slate-100 text-slate-600 border-slate-200"
-                            }`}>
-                              {t.status}
-                            </span>
-                            <span className={`px-1.5 py-0.5 rounded border ${
-                              t.priority === "URGENT" 
-                                ? isDark ? "bg-red-950/40 text-red-400 border-red-500/20" : "bg-red-50 text-red-700 border-red-200"
-                                : t.priority === "HIGH"
-                                ? isDark ? "bg-orange-950/30 text-orange-400 border-orange-500/20" : "bg-orange-50 text-orange-700 border-orange-200"
-                                : t.priority === "MEDIUM"
-                                ? isDark ? "bg-yellow-950/30 text-yellow-400 border-yellow-500/20" : "bg-yellow-50 text-yellow-700 border-yellow-200"
-                                : isDark ? "bg-slate-800 text-slate-400 border-slate-700/20" : "bg-slate-100 text-slate-600 border-slate-200"
-                            }`}>
-                              {t.priority}
-                            </span>
-                            <span>Assignee: {t.agent?.name || "NONE"}</span>
-                            {t.team && <span className={`font-semibold ${isDark ? 'text-[#5FC0F9]' : 'text-[#0d7fc0]'}`}>[{t.team.name}]</span>}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className={`text-[10px] font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{t.customer.name}</p>
-                          <p className="text-[8px] text-slate-500 font-mono mt-0.5">
-                            {new Date(t.createdAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                    ))
+            {/* Ticket List */}
+            <div className={`lg:col-span-3 admin-card ${isDark ? "admin-dark" : ""} overflow-hidden`}>
+              {/* Toolbar */}
+              <div className={`px-5 py-4 border-b flex flex-col sm:flex-row items-stretch sm:items-center gap-3 ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
+                <h2 className={`text-sm font-semibold flex-1 ${isDark ? "text-white" : "text-slate-900"}`}>
+                  All Tickets
+                  {filteredTickets.length !== tickets.length && (
+                    <span className={`ml-2 text-xs font-normal ${isDark ? "text-slate-500" : "text-slate-400"}`}>({filteredTickets.length} shown)</span>
                   )}
+                </h2>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={ticketStatusFilter}
+                    onChange={e => setTicketStatusFilter(e.target.value)}
+                    className={`admin-select ${isDark ? "admin-dark" : ""} h-9 text-xs`}
+                    style={{ height: 36 }}
+                  >
+                    <option value="ALL">All Statuses</option>
+                    <option value="OPEN">Open</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="RESOLVED">Resolved</option>
+                    <option value="CLOSED">Closed</option>
+                  </select>
+                  <select
+                    value={ticketPriorityFilter}
+                    onChange={e => setTicketPriorityFilter(e.target.value)}
+                    className={`admin-select ${isDark ? "admin-dark" : ""} h-9 text-xs`}
+                    style={{ height: 36 }}
+                  >
+                    <option value="ALL">All Priorities</option>
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High</option>
+                    <option value="URGENT">Urgent</option>
+                  </select>
                 </div>
               </div>
 
-              {/* Ticket Assignment & Conversation Detail Panel */}
-              <div className={`p-6 border rounded-xl space-y-6 lg:sticky lg:top-8 transition-colors ${
-                isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
-              }`}>
-                {selectedTicket ? (
-                  <div className="space-y-6">
-                    {/* Title */}
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className={`text-[9px] font-mono ${isDark ? 'text-[#5FC0F9]' : 'text-[#0d7fc0]'}`}>ID: {selectedTicket.id.slice(0, 8)}...</span>
-                        <button onClick={() => setSelectedTicket(null)} className="text-slate-500 hover:text-red-500 transition-colors">
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{selectedTicket.title}</h3>
-                      <p className={`text-xs mt-2 p-3 rounded border whitespace-pre-wrap ${
-                        isDark 
-                          ? 'text-slate-400 bg-slate-900/60 border-white/[0.02]' 
-                          : 'text-slate-600 bg-slate-50 border-slate-200'
-                      }`}>
-                        {selectedTicket.description}
-                      </p>
-                    </div>
-
-                    {/* Metadata controls */}
-                    <div className={`p-3.5 border rounded-lg text-xs space-y-3 font-mono ${
-                      isDark ? 'bg-white/[0.01] border-white/[0.04]' : 'bg-slate-50 border-slate-200'
-                    }`}>
-                      {/* Priority */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Priority:</span>
-                        <select
-                          value={selectedTicket.priority}
-                          onChange={e => updateTicketDetails({ priority: e.target.value })}
-                          className={`rounded text-[11px] px-1.5 py-0.5 focus:outline-none border ${
-                            isDark 
-                              ? 'bg-[#0F172A] border-[#334155] text-slate-200' 
-                              : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        >
-                          <option value="LOW">Low</option>
-                          <option value="MEDIUM">Medium</option>
-                          <option value="HIGH">High</option>
-                          <option value="URGENT">Urgent</option>
-                        </select>
-                      </div>
-
-                      {/* Status */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Status:</span>
-                        <select
-                          value={selectedTicket.status}
-                          onChange={e => updateTicketDetails({ status: e.target.value })}
-                          className={`rounded text-[11px] px-1.5 py-0.5 focus:outline-none border ${
-                            isDark 
-                              ? 'bg-[#0F172A] border-[#334155] text-slate-200' 
-                              : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        >
-                          <option value="OPEN">Open</option>
-                          <option value="IN_PROGRESS">In Progress</option>
-                          <option value="RESOLVED">Resolved</option>
-                          <option value="CLOSED">Closed</option>
-                        </select>
-                      </div>
-
-                      {/* Team Assignment */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Team:</span>
-                        <select
-                          value={selectedTicket.team?.id || ""}
-                          onChange={e => {
-                            const val = e.target.value;
-                            updateTicketDetails({ teamId: val || null, agentId: null });
-                          }}
-                          className={`rounded text-[11px] px-1.5 py-0.5 focus:outline-none max-w-[150px] border ${
-                            isDark 
-                              ? 'bg-[#0F172A] border-[#334155] text-slate-200' 
-                              : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        >
-                          <option value="">Unassigned</option>
-                          {teams.map(team => (
-                            <option key={team.id} value={team.id}>
-                              {team.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Agent Assignment */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Agent:</span>
-                        <select
-                          value={selectedTicket.agent?.id || ""}
-                          onChange={e => {
-                            const val = e.target.value;
-                            updateTicketDetails({ agentId: val || null });
-                          }}
-                          className={`rounded text-[11px] px-1.5 py-0.5 focus:outline-none max-w-[150px] border ${
-                            isDark 
-                              ? 'bg-[#0F172A] border-[#334155] text-slate-200' 
-                              : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        >
-                          <option value="">Unassigned</option>
-                          {/* Filter agents to only members of the selected team, if a team is assigned */}
-                          {(selectedTicket.team
-                            ? agents.filter(a =>
-                                teams
-                                  .find(t => t.id === selectedTicket.team?.id)
-                                  ?.members.some(m => m.id === a.id)
-                              )
-                            : agents
-                          ).map(agent => (
-                            <option key={agent.id} value={agent.id}>
-                              {agent.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Messages Conversation */}
-                    <div className="space-y-3">
-                      <h4 className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Communication log</h4>
-                      
-                      <div className="space-y-2.5 max-h-[200px] overflow-y-auto pr-1">
-                        {selectedTicket.messages?.map(msg => (
-                          <div key={msg.id} className={`p-2.5 rounded border text-[11px] space-y-1 ${
-                            isDark 
-                              ? 'bg-slate-900 border-white/[0.02]' 
-                              : 'bg-slate-50 border-slate-200'
-                          }`}>
-                            <div className="flex items-center justify-between text-slate-500 font-mono text-[9px]">
-                              <span className={msg.sender.role === "CUSTOMER" 
-                                ? isDark ? "text-[#5FC0F9]" : "text-[#0d7fc0]" 
-                                : "text-amber-500"
-                              }>
-                                {msg.sender.name} ({msg.sender.role})
-                              </span>
-                              <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                            </div>
-                            <p className={`whitespace-pre-wrap ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{msg.message}</p>
-                          </div>
-                        ))}
-                        {(!selectedTicket.messages || selectedTicket.messages.length === 0) && (
-                          <p className={`text-[10px] font-mono ${isDark ? 'text-slate-600' : 'text-slate-400'}`}>No communication records.</p>
-                        )}
-                      </div>
-
-                      {/* Reply Box */}
-                      <form onSubmit={submitTicketReply} className="flex items-stretch gap-2 pt-2">
-                        <input
-                          type="text"
-                          required
-                          value={ticketReply}
-                          onChange={e => setTicketReply(e.target.value)}
-                          placeholder="Respond to client..."
-                          className={`flex-grow text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark 
-                              ? 'bg-slate-900 border-[#334155] text-white placeholder-slate-500' 
-                              : 'bg-white border-slate-300 text-slate-800 placeholder-slate-400'
-                          }`}
-                        />
-                        <button type="submit" className="px-3 bg-[#5FC0F9] hover:bg-[#38B1F7] text-[#020617] rounded flex items-center justify-center transition-all cursor-pointer">
-                          <Send className="w-3.5 h-3.5" />
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="h-[250px] flex flex-col items-center justify-center text-center space-y-2 text-slate-500 font-mono">
-                    <Ticket className="w-8 h-8 text-slate-600 mb-1" />
-                    <p className="text-xs">No ticket active.</p>
-                    <p className="text-[10px] text-slate-600 max-w-[200px]">Select any queue item to dispatch, assign or reply.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {/* TAB 3: TEAMS                                                       */}
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {activeTab === "teams" && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className={`text-sm font-bold uppercase tracking-wider ${isDark ? 'text-white' : 'text-slate-900'}`}>Operations Teams</h3>
-                  <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-600'}`}>Group customer support agents by department and assign tickets.</p>
-                </div>
-                <button
-                  onClick={() => setShowCreateTeam(!showCreateTeam)}
-                  className={`btn-cyber flex items-center px-4 py-2 text-xs font-mono font-bold ${
-                    isDark ? 'text-black' : 'text-white'
-                  }`}
-                >
-                  <Plus className="w-4 h-4 mr-2" /> CREATE NEW TEAM
-                </button>
-              </div>
-
-              {/* Create Team Form Section */}
-              {showCreateTeam && (
-                <form onSubmit={handleCreateTeam} className={`p-6 border rounded-xl space-y-4 max-w-xl transition-colors ${
-                  isDark 
-                    ? 'bg-[#0F172A]/45 border-[#5FC0F9]/20' 
-                    : 'bg-white border-[#38b1f7]/30 shadow-sm'
-                }`}>
-                  <h4 className={`text-xs font-bold uppercase tracking-wider font-mono ${isDark ? 'text-[#5FC0F9]' : 'text-[#0d7fc0]'}`}>Team Registration</h4>
-                  
-                  <div className="space-y-2">
-                    <label className="block text-[10px] text-slate-400 font-mono uppercase font-bold">Team Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={newTeamName}
-                      onChange={e => setNewTeamName(e.target.value)}
-                      placeholder="e.g. Billing Escalations, Tier 2 Technical"
-                      className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                        isDark 
-                          ? 'bg-slate-900 border-[#334155] text-white' 
-                          : 'bg-white border-slate-300 text-slate-800'
-                      }`}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="block text-[10px] text-slate-400 font-mono uppercase font-bold">Description</label>
-                    <textarea
-                      value={newTeamDesc}
-                      onChange={e => setNewTeamDesc(e.target.value)}
-                      placeholder="Purpose / ticket routing rules..."
-                      className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] h-20 border ${
-                        isDark 
-                          ? 'bg-slate-900 border-[#334155] text-white' 
-                          : 'bg-white border-slate-300 text-slate-800'
-                      }`}
-                    />
-                  </div>
-
-                  {/* Assign members checkboxes */}
-                  <div className="space-y-2">
-                    <label className="block text-[10px] text-slate-400 font-mono uppercase font-bold">Select Team Members (Agents)</label>
-                    <div className={`grid grid-cols-2 gap-2 max-h-[120px] overflow-y-auto border p-2.5 rounded ${
-                      isDark 
-                        ? 'bg-slate-900/40 border-[#334155]' 
-                        : 'bg-slate-50 border-slate-200'
-                    }`}>
-                      {agents.map(a => (
-                        <label key={a.id} className={`flex items-center space-x-2 text-xs font-mono cursor-pointer select-none ${
-                          isDark ? 'text-slate-300' : 'text-slate-700'
-                        }`}>
-                          <input
-                            type="checkbox"
-                            checked={newTeamMembers.includes(a.id)}
-                            onChange={() => toggleTeamMemberSelection(a.id)}
-                            className="rounded border-[#334155] text-[#5FC0F9] cursor-pointer"
-                          />
-                          <span>{a.name}</span>
-                        </label>
-                      ))}
-                      {agents.length === 0 && (
-                        <p className="text-[10px] text-slate-500 font-mono col-span-2">No agents found. Register users with AGENT roles first.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end space-x-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateTeam(false)}
-                      className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-500 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 text-xs font-bold bg-[#5FC0F9] text-[#020617] rounded hover:bg-[#38B1F7] transition-colors cursor-pointer"
-                    >
-                      Save Team
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {/* Teams Cards Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {teams.map(t => (
-                  <div key={t.id} className={`p-6 border rounded-xl flex flex-col justify-between min-h-[200px] transition-colors ${
-                    isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
-                  }`}>
-                    <div className="space-y-3">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h4 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{t.name}</h4>
-                          <p className="text-[10px] text-slate-500 font-mono">Tickets: {t._count?.tickets ?? 0}</p>
-                        </div>
-                        {user.role === "ADMIN" && (
-                          <div className="flex items-center space-x-1">
-                            <button
-                              onClick={() => handleEditTeamClick(t)}
-                              className="text-slate-500 hover:text-[#5FC0F9] transition-colors p-1"
-                              title="Edit Team"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteTeam(t.id)}
-                              className="text-slate-500 hover:text-red-500 transition-colors p-1"
-                              title="Delete Team"
-                            >
-                              <Trash className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      <p className={`text-xs leading-relaxed font-sans ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{t.description || "No description provided."}</p>
-                    </div>
-
-                    <div className={`pt-4 mt-4 border-t ${isDark ? 'border-white/[0.04]' : 'border-slate-100'}`}>
-                      <span className="block text-[9px] font-mono uppercase text-slate-500 mb-2">Members ({t.members.length})</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {t.members.map(m => (
-                          <span key={m.id} className={`text-[9px] font-mono px-2 py-0.5 rounded border ${
-                            isDark 
-                              ? 'bg-[#111827] border-white/[0.05] text-slate-300' 
-                              : 'bg-slate-50 border-slate-200 text-slate-700'
-                          }`}>
-                            {m.name}
+              {/* List */}
+              <div className={`divide-y overflow-y-auto max-h-[600px] ${isDark ? "divide-white/[0.04]" : "divide-slate-100"}`}>
+                {filteredTickets.length === 0 ? (
+                  <EmptyState icon={<Ticket className="w-8 h-8" />} title="No tickets found" description="No tickets match the active filters." isDark={isDark} />
+                ) : filteredTickets.map(t => (
+                  <div
+                    key={t.id}
+                    onClick={() => selectTicket(t)}
+                    className={`flex items-start justify-between px-5 py-4 cursor-pointer transition-colors ${
+                      selectedTicket?.id === t.id
+                        ? isDark ? "bg-[#38b1f7]/8 border-l-2 border-[#38b1f7]" : "bg-blue-50/60 border-l-2 border-[#38b1f7]"
+                        : isDark ? "hover:bg-white/[0.025] border-l-2 border-transparent" : "hover:bg-slate-50 border-l-2 border-transparent"
+                    }`}
+                  >
+                    <div className="space-y-1.5 flex-1 min-w-0 mr-3">
+                      <p className={`text-sm font-medium leading-tight truncate ${isDark ? "text-slate-100" : "text-slate-800"}`}>{t.title}</p>
+                      <div className="flex items-center flex-wrap gap-1.5">
+                        <span className={statusBadgeClass(t.status)}>
+                          <StatusIcon status={t.status} />
+                          {t.status.replace("_", " ")}
+                        </span>
+                        <span className={priorityBadgeClass(t.priority)}>{t.priority}</span>
+                        {t.team && (
+                          <span className={`admin-badge ${isDark ? "bg-[#38b1f7]/10 text-[#5fc0f9] border-[#38b1f7]/20" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
+                            {t.team.name}
                           </span>
-                        ))}
-                        {t.members.length === 0 && (
-                          <span className="text-[9px] font-mono text-slate-500">No agents registered.</span>
                         )}
                       </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className={`text-xs font-medium ${isDark ? "text-slate-300" : "text-slate-700"}`}>{t.customer.name}</p>
+                      <p className={`text-xs mt-0.5 ${isDark ? "text-slate-600" : "text-slate-400"}`}>{new Date(t.createdAt).toLocaleDateString()}</p>
                     </div>
                   </div>
                 ))}
-                {teams.length === 0 && (
-                  <p className="text-xs text-slate-500 font-mono">No operations teams constructed yet.</p>
-                )}
               </div>
-
-              {/* Edit Team Modal */}
-              {showEditTeam && selectedTeam && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                  <div className={`w-full max-w-md border rounded-2xl p-6 relative flex flex-col space-y-4 shadow-2xl transition-colors ${
-                    isDark ? 'bg-[#0F172A] border-[#1E293B] text-[#F8FAFC]' : 'bg-white border-slate-200 text-[#0F172A]'
-                  }`}>
-                    <button 
-                      onClick={() => { setShowEditTeam(false); setSelectedTeam(null); }}
-                      className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                      <X className="absolute w-4 h-4 top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors" />
-                    </button>
-
-                    <div>
-                      <h4 className={`text-sm font-bold uppercase tracking-wider font-mono ${isDark ? 'text-[#5FC0F9]' : 'text-[#0d7fc0]'}`}>Modify Operations Team</h4>
-                      <p className="text-[10px] text-slate-500 font-mono">ID: {selectedTeam.id}</p>
-                    </div>
-
-                    <form onSubmit={handleEditTeam} className="space-y-4">
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Team Name</label>
-                        <input
-                          type="text"
-                          required
-                          value={editTeamName}
-                          onChange={e => setEditTeamName(e.target.value)}
-                          placeholder="e.g. Billing Escalations"
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Description</label>
-                        <textarea
-                          value={editTeamDesc}
-                          onChange={e => setEditTeamDesc(e.target.value)}
-                          placeholder="Purpose / routing rules..."
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] h-20 border ${
-                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        />
-                      </div>
-
-                      {/* Select members checkboxes */}
-                      <div className="space-y-1.5">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Select Team Members (Agents)</label>
-                        <div className={`grid grid-cols-2 gap-2 max-h-[120px] overflow-y-auto border p-2.5 rounded ${
-                          isDark ? 'bg-slate-900/40 border-[#334155]' : 'bg-slate-50 border-slate-200'
-                        }`}>
-                          {agents.map(a => (
-                            <label key={a.id} className={`flex items-center space-x-2 text-[10px] font-mono cursor-pointer select-none ${
-                              isDark ? 'text-slate-300' : 'text-slate-700'
-                            }`}>
-                              <input
-                                type="checkbox"
-                                checked={editTeamMembers.includes(a.id)}
-                                onChange={() => {
-                                  setEditTeamMembers(prev =>
-                                    prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id]
-                                  );
-                                }}
-                                className="rounded border-[#334155] text-[#5FC0F9] cursor-pointer"
-                              />
-                              <span className="truncate">{a.name}</span>
-                            </label>
-                          ))}
-                          {agents.length === 0 && (
-                            <p className="text-[9px] text-slate-500 font-mono col-span-2">No agents found.</p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end space-x-3 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => { setShowEditTeam(false); setSelectedTeam(null); }}
-                          className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-500 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-4 py-2 text-xs font-bold bg-[#5FC0F9] text-[#020617] rounded hover:bg-[#38B1F7] transition-colors cursor-pointer"
-                        >
-                          Save Changes
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-              )}
             </div>
-          )}
 
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {/* TAB 4: USER DIRECTORY                                              */}
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {/* TAB 4: CLIENT ACCOUNTS                                             */}
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {activeTab === "clients" && user.role === "ADMIN" && (
-            <div className="space-y-6">
-              {/* Clients Toolbar */}
-              <div className={`p-6 border rounded-xl space-y-6 transition-colors ${
-                isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
-              }`}>
-                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-                  <div>
-                    <h3 className={`text-sm font-bold uppercase tracking-wider ${isDark ? 'text-white' : 'text-slate-900'}`}>Client Accounts</h3>
-                    <p className="text-[10px] text-slate-500 font-mono">External support submitters and client organization profiles</p>
-                  </div>
-
-                  {/* Search & Actions */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 max-w-xl w-full">
-                    <div className="relative flex-grow">
-                      <input
-                        type="text"
-                        value={userSearch}
-                        onChange={e => setUserSearch(e.target.value)}
-                        placeholder="Search clients by name or email..."
-                        className={`w-full text-xs rounded pl-8 pr-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                          isDark 
-                            ? 'bg-slate-900 border-[#334155] text-white' 
-                            : 'bg-white border-slate-300 text-slate-800'
-                        }`}
-                      />
-                      <Search className="absolute left-2.5 top-2.5 text-slate-500 w-3.5 h-3.5" />
+            {/* Detail Panel */}
+            <div className={`lg:col-span-2 admin-card sticky top-6 ${isDark ? "admin-dark" : ""} overflow-hidden`}>
+              {selectedTicket ? (
+                <div className="flex flex-col h-full max-h-[85vh]">
+                  {/* Panel header */}
+                  <div className={`px-5 py-4 border-b flex items-start justify-between gap-3 ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-[11px] font-mono mb-1 ${isDark ? "text-[#5fc0f9]" : "text-[#0d7fc0]"}`}>#{selectedTicket.id.slice(0, 8)}</p>
+                      <h3 className={`text-sm font-semibold leading-tight ${isDark ? "text-white" : "text-slate-900"}`}>{selectedTicket.title}</h3>
                     </div>
-
-                    <button
-                      onClick={() => {
-                        setUserFormName("");
-                        setUserFormEmail("");
-                        setUserFormPassword("");
-                        setUserFormRole("CUSTOMER");
-                        setUserFormTeams([]);
-                        setShowCreateUser(true);
-                      }}
-                      className={`btn-cyber flex items-center justify-center px-4 py-2 text-xs font-mono font-bold shrink-0 ${
-                        isDark ? 'text-black' : 'text-white'
-                      }`}
-                    >
-                      <Plus className="w-4 h-4 mr-1.5" /> REGISTER NEW CLIENT
-                    </button>
-                  </div>
-                </div>
-
-                {/* Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs font-mono">
-                    <thead>
-                      <tr className={`border-b text-slate-500 font-bold uppercase text-[9px] ${
-                        isDark ? 'border-white/[0.05]' : 'border-slate-200'
-                      }`}>
-                        <th className="py-3 px-2">Name</th>
-                        <th className="py-3 px-2">Email</th>
-                        <th className="py-3 px-2">Access Status</th>
-                        <th className="py-3 px-2 text-right">Created At</th>
-                        <th className="py-3 px-2 text-center">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${isDark ? 'divide-white/[0.03]' : 'divide-slate-100'}`}>
-                      {users
-                        .filter(u => u.role === "CUSTOMER")
-                        .filter(u => {
-                          if (!userSearch.trim()) return true;
-                          return (
-                            u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-                            u.email.toLowerCase().includes(userSearch.toLowerCase())
-                          );
-                        })
-                        .map(u => (
-                          <tr key={u.id} className={isDark ? 'hover:bg-white/[0.01]' : 'hover:bg-slate-50/50'}>
-                            <td className={`py-3.5 px-2 font-sans font-semibold ${isDark ? 'text-slate-200' : 'text-slate-850'}`}>{u.name}</td>
-                            <td className={`py-3.5 px-2 ${isDark ? 'text-slate-400' : 'text-slate-650'}`}>{u.email}</td>
-                            <td className="py-3.5 px-2">
-                              <button
-                                onClick={() => handleUpdateUser(u.id, { isActive: !u.isActive })}
-                                className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-colors ${
-                                  u.isActive 
-                                    ? isDark ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                                    : isDark ? "bg-red-950/40 text-red-400 border-red-500/20" : "bg-red-50 text-red-750 border-red-200"
-                                }`}
-                              >
-                                {u.isActive ? "ACTIVE" : "SUSPENDED"}
-                              </button>
-                            </td>
-                            <td className="py-3.5 px-2 text-right text-slate-500 text-[10px]">
-                              {new Date(u.createdAt).toLocaleDateString()}
-                            </td>
-                            <td className="py-3.5 px-2 text-center">
-                              <button
-                                onClick={() => handleEditUserClick(u)}
-                                className={`px-2.5 py-1 text-[10px] font-bold font-mono border rounded transition-colors ${
-                                  isDark 
-                                    ? 'bg-[#1E293B] border-[#334155] text-slate-300 hover:text-white hover:border-[#38b1f7]/55' 
-                                    : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
-                                }`}
-                              >
-                                EDIT
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      {users.filter(u => u.role === "CUSTOMER").filter(u => {
-                        if (!userSearch.trim()) return true;
-                        return u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase());
-                      }).length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="py-6 text-slate-500 text-center font-mono">No clients matched search criteria.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Create Client Modal */}
-              {showCreateUser && userFormRole === "CUSTOMER" && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                  <div className={`w-full max-w-md border rounded-2xl p-6 relative flex flex-col space-y-4 shadow-2xl transition-colors ${
-                    isDark ? 'bg-[#0F172A] border-[#1E293B] text-[#F8FAFC]' : 'bg-white border-slate-200 text-[#0F172A]'
-                  }`}>
-                    <button 
-                      onClick={() => setShowCreateUser(false)}
-                      className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
-                    >
+                    <button onClick={() => setSelectedTicket(null)} className={`p-1.5 rounded-lg transition-colors shrink-0 ${isDark ? "text-slate-500 hover:text-white hover:bg-white/[0.05]" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"}`}>
                       <X className="w-4 h-4" />
                     </button>
-
-                    <div>
-                      <h4 className={`text-sm font-bold uppercase tracking-wider font-mono ${isDark ? 'text-[#5FC0F9]' : 'text-[#0d7fc0]'}`}>Register Client Account</h4>
-                      <p className="text-[10px] text-slate-500 font-mono">Create new external customer profile</p>
-                    </div>
-
-                    <form onSubmit={handleCreateUser} className="space-y-4">
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Full Name</label>
-                        <input
-                          type="text"
-                          required
-                          value={userFormName}
-                          onChange={e => setUserFormName(e.target.value)}
-                          placeholder="e.g. Alex Carter"
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Email Address</label>
-                        <input
-                          type="email"
-                          required
-                          value={userFormEmail}
-                          onChange={e => setUserFormEmail(e.target.value)}
-                          placeholder="alex@company.com"
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Password</label>
-                        <input
-                          type="password"
-                          required
-                          value={userFormPassword}
-                          onChange={e => setUserFormPassword(e.target.value)}
-                          placeholder="••••••"
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        />
-                      </div>
-
-                      <div className="flex justify-end space-x-3 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => setShowCreateUser(false)}
-                          className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-500 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-4 py-2 text-xs font-bold bg-[#5FC0F9] text-[#020617] rounded hover:bg-[#38B1F7] transition-colors cursor-pointer"
-                        >
-                          Create Client
-                        </button>
-                      </div>
-                    </form>
                   </div>
-                </div>
-              )}
 
-              {/* Edit Client Modal */}
-              {showEditUser && selectedUser && selectedUser.role === "CUSTOMER" && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                  <div className={`w-full max-w-md border rounded-2xl p-6 relative flex flex-col space-y-4 shadow-2xl transition-colors ${
-                    isDark ? 'bg-[#0F172A] border-[#1E293B] text-[#F8FAFC]' : 'bg-white border-slate-200 text-[#0F172A]'
-                  }`}>
-                    <button 
-                      onClick={() => { setShowEditUser(false); setSelectedUser(null); }}
-                      className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-
-                    <div>
-                      <h4 className={`text-sm font-bold uppercase tracking-wider font-mono ${isDark ? 'text-[#5FC0F9]' : 'text-[#0d7fc0]'}`}>Modify Client Account</h4>
-                      <p className="text-[10px] text-slate-500 font-mono">ID: {selectedUser.id}</p>
+                  <div className="flex-1 overflow-y-auto">
+                    {/* Description */}
+                    <div className="px-5 py-4">
+                      <p className={`text-xs leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>{selectedTicket.description}</p>
                     </div>
 
-                    <form onSubmit={handleSaveEditUser} className="space-y-4">
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Full Name</label>
-                        <input
-                          type="text"
-                          required
-                          value={userFormName}
-                          onChange={e => setUserFormName(e.target.value)}
-                          placeholder="Name"
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        />
-                      </div>
+                    {/* Metadata controls */}
+                    <div className={`mx-5 mb-4 p-4 rounded-xl border space-y-3 ${isDark ? "bg-white/[0.02] border-white/[0.05]" : "bg-slate-50 border-slate-200"}`}>
+                      {[
+                        {
+                          label: "Priority", value: selectedTicket.priority,
+                          options: ["LOW", "MEDIUM", "HIGH", "URGENT"],
+                          onChange: (v: string) => updateTicketDetails({ priority: v }),
+                        },
+                        {
+                          label: "Status", value: selectedTicket.status,
+                          options: ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"],
+                          onChange: (v: string) => updateTicketDetails({ status: v }),
+                        },
+                      ].map(({ label, value, options, onChange }) => (
+                        <div key={label} className="flex items-center justify-between gap-3">
+                          <span className={`text-xs font-medium shrink-0 ${isDark ? "text-slate-400" : "text-slate-500"}`}>{label}</span>
+                          <select
+                            value={value}
+                            onChange={e => onChange(e.target.value)}
+                            className={`admin-select text-xs flex-1 max-w-[160px] ${isDark ? "admin-dark" : ""}`}
+                            style={{ height: 32 }}
+                          >
+                            {options.map(o => <option key={o} value={o}>{o.replace("_", " ")}</option>)}
+                          </select>
+                        </div>
+                      ))}
 
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Email Address</label>
-                        <input
-                          type="email"
-                          required
-                          value={userFormEmail}
-                          onChange={e => setUserFormEmail(e.target.value)}
-                          placeholder="Email"
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Update Password (Optional)</label>
-                        <input
-                          type="password"
-                          value={userFormPassword}
-                          onChange={e => setUserFormPassword(e.target.value)}
-                          placeholder="Leave blank to keep current password"
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Access Status</label>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className={`text-xs font-medium shrink-0 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Team</span>
                         <select
-                          value={userFormIsActive ? "true" : "false"}
-                          onChange={e => setUserFormIsActive(e.target.value === "true")}
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                          }`}
+                          value={selectedTicket.team?.id || ""}
+                          onChange={e => updateTicketDetails({ teamId: e.target.value || null, agentId: null })}
+                          className={`admin-select text-xs flex-1 max-w-[160px] ${isDark ? "admin-dark" : ""}`}
+                          style={{ height: 32 }}
                         >
-                          <option value="true">ACTIVE</option>
-                          <option value="false">SUSPENDED</option>
+                          <option value="">Unassigned</option>
+                          {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                         </select>
                       </div>
 
-                      <div className="flex justify-end space-x-3 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => { setShowEditUser(false); setSelectedUser(null); }}
-                          className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-500 transition-colors"
+                      <div className="flex items-center justify-between gap-3">
+                        <span className={`text-xs font-medium shrink-0 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Agent</span>
+                        <select
+                          value={selectedTicket.agent?.id || ""}
+                          onChange={e => updateTicketDetails({ agentId: e.target.value || null })}
+                          className={`admin-select text-xs flex-1 max-w-[160px] ${isDark ? "admin-dark" : ""}`}
+                          style={{ height: 32 }}
                         >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-4 py-2 text-xs font-bold bg-[#5FC0F9] text-[#020617] rounded hover:bg-[#38B1F7] transition-colors cursor-pointer"
-                        >
-                          Save Changes
-                        </button>
+                          <option value="">Unassigned</option>
+                          {(selectedTicket.team
+                            ? agents.filter(a => teams.find(t => t.id === selectedTicket.team?.id)?.members.some(m => m.id === a.id))
+                            : agents
+                          ).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
                       </div>
-                    </form>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {/* TAB 4.5: STAFF DIRECTORY                                           */}
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {activeTab === "admins" && user.role === "ADMIN" && (
-            <div className="space-y-6">
-              {/* Staff Toolbar */}
-              <div className={`p-6 border rounded-xl space-y-6 transition-colors ${
-                isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
-              }`}>
-                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-                  <div>
-                    <h3 className={`text-sm font-bold uppercase tracking-wider ${isDark ? 'text-white' : 'text-slate-900'}`}>Staff Directory</h3>
-                    <p className="text-[10px] text-slate-500 font-mono">Operations, Agents, and System Administrators database</p>
-                  </div>
-
-                  {/* Search & Actions */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 max-w-xl w-full">
-                    <div className="relative flex-grow">
-                      <input
-                        type="text"
-                        value={userSearch}
-                        onChange={e => setUserSearch(e.target.value)}
-                        placeholder="Search staff by name or email..."
-                        className={`w-full text-xs rounded pl-8 pr-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                          isDark 
-                            ? 'bg-slate-900 border-[#334155] text-white' 
-                            : 'bg-white border-slate-300 text-slate-800'
-                        }`}
-                      />
-                      <Search className="absolute left-2.5 top-2.5 text-slate-500 w-3.5 h-3.5" />
                     </div>
 
-                    <button
-                      onClick={() => {
-                        setUserFormName("");
-                        setUserFormEmail("");
-                        setUserFormPassword("");
-                        setUserFormRole("AGENT");
-                        setUserFormTeams([]);
-                        setShowCreateUser(true);
-                      }}
-                      className={`btn-cyber flex items-center justify-center px-4 py-2 text-xs font-mono font-bold shrink-0 ${
-                        isDark ? 'text-black' : 'text-white'
-                      }`}
-                    >
-                      <Plus className="w-4 h-4 mr-1.5" /> REGISTER NEW STAFF
-                    </button>
-                  </div>
-                </div>
-
-                {/* Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs font-mono">
-                    <thead>
-                      <tr className={`border-b text-slate-500 font-bold uppercase text-[9px] ${
-                        isDark ? 'border-white/[0.05]' : 'border-slate-200'
-                      }`}>
-                        <th className="py-3 px-2">Name</th>
-                        <th className="py-3 px-2">Email</th>
-                        <th className="py-3 px-2">Role Permissions</th>
-                        <th className="py-3 px-2">Teams</th>
-                        <th className="py-3 px-2">Access Status</th>
-                        <th className="py-3 px-2 text-right">Created At</th>
-                        <th className="py-3 px-2 text-center">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${isDark ? 'divide-white/[0.03]' : 'divide-slate-100'}`}>
-                      {users
-                        .filter(u => u.role === "AGENT" || u.role === "ADMIN")
-                        .filter(u => {
-                          if (!userSearch.trim()) return true;
-                          return (
-                            u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-                            u.email.toLowerCase().includes(userSearch.toLowerCase())
-                          );
-                        })
-                        .map(u => (
-                          <tr key={u.id} className={isDark ? 'hover:bg-white/[0.01]' : 'hover:bg-slate-50/50'}>
-                            <td className={`py-3.5 px-2 font-sans font-semibold ${isDark ? 'text-slate-200' : 'text-slate-850'}`}>{u.name}</td>
-                            <td className={`py-3.5 px-2 ${isDark ? 'text-slate-400' : 'text-slate-650'}`}>{u.email}</td>
-                            <td className="py-3.5 px-2">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                                u.role === "ADMIN" 
-                                  ? isDark ? "bg-purple-950/40 text-purple-400 border-purple-500/20" : "bg-purple-50 text-purple-700 border-purple-200"
-                                  : isDark ? "bg-[#38b1f7]/20 text-[#38b1f7] border-[#38b1f7]/20" : "bg-[#38b1f7]/10 text-[#0d7fc0] border-[#38b1f7]/20"
-                              }`}>
-                                {u.role}
+                    {/* Messages */}
+                    <div className="px-5 pb-4 space-y-3">
+                      <h4 className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                        <MessageSquare className="w-3.5 h-3.5 inline mr-1.5" />
+                        Conversation
+                      </h4>
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {selectedTicket.messages?.map(msg => (
+                          <div key={msg.id} className={`p-3 rounded-xl border text-sm ${
+                            msg.sender.role === "CUSTOMER"
+                              ? isDark ? "bg-[#38b1f7]/6 border-[#38b1f7]/15" : "bg-blue-50/60 border-blue-100"
+                              : isDark ? "bg-white/[0.03] border-white/[0.04]" : "bg-slate-50 border-slate-100"
+                          }`}>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className={`text-xs font-semibold ${
+                                msg.sender.role === "CUSTOMER"
+                                  ? isDark ? "text-[#5fc0f9]" : "text-blue-700"
+                                  : isDark ? "text-amber-400" : "text-amber-700"
+                              }`}>{msg.sender.name}</span>
+                              <span className={`text-[10px] ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                                {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                               </span>
-                            </td>
-                            <td className="py-3.5 px-2">
-                              <div className="flex flex-wrap gap-1 max-w-[200px]">
-                                {u.teams && u.teams.length > 0 ? (
-                                  u.teams.map(t => (
-                                    <span key={t.id} className={`text-[9px] font-mono px-1.5 py-0.5 rounded border whitespace-nowrap ${
-                                      isDark ? 'bg-slate-900 border-white/[0.05] text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'
-                                    }`}>
-                                      {t.name}
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="text-slate-500 text-[10px] italic">-</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-3.5 px-2">
-                              <button
-                                onClick={() => handleUpdateUser(u.id, { isActive: !u.isActive })}
-                                className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-colors ${
-                                  u.isActive 
-                                    ? isDark ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                                    : isDark ? "bg-red-950/40 text-red-400 border-red-500/20" : "bg-red-50 text-red-750 border-red-200"
-                                }`}
-                              >
-                                {u.isActive ? "ACTIVE" : "SUSPENDED"}
-                              </button>
-                            </td>
-                            <td className="py-3.5 px-2 text-right text-slate-500 text-[10px]">
-                              {new Date(u.createdAt).toLocaleDateString()}
-                            </td>
-                            <td className="py-3.5 px-2 text-center">
-                              <button
-                                onClick={() => handleEditUserClick(u)}
-                                className={`px-2.5 py-1 text-[10px] font-bold font-mono border rounded transition-colors ${
-                                  isDark 
-                                    ? 'bg-[#1E293B] border-[#334155] text-slate-300 hover:text-white hover:border-[#38b1f7]/55' 
-                                    : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
-                                }`}
-                              >
-                                EDIT
-                              </button>
-                            </td>
-                          </tr>
+                            </div>
+                            <p className={`text-xs leading-relaxed whitespace-pre-wrap ${isDark ? "text-slate-300" : "text-slate-700"}`}>{msg.message}</p>
+                          </div>
                         ))}
-                      {users.filter(u => u.role === "AGENT" || u.role === "ADMIN").filter(u => {
-                        if (!userSearch.trim()) return true;
-                        return u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase());
-                      }).length === 0 && (
-                        <tr>
-                          <td colSpan={7} className="py-6 text-slate-500 text-center font-mono">No staff profiles matched search criteria.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Create Staff Modal */}
-              {showCreateUser && (userFormRole === "AGENT" || userFormRole === "ADMIN") && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                  <div className={`w-full max-w-md border rounded-2xl p-6 relative flex flex-col space-y-4 shadow-2xl transition-colors ${
-                    isDark ? 'bg-[#0F172A] border-[#1E293B] text-[#F8FAFC]' : 'bg-white border-slate-200 text-[#0F172A]'
-                  }`}>
-                    <button 
-                      onClick={() => setShowCreateUser(false)}
-                      className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-
-                    <div>
-                      <h4 className={`text-sm font-bold uppercase tracking-wider font-mono ${isDark ? 'text-[#5FC0F9]' : 'text-[#0d7fc0]'}`}>Register Staff Account</h4>
-                      <p className="text-[10px] text-slate-500 font-mono">Create new system administrator or agent profile</p>
+                        {(!selectedTicket.messages || selectedTicket.messages.length === 0) && (
+                          <p className={`text-xs text-center py-3 ${isDark ? "text-slate-600" : "text-slate-400"}`}>No messages yet.</p>
+                        )}
+                      </div>
                     </div>
+                  </div>
 
-                    <form onSubmit={handleCreateUser} className="space-y-4">
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Full Name</label>
-                        <input
-                          type="text"
-                          required
-                          value={userFormName}
-                          onChange={e => setUserFormName(e.target.value)}
-                          placeholder="e.g. Alex Carter"
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Email Address</label>
-                        <input
-                          type="email"
-                          required
-                          value={userFormEmail}
-                          onChange={e => setUserFormEmail(e.target.value)}
-                          placeholder="alex@company.com"
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Password</label>
-                        <input
-                          type="password"
-                          required
-                          value={userFormPassword}
-                          onChange={e => setUserFormPassword(e.target.value)}
-                          placeholder="••••••"
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Role Permissions</label>
-                        <select
-                          value={userFormRole}
-                          onChange={e => setUserFormRole(e.target.value as any)}
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        >
-                          <option value="AGENT">AGENT (Support Representative)</option>
-                          <option value="ADMIN">ADMIN (Full Operations Access)</option>
-                        </select>
-                      </div>
-
-                      {/* Team assignment */}
-                      <div className="space-y-1.5">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Assign Operations Teams</label>
-                        <div className={`grid grid-cols-2 gap-2 max-h-[100px] overflow-y-auto border p-2 rounded ${
-                          isDark ? 'bg-slate-900/40 border-[#334155]' : 'bg-slate-50 border-slate-200'
-                        }`}>
-                          {teams.map(t => (
-                            <label key={t.id} className={`flex items-center space-x-2 text-[10px] font-mono cursor-pointer select-none ${
-                              isDark ? 'text-slate-300' : 'text-slate-700'
-                            }`}>
-                              <input
-                                type="checkbox"
-                                checked={userFormTeams.includes(t.id)}
-                                onChange={() => {
-                                  setUserFormTeams(prev =>
-                                    prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
-                                  );
-                                }}
-                                className="rounded border-[#334155] text-[#5FC0F9] cursor-pointer"
-                              />
-                              <span className="truncate">{t.name}</span>
-                            </label>
-                          ))}
-                          {teams.length === 0 && (
-                            <p className="text-[9px] text-slate-500 font-mono col-span-2">No teams found.</p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end space-x-3 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => setShowCreateUser(false)}
-                          className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-500 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-4 py-2 text-xs font-bold bg-[#5FC0F9] text-[#020617] rounded hover:bg-[#38B1F7] transition-colors cursor-pointer"
-                        >
-                          Create Staff Account
-                        </button>
-                      </div>
+                  {/* Reply box */}
+                  <div className={`px-5 py-4 border-t ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
+                    <form onSubmit={submitTicketReply} className="flex gap-2">
+                      <input
+                        type="text"
+                        required
+                        value={ticketReply}
+                        onChange={e => setTicketReply(e.target.value)}
+                        placeholder="Write a reply..."
+                        className={`admin-input ${isDark ? "admin-dark" : ""} flex-1 text-sm`}
+                        style={{ height: 38 }}
+                      />
+                      <button type="submit" className="admin-btn admin-btn-primary px-3" style={{ height: 38 }} aria-label="Send reply">
+                        <Send className="w-4 h-4" />
+                      </button>
                     </form>
                   </div>
                 </div>
-              )}
-
-              {/* Edit Staff Modal */}
-              {showEditUser && selectedUser && (selectedUser.role === "AGENT" || selectedUser.role === "ADMIN") && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                  <div className={`w-full max-w-md border rounded-2xl p-6 relative flex flex-col space-y-4 shadow-2xl transition-colors ${
-                    isDark ? 'bg-[#0F172A] border-[#1E293B] text-[#F8FAFC]' : 'bg-white border-slate-200 text-[#0F172A]'
-                  }`}>
-                    <button 
-                      onClick={() => { setShowEditUser(false); setSelectedUser(null); }}
-                      className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-
-                    <div>
-                      <h4 className={`text-sm font-bold uppercase tracking-wider font-mono ${isDark ? 'text-[#5FC0F9]' : 'text-[#0d7fc0]'}`}>Modify Staff Profile</h4>
-                      <p className="text-[10px] text-slate-500 font-mono">ID: {selectedUser.id}</p>
-                    </div>
-
-                    <form onSubmit={handleSaveEditUser} className="space-y-4">
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Full Name</label>
-                        <input
-                          type="text"
-                          required
-                          value={userFormName}
-                          onChange={e => setUserFormName(e.target.value)}
-                          placeholder="Name"
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Email Address</label>
-                        <input
-                          type="email"
-                          required
-                          value={userFormEmail}
-                          onChange={e => setUserFormEmail(e.target.value)}
-                          placeholder="Email"
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Update Password (Optional)</label>
-                        <input
-                          type="password"
-                          value={userFormPassword}
-                          onChange={e => setUserFormPassword(e.target.value)}
-                          placeholder="Leave blank to keep current password"
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                          <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Role Permissions</label>
-                          <select
-                            value={userFormRole}
-                            onChange={e => setUserFormRole(e.target.value as any)}
-                            className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                              isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                            }`}
-                          >
-                            <option value="AGENT">AGENT</option>
-                            <option value="ADMIN">ADMIN</option>
-                          </select>
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Access Status</label>
-                          <select
-                            value={userFormIsActive ? "true" : "false"}
-                            onChange={e => setUserFormIsActive(e.target.value === "true")}
-                            className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                              isDark ? 'bg-slate-900 border-[#334155] text-white' : 'bg-white border-slate-300 text-slate-800'
-                            }`}
-                          >
-                            <option value="true">ACTIVE</option>
-                            <option value="false">SUSPENDED</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      {/* Team assignment */}
-                      <div className="space-y-1.5">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Assign Operations Teams</label>
-                        <div className={`grid grid-cols-2 gap-2 max-h-[100px] overflow-y-auto border p-2 rounded ${
-                          isDark ? 'bg-slate-900/40 border-[#334155]' : 'bg-slate-50 border-slate-200'
-                        }`}>
-                          {teams.map(t => (
-                            <label key={t.id} className={`flex items-center space-x-2 text-[10px] font-mono cursor-pointer select-none ${
-                              isDark ? 'text-slate-300' : 'text-slate-700'
-                            }`}>
-                              <input
-                                type="checkbox"
-                                checked={userFormTeams.includes(t.id)}
-                                onChange={() => {
-                                  setUserFormTeams(prev =>
-                                    prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
-                                  );
-                                }}
-                                className="rounded border-[#334155] text-[#5FC0F9] cursor-pointer"
-                              />
-                              <span className="truncate">{t.name}</span>
-                            </label>
-                          ))}
-                          {teams.length === 0 && (
-                            <p className="text-[9px] text-slate-500 font-mono col-span-2">No teams found.</p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end space-x-3 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => { setShowEditUser(false); setSelectedUser(null); }}
-                          className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-500 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-4 py-2 text-xs font-bold bg-[#5FC0F9] text-[#020617] rounded hover:bg-[#38B1F7] transition-colors cursor-pointer"
-                        >
-                          Save Changes
-                        </button>
-                      </div>
-                    </form>
-                  </div>
+              ) : (
+                <div className="h-64">
+                  <EmptyState icon={<Ticket className="w-8 h-8" />} title="Select a ticket" description="Click any ticket in the list to view details, assign agents, and reply." isDark={isDark} />
                 </div>
               )}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {/* TAB 5: KNOWLEDGE BASE                                              */}
-          {/* ─────────────────────────────────────────────────────────────────── */}
-          {activeTab === "kb" && (
-            <div className="space-y-6">
-              
-              {/* KB Main Views */}
-              {!kbEditing ? (
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className={`text-sm font-bold uppercase tracking-wider ${isDark ? 'text-white' : 'text-slate-900'}`}>Knowledge Repository</h3>
-                      <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-600'}`}>Construct support manuals and self-service documentation articles.</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setKbArticleId(null);
-                        setKbTitle("");
-                        setKbContent("");
-                        setKbIsPublished(false);
-                        setKbIsInternal(false);
-                        setKbCategoryId("");
-                        setKbEditing(true);
-                      }}
-                      className={`btn-cyber flex items-center px-4 py-2 text-xs font-mono font-bold ${
-                        isDark ? 'text-black' : 'text-white'
-                      }`}
-                    >
-                      <Plus className="w-4 h-4 mr-2" /> CREATE NEW ARTICLE
-                    </button>
-                  </div>
+        {/* ══════════════════════════════════════════════════════════
+            TAB: TEAMS
+        ══════════════════════════════════════════════════════════ */}
+        {activeTab === "teams" && (
+          <div className="space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Support Teams</h2>
+                <p className={`text-sm mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Organize agents and route tickets by team.</p>
+              </div>
+              <button onClick={() => setShowCreateTeam(true)} className="admin-btn admin-btn-primary">
+                <Plus className="w-4 h-4" />
+                New Team
+              </button>
+            </div>
 
-                  {/* Articles Grid list */}
-                  <div className="grid grid-cols-1 gap-4">
-                    {kbArticles.map(art => (
-                      <div key={art.id} className={`p-5 border rounded-xl flex items-center justify-between gap-6 transition-colors ${
-                        isDark 
-                          ? 'bg-[#0F172A]/45 border-white/[0.03] hover:border-white/[0.08]' 
-                          : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
-                      }`}>
-                        <div className="space-y-1.5 max-w-[70%]">
-                          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                            <h4 className={`text-xs font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{art.title}</h4>
-                            <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded font-bold border ${
-                              art.isPublished 
-                                ? isDark ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                                : isDark ? "bg-slate-800 border-slate-700/50 text-slate-400" : "bg-slate-100 border-slate-200 text-slate-500"
-                            }`}>
-                              {art.isPublished ? "PUBLISHED" : "DRAFT"}
-                            </span>
-                            <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded font-bold border ${
-                              art.isInternal 
-                                ? isDark ? "bg-red-950/40 text-red-400 border-red-500/20" : "bg-red-50 text-red-700 border-red-200" 
-                                : isDark ? "bg-slate-900 border-white/[0.04] text-slate-400" : "bg-slate-50 border-slate-200 text-slate-500"
-                            }`}>
-                              {art.isInternal ? "INTERNAL ONLY" : "PUBLIC"}
-                            </span>
+            {/* ── Create Team Modal ─────────────────────────────── */}
+            {showCreateTeam && (
+              <TeamModal
+                title="Create New Team"
+                subtitle="Set up a team to group agents and route tickets"
+                isDark={isDark}
+                name={newTeamName}
+                onNameChange={setNewTeamName}
+                description={newTeamDesc}
+                onDescriptionChange={setNewTeamDesc}
+                selectedMemberIds={newTeamMembers}
+                onMembersChange={setNewTeamMembers}
+                agents={agents}
+                onClose={() => { setShowCreateTeam(false); setNewTeamName(""); setNewTeamDesc(""); setNewTeamMembers([]); }}
+                onSubmit={handleCreateTeam}
+                submitLabel="Create Team"
+              />
+            )}
+
+            {/* ── Edit Team Modal ───────────────────────────────── */}
+            {showEditTeam && selectedTeam && (
+              <TeamModal
+                title="Edit Team"
+                subtitle={`Editing: ${selectedTeam.name}`}
+                isDark={isDark}
+                name={editTeamName}
+                onNameChange={setEditTeamName}
+                description={editTeamDesc}
+                onDescriptionChange={setEditTeamDesc}
+                selectedMemberIds={editTeamMembers}
+                onMembersChange={setEditTeamMembers}
+                agents={agents}
+                onClose={() => { setShowEditTeam(false); setSelectedTeam(null); }}
+                onSubmit={handleEditTeam}
+                submitLabel="Save Changes"
+              />
+            )}
+
+            {/* ── Teams Grid ────────────────────────────────────── */}
+            {teams.length === 0 ? (
+              <div className={`admin-card ${isDark ? "admin-dark" : ""}`}>
+                <EmptyState icon={<Layers className="w-10 h-10" />} title="No teams yet" description="Create your first team to group agents and route support tickets efficiently." isDark={isDark} />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {teams.map(t => (
+                  <div
+                    key={t.id}
+                    className={`admin-card admin-card-hover flex flex-col ${isDark ? "admin-dark" : ""}`}
+                  >
+                    {/* Card header */}
+                    <div className={`flex items-start justify-between px-5 pt-5 pb-4 border-b ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
+                      <div className="min-w-0 flex-1 mr-3">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isDark ? "bg-[#38b1f7]/12 text-[#5fc0f9]" : "bg-[#38b1f7]/10 text-[#0d7fc0]"}`}>
+                            <Layers className="w-4 h-4" />
                           </div>
-                          
-                          <p className={`text-[11px] truncate max-w-xl ${isDark ? 'text-slate-400' : 'text-slate-650'}`}>{art.content}</p>
-                          
-                          <div className="flex items-center space-x-4 text-[9px] text-slate-500 font-mono">
-                            <span>Author: {art.author.name}</span>
-                            {art.category && <span>Category: {art.category.name}</span>}
-                            <span>Slug: {art.slug}</span>
-                          </div>
+                          <h3 className={`text-sm font-semibold truncate ${isDark ? "text-white" : "text-slate-900"}`}>{t.name}</h3>
                         </div>
-
-                        {/* Actions */}
-                        <div className="flex items-center space-x-2">
+                        <p className={`text-xs pl-10 ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                          {t.members.length} member{t.members.length !== 1 ? "s" : ""} · {t._count?.tickets ?? 0} tickets
+                        </p>
+                      </div>
+                      {user.role === "ADMIN" && (
+                        <div className="flex gap-1 shrink-0">
                           <button
-                            onClick={() => startEditKB(art)}
-                            className={`px-2.5 py-1 text-[10px] font-bold font-mono border rounded transition-colors ${
-                              isDark 
-                                ? 'bg-[#1E293B] border-[#334155] text-slate-300 hover:text-white' 
-                                : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
-                            }`}
+                            onClick={() => handleEditTeamClick(t)}
+                            className={`p-1.5 rounded-lg transition-colors ${isDark ? "text-slate-500 hover:text-[#5fc0f9] hover:bg-white/[0.05]" : "text-slate-400 hover:text-[#0d7fc0] hover:bg-blue-50"}`}
+                            title="Edit team"
                           >
-                            EDIT
+                            <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => handleDeleteKB(art.id)}
-                            className={`p-1.5 border rounded transition-colors ${
-                              isDark 
-                                ? 'bg-slate-900 border-white/[0.03] hover:bg-red-950/40 hover:text-red-400 hover:border-red-500/20 text-slate-500' 
-                                : 'bg-slate-50 border-slate-200 hover:bg-red-50 hover:text-red-750 hover:border-red-200 text-slate-400'
-                            }`}
+                            onClick={() => handleDeleteTeam(t.id)}
+                            className={`p-1.5 rounded-lg transition-colors ${isDark ? "text-slate-500 hover:text-red-400 hover:bg-red-950/20" : "text-slate-400 hover:text-red-500 hover:bg-red-50"}`}
+                            title="Delete team"
                           >
-                            <Trash className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Description */}
+                    <div className="px-5 py-3 flex-1">
+                      {t.description ? (
+                        <p className={`text-xs leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>{t.description}</p>
+                      ) : (
+                        <p className={`text-xs italic ${isDark ? "text-slate-600" : "text-slate-400"}`}>No description</p>
+                      )}
+                    </div>
+
+                    {/* Members */}
+                    <div className={`px-5 pb-5 pt-3 border-t ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
+                      <p className={`text-[11px] font-semibold uppercase tracking-wider mb-2.5 ${isDark ? "text-slate-600" : "text-slate-400"}`}>Members</p>
+                      {t.members.length === 0 ? (
+                        <p className={`text-xs ${isDark ? "text-slate-700" : "text-slate-400"}`}>No members assigned</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {t.members.map(m => (
+                            <div
+                              key={m.id}
+                              title={m.email}
+                              className={`flex items-center gap-1.5 admin-badge ${isDark ? "bg-[#38b1f7]/8 text-[#5fc0f9] border-[#38b1f7]/15" : "bg-blue-50 text-blue-700 border-blue-200"}`}
+                            >
+                              <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${isDark ? "bg-[#38b1f7]/20" : "bg-blue-200"}`}>
+                                {m.name.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="truncate max-w-[80px]">{m.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════
+            TAB: CLIENTS
+        ══════════════════════════════════════════════════════════ */}
+        {activeTab === "clients" && user.role === "ADMIN" && (
+          <div className="space-y-5">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div>
+                <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Client Accounts</h2>
+                <p className={`text-sm mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>External customers and support submitters.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? "text-slate-500" : "text-slate-400"}`} />
+                  <input type="text" value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Search clients..." className={`admin-input ${isDark ? "admin-dark" : ""} pl-9 w-64 text-sm`} style={{ height: 38 }} />
+                </div>
+                <button
+                  onClick={() => { setUserFormName(""); setUserFormEmail(""); setUserFormPassword(""); setUserFormRole("CUSTOMER"); setUserFormTeams([]); setShowCreateUser(true); }}
+                  className="admin-btn admin-btn-primary"
+                >
+                  <Plus className="w-4 h-4" />
+                  New Client
+                </button>
+              </div>
+            </div>
+
+            <div className={`admin-card overflow-hidden ${isDark ? "admin-dark" : ""}`}>
+              <div className="overflow-x-auto">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Status</th>
+                      <th>Created</th>
+                      <th className="text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.filter(u => u.role === "CUSTOMER").filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).length === 0 ? (
+                      <tr><td colSpan={5} className="text-center py-8"><span className={isDark ? "text-slate-500" : "text-slate-400"}>No clients found.</span></td></tr>
+                    ) : users.filter(u => u.role === "CUSTOMER").filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).map(u => (
+                      <tr key={u.id}>
+                        <td><span className={`font-medium text-sm ${isDark ? "text-slate-100" : "text-slate-900"}`}>{u.name}</span></td>
+                        <td><span className={`text-sm ${isDark ? "text-slate-400" : "text-slate-600"}`}>{u.email}</span></td>
+                        <td>
+                          <button onClick={() => handleUpdateUser(u.id, { isActive: !u.isActive })} className={`admin-badge cursor-pointer transition-opacity hover:opacity-80 ${u.isActive ? "admin-badge-active" : "admin-badge-suspended"}`}>
+                            {u.isActive ? "Active" : "Suspended"}
+                          </button>
+                        </td>
+                        <td><span className={`text-sm ${isDark ? "text-slate-500" : "text-slate-400"}`}>{new Date(u.createdAt).toLocaleDateString()}</span></td>
+                        <td className="text-center">
+                          <button onClick={() => handleEditUserClick(u)} className={`admin-btn admin-btn-ghost admin-btn-sm`}>
+                            <Edit2 className="w-3.5 h-3.5" />
+                            Edit
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Create Client Modal */}
+            {showCreateUser && userFormRole === "CUSTOMER" && (
+              <UserModal
+                title="Create Client Account"
+                subtitle="New external customer profile"
+                isDark={isDark}
+                showRole={false}
+                showTeams={false}
+                showStatusToggle={false}
+                formName={userFormName} setFormName={setUserFormName}
+                formEmail={userFormEmail} setFormEmail={setUserFormEmail}
+                formPassword={userFormPassword} setFormPassword={setUserFormPassword}
+                formRole={userFormRole} setFormRole={setUserFormRole}
+                formIsActive={userFormIsActive} setFormIsActive={setUserFormIsActive}
+                formTeams={userFormTeams} setFormTeams={setUserFormTeams}
+                teams={teams}
+                onClose={() => setShowCreateUser(false)}
+                onSubmit={handleCreateUser}
+                submitLabel="Create Client"
+              />
+            )}
+
+            {/* Edit Client Modal */}
+            {showEditUser && selectedUser?.role === "CUSTOMER" && (
+              <UserModal
+                title="Edit Client Account"
+                subtitle={`ID: ${selectedUser.id.slice(0, 12)}...`}
+                isDark={isDark}
+                showRole={false}
+                showTeams={false}
+                showStatusToggle={true}
+                formName={userFormName} setFormName={setUserFormName}
+                formEmail={userFormEmail} setFormEmail={setUserFormEmail}
+                formPassword={userFormPassword} setFormPassword={setUserFormPassword}
+                formRole={userFormRole} setFormRole={setUserFormRole}
+                formIsActive={userFormIsActive} setFormIsActive={setUserFormIsActive}
+                formTeams={userFormTeams} setFormTeams={setUserFormTeams}
+                teams={teams}
+                onClose={() => { setShowEditUser(false); setSelectedUser(null); }}
+                onSubmit={handleSaveEditUser}
+                submitLabel="Save Changes"
+              />
+            )}
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════
+            TAB: STAFF DIRECTORY
+        ══════════════════════════════════════════════════════════ */}
+        {activeTab === "admins" && user.role === "ADMIN" && (
+          <div className="space-y-5">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div>
+                <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Staff Directory</h2>
+                <p className={`text-sm mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Agents, administrators, and their permissions.</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className={`absolute right-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? "text-slate-500" : "text-slate-400"}`} />
+                  <input type="text" value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Search staff..." className={`admin-input ${isDark ? "admin-dark" : ""} pl-9 w-50 text-sm`} style={{ height: 40 }} />
+                </div>
+                <button
+                  onClick={() => { setUserFormName(""); setUserFormEmail(""); setUserFormPassword(""); setUserFormRole("AGENT"); setUserFormTeams([]); setShowCreateUser(true); }}
+                  className="admin-btn admin-btn-primary"
+                >
+                  <Plus className="w-4 h-4" />
+                  New Staff
+                </button>
+              </div>
+            </div>
+
+            <div className={`admin-card overflow-hidden ${isDark ? "admin-dark" : ""}`}>
+              <div className="overflow-x-auto">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Teams</th>
+                      <th>Status</th>
+                      <th>Created</th>
+                      <th className="text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.filter(u => u.role === "AGENT" || u.role === "ADMIN").filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).length === 0 ? (
+                      <tr><td colSpan={7} className="text-center py-8"><span className={isDark ? "text-slate-500" : "text-slate-400"}>No staff found.</span></td></tr>
+                    ) : users.filter(u => u.role === "AGENT" || u.role === "ADMIN").filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).map(u => (
+                      <tr key={u.id}>
+                        <td><span className={`font-medium text-sm ${isDark ? "text-slate-100" : "text-slate-900"}`}>{u.name}</span></td>
+                        <td><span className={`text-sm ${isDark ? "text-slate-400" : "text-slate-600"}`}>{u.email}</span></td>
+                        <td>
+                          <span className={`admin-badge ${u.role === "ADMIN" ? "admin-badge-admin" : "admin-badge-agent"}`}>{u.role}</span>
+                        </td>
+                        <td>
+                          <div className="flex flex-wrap gap-1">
+                            {u.teams && u.teams.length > 0
+                              ? u.teams.map(t => <span key={t.id} className={`admin-badge admin-badge-agent`}>{t.name}</span>)
+                              : <span className={`text-xs ${isDark ? "text-slate-600" : "text-slate-400"}`}>—</span>
+                            }
+                          </div>
+                        </td>
+                        <td>
+                          <button onClick={() => handleUpdateUser(u.id, { isActive: !u.isActive })} className={`admin-badge cursor-pointer hover:opacity-80 transition-opacity ${u.isActive ? "admin-badge-active" : "admin-badge-suspended"}`}>
+                            {u.isActive ? "Active" : "Suspended"}
+                          </button>
+                        </td>
+                        <td><span className={`text-sm ${isDark ? "text-slate-500" : "text-slate-400"}`}>{new Date(u.createdAt).toLocaleDateString()}</span></td>
+                        <td className="text-center">
+                          <button onClick={() => handleEditUserClick(u)} className="admin-btn admin-btn-ghost admin-btn-sm">
+                            <Edit2 className="w-3.5 h-3.5" />
+                            Edit
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Create Staff Modal */}
+            {showCreateUser && (userFormRole === "AGENT" || userFormRole === "ADMIN") && (
+              <UserModal
+                title="Create Staff Account"
+                subtitle="New agent or administrator profile"
+                isDark={isDark}
+                showRole={true}
+                showTeams={true}
+                showStatusToggle={false}
+                formName={userFormName} setFormName={setUserFormName}
+                formEmail={userFormEmail} setFormEmail={setUserFormEmail}
+                formPassword={userFormPassword} setFormPassword={setUserFormPassword}
+                formRole={userFormRole} setFormRole={setUserFormRole}
+                formIsActive={userFormIsActive} setFormIsActive={setUserFormIsActive}
+                formTeams={userFormTeams} setFormTeams={setUserFormTeams}
+                teams={teams}
+                onClose={() => setShowCreateUser(false)}
+                onSubmit={handleCreateUser}
+                submitLabel="Create Staff"
+              />
+            )}
+
+            {/* Edit Staff Modal */}
+            {showEditUser && selectedUser && (selectedUser.role === "AGENT" || selectedUser.role === "ADMIN") && (
+              <UserModal
+                title="Edit Staff Profile"
+                subtitle={`ID: ${selectedUser.id.slice(0, 12)}...`}
+                isDark={isDark}
+                showRole={true}
+                showTeams={true}
+                showStatusToggle={true}
+                formName={userFormName} setFormName={setUserFormName}
+                formEmail={userFormEmail} setFormEmail={setUserFormEmail}
+                formPassword={userFormPassword} setFormPassword={setUserFormPassword}
+                formRole={userFormRole} setFormRole={setUserFormRole}
+                formIsActive={userFormIsActive} setFormIsActive={setUserFormIsActive}
+                formTeams={userFormTeams} setFormTeams={setUserFormTeams}
+                teams={teams}
+                onClose={() => { setShowEditUser(false); setSelectedUser(null); }}
+                onSubmit={handleSaveEditUser}
+                submitLabel="Save Changes"
+              />
+            )}
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════
+            TAB: KNOWLEDGE BASE (Quick inline, navigates to full KB)
+        ══════════════════════════════════════════════════════════ */}
+        {activeTab === "kb" && (
+          <div className="space-y-5">
+            {!kbEditing ? (
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Knowledge Base</h2>
+                    <p className={`text-sm mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Articles and self-service documentation.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => router.push("/admin/dashboard/kb")} className="admin-btn admin-btn-secondary admin-btn-sm">
+                      <BookOpen className="w-4 h-4" />
+                      Full KB Manager
+                    </button>
+                    <button
+                      onClick={() => { setKbArticleId(null); setKbTitle(""); setKbContent(""); setKbIsPublished(false); setKbIsInternal(false); setKbCategoryId(""); setKbEditing(true); }}
+                      className="admin-btn admin-btn-primary"
+                    >
+                      <Plus className="w-4 h-4" />
+                      New Article
+                    </button>
+                  </div>
+                </div>
+
+                <div className={`admin-card overflow-hidden ${isDark ? "admin-dark" : ""}`}>
+                  <div className={`divide-y ${isDark ? "divide-white/[0.04]" : "divide-slate-100"}`}>
+                    {kbArticles.length === 0 ? (
+                      <EmptyState icon={<BookOpen className="w-8 h-8" />} title="No articles yet" description="Create your first KB article to help customers self-serve." isDark={isDark} />
+                    ) : kbArticles.map(art => (
+                      <div key={art.id} className={`flex items-center justify-between px-5 py-4 gap-4 transition-colors ${isDark ? "hover:bg-white/[0.025]" : "hover:bg-slate-50"}`}>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <h3 className={`text-sm font-medium truncate ${isDark ? "text-slate-100" : "text-slate-900"}`}>{art.title}</h3>
+                            <span className={`admin-badge ${art.isPublished ? "admin-badge-resolved" : "admin-badge-medium"}`}>
+                              {art.isPublished ? "Published" : "Draft"}
+                            </span>
+                            {art.isInternal && (
+                              <span className={`admin-badge admin-badge-closed`}>Internal</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {art.category && <span className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}>{art.category.name}</span>}
+                            <span className={`text-xs ${isDark ? "text-slate-600" : "text-slate-400"}`}>By {art.author.name}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button onClick={() => startEditKB(art)} className="admin-btn admin-btn-ghost admin-btn-sm">
+                            <Edit2 className="w-3.5 h-3.5" />
+                            Edit
+                          </button>
+                          <button onClick={() => handleDeleteKB(art.id)} className={`p-2 rounded-lg transition-colors ${isDark ? "text-slate-500 hover:text-red-400 hover:bg-red-950/15" : "text-slate-400 hover:text-red-500 hover:bg-red-50"}`}>
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
                     ))}
-                    {kbArticles.length === 0 && (
-                      <p className="text-xs text-slate-500 font-mono">No articles found in repository.</p>
-                    )}
                   </div>
                 </div>
-              ) : (
-                /* Interactive Markdown Article Editor */
-                <form onSubmit={handleSaveKB} className={`p-6 border rounded-xl space-y-6 max-w-4xl transition-colors ${
-                  isDark ? 'bg-[#0F172A]/45 border-white/[0.04]' : 'bg-white border-slate-200 shadow-sm'
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <h4 className={`text-xs font-bold uppercase tracking-wider font-mono ${isDark ? 'text-[#5FC0F9]' : 'text-[#0d7fc0]'}`}>
-                      {kbArticleId ? "Update Article" : "Create KB Article"}
-                    </h4>
-                    <button
-                      type="button"
-                      onClick={() => setKbEditing(false)}
-                      className={`text-xs font-mono font-semibold transition-colors ${isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}
-                    >
-                      ← BACK TO REPOSITORY
-                    </button>
-                  </div>
+              </div>
+            ) : (
+              /* Quick KB Editor */
+              <div className="max-w-4xl space-y-5">
+                <div className="flex items-center justify-between">
+                  <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>{kbArticleId ? "Edit Article" : "New Article"}</h2>
+                  <button onClick={() => setKbEditing(false)} className={`text-sm font-medium flex items-center gap-1.5 ${isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-800"}`}>
+                    ← Back to list
+                  </button>
+                </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Left: Editor Inputs */}
-                    <div className="md:col-span-2 space-y-4">
-                      <div className="space-y-1.5">
-                        <label className="block text-[10px] text-slate-400 font-mono uppercase font-bold">Article Title</label>
-                        <input
-                          type="text"
-                          required
-                          value={kbTitle}
-                          onChange={e => setKbTitle(e.target.value)}
-                          placeholder="e.g. How to recover forgotten account passwords"
-                          className={`w-full text-xs rounded px-3 py-2 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark 
-                              ? 'bg-slate-900 border-[#334155] text-white' 
-                              : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        />
+                <form onSubmit={handleSaveKB}>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <div className={`md:col-span-2 admin-card p-5 space-y-4 ${isDark ? "admin-dark" : ""}`}>
+                      <div className="admin-form-group">
+                        <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Article Title <span className="text-red-500">*</span></label>
+                        <input type="text" required value={kbTitle} onChange={e => setKbTitle(e.target.value)} placeholder="e.g. How to reset your password" className={`admin-input ${isDark ? "admin-dark" : ""}`} />
                       </div>
-
-                      <div className="space-y-1.5">
-                        <label className="block text-[10px] text-slate-400 font-mono uppercase font-bold">Content (Markdown supported)</label>
-                        <textarea
-                          required
-                          value={kbContent}
-                          onChange={e => setKbContent(e.target.value)}
-                          placeholder="Type markdown article body here..."
-                          className={`w-full text-xs rounded px-3 py-2.5 h-80 font-mono focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark 
-                              ? 'bg-slate-900 border-[#334155] text-white' 
-                              : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        />
+                      <div className="admin-form-group">
+                        <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Content (Markdown) <span className="text-red-500">*</span></label>
+                        <textarea required value={kbContent} onChange={e => setKbContent(e.target.value)} placeholder="Write your article content here..." className={`admin-textarea font-mono ${isDark ? "admin-dark" : ""}`} style={{ minHeight: 300 }} />
                       </div>
                     </div>
 
-                    {/* Right: Settings panel */}
-                    <div className={`p-4 rounded-lg border space-y-6 ${
-                      isDark ? 'bg-slate-900/40 border-white/[0.03]' : 'bg-slate-50 border-slate-200'
-                    }`}>
-                      <h5 className={`text-[10px] font-bold uppercase tracking-wider font-mono pb-2 border-b ${
-                        isDark ? 'text-slate-400 border-white/[0.05]' : 'text-slate-650 border-slate-200'
-                      }`}>Settings</h5>
-                      
-                      <div className="space-y-2">
-                        <label className="block text-[9px] text-slate-400 font-mono uppercase font-bold">Classification Category</label>
-                        <select
-                          value={kbCategoryId}
-                          onChange={e => setKbCategoryId(e.target.value)}
-                          className={`w-full text-xs rounded px-2.5 py-1.5 focus:outline-none focus:border-[#5FC0F9] border ${
-                            isDark 
-                              ? 'bg-[#0F172A] border-[#334155] text-slate-200' 
-                              : 'bg-white border-slate-300 text-slate-800'
-                          }`}
-                        >
-                          <option value="">Unclassified</option>
-                          {categories.map(cat => (
-                            <option key={cat.id} value={cat.id}>
-                              {cat.name}
-                            </option>
-                          ))}
+                    <div className={`admin-card p-5 space-y-4 h-fit ${isDark ? "admin-dark" : ""}`}>
+                      <h3 className={`text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Settings</h3>
+                      <div className="admin-form-group">
+                        <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Category</label>
+                        <select value={kbCategoryId} onChange={e => setKbCategoryId(e.target.value)} className={`admin-select ${isDark ? "admin-dark" : ""}`}>
+                          <option value="">Uncategorized</option>
+                          {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                         </select>
                       </div>
 
-                      {/* Toggles */}
-                      <div className="space-y-4 pt-2">
-                        <label className={`flex items-center space-x-2 text-xs font-mono cursor-pointer select-none ${
-                          isDark ? 'text-slate-300' : 'text-slate-750'
-                        }`}>
-                          <input
-                            type="checkbox"
-                            checked={kbIsPublished}
-                            onChange={() => setKbIsPublished(!kbIsPublished)}
-                            className="rounded border-[#334155] text-[#5FC0F9] cursor-pointer"
-                          />
-                          <span>Publish Immediately</span>
+                      <div className="space-y-3 pt-1">
+                        <label className={`flex items-center gap-3 text-sm cursor-pointer ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                          <input type="checkbox" checked={kbIsPublished} onChange={() => setKbIsPublished(!kbIsPublished)} className="w-4 h-4 rounded accent-[#38b1f7]" />
+                          Publish immediately
                         </label>
-
-                        <label className={`flex items-center space-x-2 text-xs font-mono cursor-pointer select-none ${
-                          isDark ? 'text-red-400' : 'text-red-750'
-                        }`}>
-                          <input
-                            type="checkbox"
-                            checked={kbIsInternal}
-                            onChange={() => setKbIsInternal(!kbIsInternal)}
-                            className="rounded border-[#334155] text-red-500 cursor-pointer"
-                          />
-                          <span>Internal Agent View Only</span>
+                        <label className={`flex items-center gap-3 text-sm cursor-pointer ${isDark ? "text-amber-400" : "text-amber-700"}`}>
+                          <input type="checkbox" checked={kbIsInternal} onChange={() => setKbIsInternal(!kbIsInternal)} className="w-4 h-4 rounded accent-amber-500" />
+                          Internal only (agents only)
                         </label>
                       </div>
 
-                      <div className="pt-6">
-                        <button
-                          type="submit"
-                          className="w-full py-2.5 text-xs font-mono font-bold bg-[#5FC0F9] hover:bg-[#38B1F7] text-[#020617] rounded active:scale-98 transition-all cursor-pointer"
-                        >
-                          {kbArticleId ? "UPDATE ARTICLE" : "PERSIST ARTICLE"}
+                      <div className="pt-2">
+                        <button type="submit" className="admin-btn admin-btn-primary w-full">
+                          {kbArticleId ? "Update Article" : "Save Article"}
                         </button>
                       </div>
                     </div>
                   </div>
                 </form>
-              )}
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+    </AdminShell>
+  );
+}
+
+// ── Sub-components ─────────────────────────────────────────────────
+
+function StatCard({ label, value, icon, iconBg, iconBgDark, isDark, highlight }: {
+  label: string; value: number; icon: React.ReactNode;
+  iconBg: string; iconBgDark: string; isDark: boolean; highlight?: boolean;
+}) {
+  return (
+    <div className={`admin-card p-5 flex items-center justify-between ${isDark ? "admin-dark" : ""}`}>
+      <div>
+        <p className={`text-xs font-medium mb-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>{label}</p>
+        <p className={`text-3xl font-bold ${highlight ? "text-[#38b1f7]" : isDark ? "text-white" : "text-slate-900"}`}>{value}</p>
+      </div>
+      <div className={`admin-stat-icon-wrap ${isDark ? iconBgDark : iconBg}`}>
+        {icon}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ icon, title, description, isDark }: {
+  icon: React.ReactNode; title: string; description: string; isDark: boolean;
+}) {
+  return (
+    <div className="admin-empty-state">
+      <span className={isDark ? "text-slate-700" : "text-slate-300"}>{icon}</span>
+      <h3 className={isDark ? "!text-slate-400" : ""}>{title}</h3>
+      <p>{description}</p>
+    </div>
+  );
+}
+
+// Shared User Create/Edit Modal
+interface UserModalProps {
+  title: string; subtitle: string; isDark: boolean;
+  showRole: boolean; showTeams: boolean; showStatusToggle: boolean;
+  formName: string; setFormName: (v: string) => void;
+  formEmail: string; setFormEmail: (v: string) => void;
+  formPassword: string; setFormPassword: (v: string) => void;
+  formRole: "CUSTOMER" | "AGENT" | "ADMIN"; setFormRole: (v: any) => void;
+  formIsActive: boolean; setFormIsActive: (v: boolean) => void;
+  formTeams: string[]; setFormTeams: (v: string[]) => void;
+  teams: { id: string; name: string }[];
+  onClose: () => void; onSubmit: (e: React.FormEvent) => void;
+  submitLabel: string;
+}
+
+function UserModal({ title, subtitle, isDark, showRole, showTeams, showStatusToggle, formName, setFormName, formEmail, setFormEmail, formPassword, setFormPassword, formRole, setFormRole, formIsActive, setFormIsActive, formTeams, setFormTeams, teams, onClose, onSubmit, submitLabel }: UserModalProps) {
+  return (
+    <div className="admin-modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className={`admin-modal ${isDark ? "admin-dark" : ""}`}>
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <h3 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>{title}</h3>
+            <p className={`text-xs mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>{subtitle}</p>
+          </div>
+          <button onClick={onClose} className={`p-1.5 rounded-lg mt-0.5 ${isDark ? "text-slate-400 hover:text-white hover:bg-white/[0.05]" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"}`}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="admin-form-group">
+            <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Full Name <span className="text-red-500">*</span></label>
+            <input type="text" required value={formName} onChange={e => setFormName(e.target.value)} placeholder="Alex Carter" className={`admin-input ${isDark ? "admin-dark" : ""}`} />
+          </div>
+          <div className="admin-form-group">
+            <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Email Address <span className="text-red-500">*</span></label>
+            <input type="email" required value={formEmail} onChange={e => setFormEmail(e.target.value)} placeholder="alex@company.com" className={`admin-input ${isDark ? "admin-dark" : ""}`} />
+          </div>
+          <div className="admin-form-group">
+            <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Password {!showStatusToggle && <span className="text-red-500">*</span>}</label>
+            <input type="password" required={!showStatusToggle} value={formPassword} onChange={e => setFormPassword(e.target.value)} placeholder={showStatusToggle ? "Leave blank to keep current" : "••••••••"} className={`admin-input ${isDark ? "admin-dark" : ""}`} />
+          </div>
+          {showRole && (
+            <div className="admin-form-group">
+              <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Role</label>
+              <select value={formRole} onChange={e => setFormRole(e.target.value)} className={`admin-select ${isDark ? "admin-dark" : ""}`}>
+                <option value="AGENT">Agent — Support Representative</option>
+                <option value="ADMIN">Admin — Full Access</option>
+              </select>
             </div>
           )}
+          {showStatusToggle && (
+            <div className="admin-form-group">
+              <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Account Status</label>
+              <select value={formIsActive ? "true" : "false"} onChange={e => setFormIsActive(e.target.value === "true")} className={`admin-select ${isDark ? "admin-dark" : ""}`}>
+                <option value="true">Active</option>
+                <option value="false">Suspended</option>
+              </select>
+            </div>
+          )}
+          {showTeams && teams.length > 0 && (
+            <div className="admin-form-group">
+              <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Assign to Teams</label>
+              <div className={`border rounded-xl p-3 max-h-36 overflow-y-auto grid grid-cols-2 gap-2 ${isDark ? "border-[#1e293b] bg-white/[0.02]" : "border-slate-200 bg-slate-50"}`}>
+                {teams.map(t => (
+                  <label key={t.id} className={`flex items-center gap-2 text-sm cursor-pointer ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                    <input type="checkbox" checked={formTeams.includes(t.id)} onChange={() => setFormTeams(formTeams.includes(t.id) ? formTeams.filter(id => id !== t.id) : [...formTeams, t.id])} className="rounded accent-[#38b1f7]" />
+                    <span className="truncate">{t.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="admin-btn admin-btn-ghost">Cancel</button>
+            <button type="submit" className="admin-btn admin-btn-primary">{submitLabel}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
-        </main>
+// ── Team Modal with Searchable Member Dropdown ─────────────────────
+interface TeamModalProps {
+  title: string;
+  subtitle: string;
+  isDark: boolean;
+  name: string;
+  onNameChange: (v: string) => void;
+  description: string;
+  onDescriptionChange: (v: string) => void;
+  selectedMemberIds: string[];
+  onMembersChange: (ids: string[]) => void;
+  agents: { id: string; name: string; email: string }[];
+  onClose: () => void;
+  onSubmit: (e: React.FormEvent) => void;
+  submitLabel: string;
+}
+
+function TeamModal({
+  title, subtitle, isDark, name, onNameChange, description, onDescriptionChange,
+  selectedMemberIds, onMembersChange, agents, onClose, onSubmit, submitLabel,
+}: TeamModalProps) {
+  const [memberSearch, setMemberSearch] = React.useState("");
+
+  const filteredAgents = agents.filter(a =>
+    a.name.toLowerCase().includes(memberSearch.toLowerCase()) ||
+    a.email.toLowerCase().includes(memberSearch.toLowerCase())
+  );
+
+  const selectedAgents = agents.filter(a => selectedMemberIds.includes(a.id));
+
+  const toggleMember = (id: string) => {
+    onMembersChange(
+      selectedMemberIds.includes(id)
+        ? selectedMemberIds.filter(x => x !== id)
+        : [...selectedMemberIds, id]
+    );
+  };
+
+  const removeMember = (id: string) => {
+    onMembersChange(selectedMemberIds.filter(x => x !== id));
+  };
+
+  return (
+    <div
+      className="admin-modal-overlay"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className={`admin-modal w-full max-w-[520px] ${isDark ? "admin-dark" : ""}`}
+        style={{ maxHeight: "92vh", overflowY: "auto" }}
+      >
+        {/* Header */}
+        <div className={`flex items-start justify-between mb-6 pb-5 border-b ${isDark ? "border-white/[0.06]" : "border-slate-100"}`}>
+          <div>
+            <h3 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>{title}</h3>
+            <p className={`text-xs mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>{subtitle}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className={`p-1.5 rounded-lg transition-colors ml-3 shrink-0 ${isDark ? "text-slate-400 hover:text-white hover:bg-white/[0.05]" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"}`}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-5">
+          {/* Team Name */}
+          <div className="admin-form-group">
+            <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>
+              Team Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={name}
+              onChange={e => onNameChange(e.target.value)}
+              placeholder="e.g. Billing Support, Tier-2 Tech"
+              className={`admin-input ${isDark ? "admin-dark" : ""}`}
+            />
+          </div>
+
+          {/* Description */}
+          <div className="admin-form-group">
+            <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Description</label>
+            <textarea
+              value={description}
+              onChange={e => onDescriptionChange(e.target.value)}
+              placeholder="Describe the team's scope, routing rules, or SLA..."
+              className={`admin-textarea ${isDark ? "admin-dark" : ""}`}
+              rows={2}
+            />
+          </div>
+
+          {/* Members section */}
+          <div className="admin-form-group">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Team Members</label>
+              {selectedMemberIds.length > 0 && (
+                <span className={`text-xs font-medium ${isDark ? "text-[#5fc0f9]" : "text-[#0d7fc0]"}`}>
+                  {selectedMemberIds.length} selected
+                </span>
+              )}
+            </div>
+
+            {/* Selected member chips */}
+            {selectedAgents.length > 0 && (
+              <div className={`flex flex-wrap gap-1.5 mb-3 p-2.5 rounded-xl border ${isDark ? "border-[#38b1f7]/15 bg-[#38b1f7]/5" : "border-blue-100 bg-blue-50/60"}`}>
+                {selectedAgents.map(a => (
+                  <div
+                    key={a.id}
+                    className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border ${isDark ? "bg-[#38b1f7]/12 text-[#5fc0f9] border-[#38b1f7]/20" : "bg-white text-blue-700 border-blue-200 shadow-sm"}`}
+                  >
+                    <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ${isDark ? "bg-[#38b1f7]/25" : "bg-blue-200 text-blue-700"}`}>
+                      {a.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span>{a.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeMember(a.id)}
+                      className={`ml-0.5 rounded-sm transition-colors ${isDark ? "text-[#5fc0f9]/60 hover:text-red-400" : "text-blue-400 hover:text-red-500"}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Searchable agent list */}
+            <div className={`border rounded-xl overflow-hidden ${isDark ? "border-[#1e293b]" : "border-slate-200"}`}>
+              {/* Search bar */}
+              <div className={`flex items-center gap-2 px-3 py-2.5 border-b ${isDark ? "border-[#1e293b] bg-[#0c1525]" : "border-slate-100 bg-slate-50"}`}>
+                <Search className={`w-3.5 h-3.5 shrink-0 ${isDark ? "text-slate-500" : "text-slate-400"}`} />
+                <input
+                  type="text"
+                  value={memberSearch}
+                  onChange={e => setMemberSearch(e.target.value)}
+                  placeholder="Search agents by name or email…"
+                  className={`flex-1 text-sm bg-transparent outline-none ${isDark ? "text-white placeholder:text-slate-600" : "text-slate-800 placeholder:text-slate-400"}`}
+                />
+                {memberSearch && (
+                  <button type="button" onClick={() => setMemberSearch("")} className={isDark ? "text-slate-500 hover:text-white" : "text-slate-400 hover:text-slate-600"}>
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Agent list */}
+              <div className="max-h-44 overflow-y-auto">
+                {agents.length === 0 ? (
+                  <p className={`text-xs text-center py-4 ${isDark ? "text-slate-600" : "text-slate-400"}`}>No agents available.</p>
+                ) : filteredAgents.length === 0 ? (
+                  <p className={`text-xs text-center py-4 ${isDark ? "text-slate-600" : "text-slate-400"}`}>No agents match "{memberSearch}"</p>
+                ) : (
+                  filteredAgents.map(a => {
+                    const isSelected = selectedMemberIds.includes(a.id);
+                    return (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => toggleMember(a.id)}
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                          isSelected
+                            ? isDark ? "bg-[#38b1f7]/10" : "bg-blue-50"
+                            : isDark ? "hover:bg-white/[0.03]" : "hover:bg-slate-50"
+                        }`}
+                      >
+                        {/* Avatar */}
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${
+                          isSelected
+                            ? isDark ? "bg-[#38b1f7]/20 text-[#5fc0f9]" : "bg-blue-100 text-blue-700"
+                            : isDark ? "bg-white/[0.06] text-slate-400" : "bg-slate-100 text-slate-600"
+                        }`}>
+                          {a.name.charAt(0).toUpperCase()}
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium truncate ${
+                            isSelected
+                              ? isDark ? "text-[#5fc0f9]" : "text-blue-700"
+                              : isDark ? "text-slate-200" : "text-slate-800"
+                          }`}>{a.name}</p>
+                          <p className={`text-xs truncate ${isDark ? "text-slate-600" : "text-slate-400"}`}>{a.email}</p>
+                        </div>
+
+                        {/* Checkmark */}
+                        {isSelected && (
+                          <CheckCircle className={`w-4 h-4 shrink-0 ${isDark ? "text-[#5fc0f9]" : "text-blue-600"}`} />
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Footer actions */}
+          <div className={`flex justify-end gap-2 pt-2 border-t ${isDark ? "border-white/[0.06]" : "border-slate-100"}`}>
+            <button type="button" onClick={onClose} className="admin-btn admin-btn-ghost">
+              Cancel
+            </button>
+            <button type="submit" className="admin-btn admin-btn-primary">
+              {submitLabel}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

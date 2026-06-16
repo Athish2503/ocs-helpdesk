@@ -33,6 +33,9 @@ async function listUsers(query) {
             emailVerified: true,
             createdAt: true,
             updatedAt: true,
+            teams: {
+                select: { id: true, name: true },
+            },
         },
         orderBy: { createdAt: "desc" },
     });
@@ -77,6 +80,11 @@ async function createUser(input) {
             role: input.role,
             emailVerified: true,
             isActive: true,
+            teams: input.teamIds
+                ? {
+                    connect: input.teamIds.map((id) => ({ id })),
+                }
+                : undefined,
         },
         select: {
             id: true,
@@ -87,6 +95,9 @@ async function createUser(input) {
             emailVerified: true,
             createdAt: true,
             updatedAt: true,
+            teams: {
+                select: { id: true, name: true },
+            },
         },
     });
 }
@@ -97,6 +108,12 @@ async function updateUser(id, input) {
     if (input.password) {
         data.passwordHash = await (0, password_js_1.hashPassword)(input.password);
         delete data.password;
+    }
+    if (input.teamIds !== undefined) {
+        data.teams = {
+            set: input.teamIds.map((id) => ({ id })),
+        };
+        delete data.teamIds;
     }
     return prisma_js_1.prisma.user.update({
         where: { id },
@@ -110,6 +127,9 @@ async function updateUser(id, input) {
             emailVerified: true,
             createdAt: true,
             updatedAt: true,
+            teams: {
+                select: { id: true, name: true },
+            },
         },
     });
 }

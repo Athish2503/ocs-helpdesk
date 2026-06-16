@@ -28,6 +28,13 @@ function optionalAuth(req, res, next) {
     next();
 }
 const router = (0, express_1.Router)();
+// --- CATEGORY ROUTING ---
+router.get("/categories", optionalAuth, kb_controller_js_1.listCategoriesHandler);
+router.post("/categories", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), kb_controller_js_1.createCategoryHandler);
+router.patch("/categories/:id", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), kb_controller_js_1.updateCategoryHandler);
+router.delete("/categories/:id", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), kb_controller_js_1.deleteCategoryHandler);
+// --- TAG ROUTING ---
+router.get("/tags", optionalAuth, kb_controller_js_1.listTagsHandler);
 // --- PUBLIC ROUTING ---
 router.get("/public/sitemap.xml", kb_controller_js_1.getPublicSitemapHandler);
 router.get("/public/articles/:slug", (0, publicSecurity_js_1.publicSecurityMiddleware)(), publicSecurity_js_1.logPublicAccess, publicSecurity_js_1.validateSlug, kb_controller_js_1.getPublicArticleBySlugHandler);
@@ -38,13 +45,6 @@ router.get("/:idOrSlug", optionalAuth, kb_controller_js_1.getArticleByIdOrSlugHa
 router.post("/", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), kb_controller_js_1.createArticleHandler);
 router.patch("/:id", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), kb_controller_js_1.updateArticleHandler);
 router.delete("/:id", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), kb_controller_js_1.deleteArticleHandler);
-// --- CATEGORY ROUTING ---
-router.get("/categories", optionalAuth, kb_controller_js_1.listCategoriesHandler);
-router.post("/categories", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), kb_controller_js_1.createCategoryHandler);
-router.patch("/categories/:id", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), kb_controller_js_1.updateCategoryHandler);
-router.delete("/categories/:id", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), kb_controller_js_1.deleteCategoryHandler);
-// --- TAG ROUTING ---
-router.get("/tags", optionalAuth, kb_controller_js_1.listTagsHandler);
 // --- VERSION ROUTING ---
 router.get("/articles/:articleId/versions", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), kb_controller_js_1.listVersionsHandler);
 // --- ANALYTICS ROUTING ---
