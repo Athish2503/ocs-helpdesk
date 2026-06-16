@@ -4,7 +4,8 @@ import React, { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth, User } from "../../../context/AuthContext";
-import { Loader2, CheckCircle2, AlertCircle, Ticket } from "lucide-react";
+import { CheckCircle2, AlertCircle, Ticket } from "lucide-react";
+import Loader from "../../../components/Loader";
 
 // Cache verification promises globally to prevent double-verification in React Strict Mode (dev)
 const verificationCache = new Map<string, Promise<{ success: boolean; error?: string; user?: User }>>();
@@ -71,11 +72,8 @@ function CallbackContent() {
 
   if (status === "loading") {
     return (
-      <div className="flex flex-col items-center space-y-6 text-center">
-        <div className="relative w-16 h-16 flex items-center justify-center">
-          <div className="absolute inset-0 rounded-full border-4 border-[#38b1f7]/20 animate-pulse"></div>
-          <Loader2 className="w-8 h-8 text-[#38b1f7] animate-spin" />
-        </div>
+      <div className="flex flex-col items-center space-y-6 text-center animate-fade-in">
+        <Loader size="lg" theme="light" />
         <div className="space-y-2">
           <h2 className="text-xl font-bold text-slate-900 font-display">Verifying Link</h2>
           <p className="text-xs text-slate-500 font-body">Authenticating your session, please hold tight...</p>
@@ -130,10 +128,7 @@ function CallbackContent() {
 function LoadingState() {
   return (
     <div className="flex flex-col items-center space-y-6 text-center">
-      <div className="relative w-16 h-16 flex items-center justify-center">
-        <div className="absolute inset-0 rounded-full border-4 border-[#38b1f7]/20 animate-pulse"></div>
-        <Loader2 className="w-8 h-8 text-[#38b1f7] animate-spin" />
-      </div>
+      <Loader size="lg" theme="light" />
       <div className="space-y-2">
         <h2 className="text-xl font-bold text-slate-900 font-display">Loading</h2>
         <p className="text-xs text-slate-500 font-body">Preparing callback verification...</p>

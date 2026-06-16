@@ -12,12 +12,12 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
-  Loader2,
   ArrowRight,
   Sun,
   Moon,
   Ticket,
 } from "lucide-react";
+import Loader from "../../../components/Loader";
 
 function AdminLoginForm() {
   const { login, logout } = useAuth();
@@ -259,7 +259,7 @@ function AdminLoginForm() {
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader size={18} variant="inline" contrast={true} />
                     Verifying…
                   </>
                 ) : (
@@ -288,8 +288,8 @@ function AdminLoginForm() {
 export default function AdminLoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-[#38b1f7]" />
+      <div className="min-h-screen bg-slate-50 dark:bg-[#020617] flex items-center justify-center transition-colors duration-200">
+        <Loader size="lg" theme="auto" label="Loading portal..." />
       </div>
     }>
       <AdminLoginForm />
