@@ -53,29 +53,38 @@ export async function createTicket(
   let priority = input.priority || "MEDIUM";
 
   // Determine Routing Category
-  // 1. Check if there is a rule matching the category name exactly
-  let rule = await prisma.routingRule.findUnique({
-    where: { issueCategory: categoryName },
-  });
-
   let issueCategory = categoryName;
+  let rule = null;
 
-  // 2. If not, fallback to priority/general category routing
-  if (!rule) {
-    issueCategory = "Technical Support";
-    if (priority === "HIGH" || priority === "URGENT") {
-      issueCategory = "Critical Issues";
-    } else if (
-      categoryName.toLowerCase().includes("billing") ||
-      categoryName.toLowerCase().includes("renew") ||
-      input.issueCategory === "Billing / Renewals"
-    ) {
-      issueCategory = "Billing / Renewals";
-    }
-
+  // 1. If explicit valid issueCategory is provided, respect it
+  const validCategories = ["Billing / Renewals", "Technical Support", "Critical Issues"];
+  if (input.issueCategory && validCategories.includes(input.issueCategory)) {
+    issueCategory = input.issueCategory;
     rule = await prisma.routingRule.findUnique({
       where: { issueCategory },
     });
+  } else {
+    // 2. Check if there is a rule matching the category name exactly
+    rule = await prisma.routingRule.findUnique({
+      where: { issueCategory: categoryName },
+    });
+
+    if (!rule) {
+      // 3. Fallback to priority/general category routing
+      issueCategory = "Technical Support";
+      if (priority === "HIGH" || priority === "URGENT") {
+        issueCategory = "Critical Issues";
+      } else if (
+        categoryName.toLowerCase().includes("billing") ||
+        categoryName.toLowerCase().includes("renew")
+      ) {
+        issueCategory = "Billing / Renewals";
+      }
+
+      rule = await prisma.routingRule.findUnique({
+        where: { issueCategory },
+      });
+    }
   }
 
   let agentId: string | null = null;
@@ -158,7 +167,7 @@ export async function createTicket(
     }
 
     // Send emails using email service
-    const { sendTicketNotificationEmail } = await import("../../services/email.service.js");
+    const { sendTicketNotificationEmail, sendCustomerTicketCreatedEmail } = await import("../../services/email.service.js");
     for (const email of emailRecipients) {
       await sendTicketNotificationEmail(email, {
         id: ticket.id,
@@ -169,6 +178,18 @@ export async function createTicket(
         customerName: ticket.customer.name,
         customerEmail: ticket.customer.email,
         affectedDomain: ticket.affectedDomain,
+      });
+    }
+
+    // Notify the customer who generated the ticket
+    if (ticket.customer && ticket.customer.email) {
+      await sendCustomerTicketCreatedEmail(ticket.customer.email, {
+        id: ticket.id,
+        title: ticket.title,
+        description: ticket.description,
+        category: ticket.category.name,
+        priority: ticket.priority,
+        customerName: ticket.customer.name,
       });
     }
   } catch (err) {
@@ -473,7 +494,7 @@ export async function updateTicket(
     }
   }
 
-  return prisma.ticket.update({
+  const updatedTicket = await prisma.ticket.update({
     where: { id },
     data: {
       ...(input.status ? { status: input.status } : {}),
@@ -504,4 +525,21 @@ export async function updateTicket(
       },
     },
   });
+
+  if (input.status === "RESOLVED" && ticket.status !== "RESOLVED") {
+    try {
+      const { sendCustomerTicketResolvedEmail } = await import("../../services/email.service.js");
+      if (updatedTicket.customer && updatedTicket.customer.email) {
+        await sendCustomerTicketResolvedEmail(updatedTicket.customer.email, {
+          id: updatedTicket.id,
+          title: updatedTicket.title,
+          customerName: updatedTicket.customer.name,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to send ticket resolution email notification:", err);
+    }
+  }
+
+  return updatedTicket;
 }

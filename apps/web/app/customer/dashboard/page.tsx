@@ -32,6 +32,7 @@ import {
   CheckCircle2,
   Globe,
   FileText,
+  LogOut,
 } from "lucide-react";
 
 interface Category {
@@ -91,6 +92,87 @@ interface KbCategory {
   id: string;
   name: string;
   article_count?: number;
+}
+
+interface CustomerNavItemProps {
+  label: string;
+  icon: React.ElementType;
+  active: boolean;
+  collapsed: boolean;
+  isDark: boolean;
+  onClick: () => void;
+  badge?: number;
+}
+
+function CustomerNavItem({ label, icon: Icon, active, collapsed, isDark, onClick, badge }: CustomerNavItemProps) {
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  return (
+    <div 
+      className="relative flex items-center w-full"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
+      <button
+        onClick={onClick}
+        aria-label={label}
+        aria-current={active ? "page" : undefined}
+        type="button"
+        className={`
+          admin-nav-item w-full flex items-center justify-between
+          ${active ? "admin-nav-item-active" : ""}
+          ${isDark ? "admin-dark" : ""}
+          ${collapsed ? "justify-center px-0" : "px-3"}
+        `}
+      >
+        <div className="flex items-center">
+          <Icon
+            className={`w-[18px] h-[18px] shrink-0 ${collapsed ? "" : "mr-2.5"} ${active ? "text-[#38b1f7]" : ""}`}
+            strokeWidth={active ? 2.5 : 2}
+            aria-hidden="true"
+          />
+          {!collapsed && (
+            <span className="truncate">{label}</span>
+          )}
+        </div>
+        {!collapsed && badge !== undefined && badge > 0 && (
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold transition-all duration-300 ${
+            isDark ? 'bg-[#38b1f7] text-[#020617]' : 'bg-[#38b1f7] text-white'
+          }`}>
+            {badge}
+          </span>
+        )}
+        {collapsed && badge !== undefined && badge > 0 && (
+          <div className="absolute top-1.5 right-2.5 w-2.5 h-2.5 rounded-full bg-[#38b1f7] ring-2 ring-[#020617] animate-pulse" />
+        )}
+      </button>
+
+      {collapsed && showTooltip && (
+        <div 
+          className={`absolute left-[62px] z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold shadow-xl whitespace-nowrap pointer-events-none tooltip-premium-animate ${
+            isDark 
+              ? "bg-[#0c1525]/95 border-white/[0.08] text-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.6)]" 
+              : "bg-white/95 border-slate-200/80 text-slate-800 shadow-[0_4px_16px_rgba(148,163,184,0.15)]"
+          }`}
+          style={{
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+          }}
+        >
+          {/* Arrow Pointer */}
+          <div 
+            className={`absolute right-full top-1/2 -translate-y-1/2 border-y-[5px] border-y-transparent border-r-[5px] ${
+              isDark ? "border-r-[#0c1525]/95" : "border-r-white/95"
+            }`}
+            style={{ marginRight: "-1px" }}
+          />
+          {/* Accent Color Bar */}
+          <div className="w-1 h-3 rounded-full bg-[#38b1f7] shrink-0" />
+          <span>{label}</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function CustomerDashboard() {
@@ -202,12 +284,39 @@ export default function CustomerDashboard() {
     issueType: "" as "" | "billing" | "technical" | "critical" | "other",
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [wizardStep, setWizardStep] = useState<"intake" | "self-help" | "routing">("intake");
+  const [wizardStep, setWizardStep] = useState<"choice" | "intake" | "self-help" | "routing">("choice");
   const [suggestedArticles, setSuggestedArticles] = useState<any[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState<boolean>(false);
   const [submittingCreate, setSubmittingCreate] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // Option 1 Self-Help states
+  const [modalKbSearch, setModalKbSearch] = useState("");
+  const [modalKbArticles, setModalKbArticles] = useState<KbArticle[]>([]);
+  const [loadingModalKb, setLoadingModalKb] = useState(false);
+  const [modalSelectedArticle, setModalSelectedArticle] = useState<KbArticle | null>(null);
+
+  const searchModalKb = async (query: string) => {
+    try {
+      setLoadingModalKb(true);
+      const params = new URLSearchParams();
+      if (query.trim()) {
+        params.append("search", query);
+      }
+      params.append("isPublished", "true");
+      params.append("isInternal", "false");
+      const res = await fetchWithAuth(`/kb?${params.toString()}`);
+      if (res.ok) {
+        const body = await res.json();
+        setModalKbArticles(body.data.articles || []);
+      }
+    } catch (err) {
+      console.error("Failed to search modal KB:", err);
+    } finally {
+      setLoadingModalKb(false);
+    }
+  };
 
   // Fetch helper for categories
   const loadCategories = useCallback(async () => {
@@ -299,6 +408,16 @@ export default function CustomerDashboard() {
       setSubmittingCreate(true);
       setCreateError(null);
 
+      // Determine routing category string
+      let issueCategory = "Technical Support";
+      if (createForm.issueType === "billing") {
+        issueCategory = "Billing / Renewals";
+      } else if (createForm.issueType === "critical") {
+        issueCategory = "Critical Issues";
+      } else if (createForm.issueType === "technical") {
+        issueCategory = "Technical Support";
+      }
+
       // 1. Create the Ticket
       const res = await fetchWithAuth("/tickets", {
         method: "POST",
@@ -308,6 +427,7 @@ export default function CustomerDashboard() {
           categoryId: createForm.categoryId || null,
           priority: createForm.priority,
           affectedDomain: createForm.affectedDomain.trim() || null,
+          issueCategory,
         }),
       });
 
@@ -347,7 +467,12 @@ export default function CustomerDashboard() {
         });
 
         if (!uploadRes.ok) {
-          toast.warning("Ticket created, but attachment upload failed.");
+          try {
+            const errData = await uploadRes.json();
+            toast.warning(`Ticket created, but attachment upload failed: ${errData.error?.message || "Unknown validation error"}`);
+          } catch {
+            toast.warning("Ticket created, but attachment upload failed.");
+          }
         }
       }
 
@@ -681,7 +806,7 @@ export default function CustomerDashboard() {
 
   return (
     <div className={`min-h-screen flex font-body selection:bg-[#38b1f7]/30 relative overflow-hidden transition-colors duration-300 ${
-      isDark ? 'bg-[#020617] text-[#F8FAFC]' : 'bg-[#F8FAFC] text-[#0F172A]'
+      isDark ? 'admin-dark bg-[#020617] text-[#F8FAFC]' : 'bg-[#F8FAFC] text-[#0F172A]'
     }`}>
       {/* Background cyber grid and glow orbs */}
       <div className={`absolute inset-0 grid-bg pointer-events-none z-0 transition-opacity duration-300 ${
@@ -695,168 +820,163 @@ export default function CustomerDashboard() {
       }`}></div>
 
       {/* 1. Sidebar Navigation */}
-      <aside className={`border-r p-4 flex flex-col justify-between hidden md:flex shrink-0 z-25 transition-all duration-300 ease-in-out group/sidebar ${
-        isSidebarCollapsed 
-          ? "w-[76px] hover:w-[280px]" 
-          : "w-[280px]"
+      <aside className={`admin-sidebar border-r flex flex-col justify-between hidden md:flex shrink-0 z-30 relative ${
+        isSidebarCollapsed ? "w-[68px]" : "w-[240px]"
       } ${
         isDark 
           ? 'bg-[#0F172A]/70 backdrop-blur-md border-[#1E293B] text-[#F8FAFC]' 
           : 'bg-white/80 backdrop-blur-md border-slate-200/80 text-slate-800'
       }`}>
-        <div className="space-y-8">
-          {/* Brand Logo Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-lg bg-[#38b1f7] flex items-center justify-center shadow-[0_0_15px_rgba(56,177,247,0.4)] shrink-0">
-                <span className="font-extrabold text-[#020617] text-md">Ω</span>
+        {/* Brand Logo Header */}
+        <div className={`flex items-center border-b border-inherit h-[64px] shrink-0 transition-all duration-300 ${
+          isSidebarCollapsed ? "justify-center px-2" : "justify-between px-4 py-4"
+        }`}>
+          {!isSidebarCollapsed ? (
+            <>
+              <div className="flex items-center gap-3 overflow-hidden min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-[#38b1f7] flex items-center justify-center shadow-[0_0_15px_rgba(56,177,247,0.4)] shrink-0">
+                  <span className="font-extrabold text-[#020617] text-md">Ω</span>
+                </div>
+                <div className="overflow-hidden">
+                  <h2 className={`font-bold text-sm leading-tight truncate whitespace-nowrap ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>OCS Helpdesk</h2>
+                  <p className={`text-[9px] font-mono tracking-wider uppercase whitespace-nowrap truncate ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>Portal Client</p>
+                </div>
               </div>
-              <div className={`transition-all duration-300 ${
-                isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto" : "opacity-100 w-auto"
-              }`}>
-                <h2 className={`font-bold text-sm transition-colors whitespace-nowrap ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>OCS Helpdesk</h2>
-                <p className={`text-[9px] font-mono tracking-wider uppercase whitespace-nowrap ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>Portal Client</p>
-              </div>
-            </div>
+              <button
+                onClick={toggleSidebar}
+                type="button"
+                className={`p-1.5 rounded-lg border transition-all duration-200 active:scale-95 shrink-0 ${
+                  isDark 
+                    ? 'border-white/10 text-slate-500 hover:text-white hover:bg-white/[0.06]' 
+                    : 'border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                }`}
+                title="Collapse Sidebar"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+            </>
+          ) : (
             <button
               onClick={toggleSidebar}
-              className={`p-1.5 rounded-lg border transition-all duration-200 active:scale-95 shrink-0 ${
-                isSidebarCollapsed ? "opacity-0 group-hover/sidebar:opacity-100" : "opacity-100"
-              } ${
+              type="button"
+              className={`p-1.5 rounded-lg border transition-all duration-200 active:scale-95 shrink-0 flex items-center justify-center ${
                 isDark 
-                  ? 'border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white' 
-                  : 'border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+                  ? 'border-white/10 text-[#38b1f7] hover:text-white hover:bg-white/[0.06]' 
+                  : 'border-slate-200 text-[#0d7fc0] hover:text-[#38b1f7] hover:bg-slate-100'
               }`}
-              title={isSidebarCollapsed ? "Expand Sidebar Lock" : "Collapse Sidebar"}
+              title="Expand Sidebar"
             >
-              {isSidebarCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
-          </div>
-
-          {/* Nav List */}
-          <nav className="space-y-1">
-            <button
-              onClick={() => { setActiveTab("dashboard"); setSelectedTicketId(null); setSelectedArticle(null); }}
-              className={`w-full h-10 flex items-center justify-between px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                activeTab === "dashboard"
-                  ? isDark
-                    ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
-                    : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
-                  : isDark 
-                    ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            >
-              <div className="flex items-center space-x-2.5">
-                <BarChart2 className="w-4 h-4 shrink-0" />
-                <span className={`transition-all duration-300 ${
-                  isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
-                }`}>Dashboard</span>
-              </div>
-            </button>
-            
-            <button
-              onClick={() => { setActiveTab("tickets"); setSelectedTicketId(null); setSelectedArticle(null); }}
-              className={`w-full h-10 flex items-center justify-between px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                activeTab === "tickets"
-                  ? isDark
-                    ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
-                    : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
-                  : isDark 
-                    ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            >
-              <div className="flex items-center space-x-2.5">
-                <MessageSquare className="w-4 h-4 shrink-0" />
-                <span className={`transition-all duration-300 ${
-                  isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
-                }`}>My Tickets</span>
-              </div>
-              {activeTicketsCount > 0 && (
-                <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold transition-all duration-300 ${
-                  isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto" : "opacity-100 w-auto"
-                } ${
-                  isDark ? 'bg-[#38b1f7] text-[#020617]' : 'bg-[#38b1f7] text-white'
-                }`}>
-                  {activeTicketsCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => { setActiveTab("kb"); setSelectedTicketId(null); setSelectedArticle(null); }}
-              className={`w-full h-10 flex items-center justify-between px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                activeTab === "kb"
-                  ? isDark
-                    ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
-                    : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
-                  : isDark 
-                    ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            >
-              <div className="flex items-center space-x-2.5">
-                <BookOpen className="w-4 h-4 shrink-0" />
-                <span className={`transition-all duration-300 ${
-                  isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
-                }`}>Knowledge Base</span>
-              </div>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab("settings"); setSelectedTicketId(null); setSelectedArticle(null); }}
-              className={`w-full h-10 flex items-center justify-between px-3 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                activeTab === "settings"
-                  ? isDark
-                    ? "bg-[#1E293B]/70 border border-[#38b1f7]/20 text-[#38b1f7] shadow-[0_0_10px_rgba(56,177,247,0.05)]"
-                    : "bg-[#38b1f7]/8 border border-[#38b1f7]/20 text-[#0d7fc0]"
-                  : isDark 
-                    ? "text-[#CBD5E1] hover:bg-white/[0.03] hover:text-white"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            >
-              <div className="flex items-center space-x-2.5">
-                <Settings className="w-4 h-4 shrink-0" />
-                <span className={`transition-all duration-300 ${
-                  isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto whitespace-nowrap" : "opacity-100 w-auto"
-                }`}>Settings</span>
-              </div>
-            </button>
-          </nav>
+          )}
         </div>
 
+        {/* Nav List */}
+        <nav className={`flex-1 px-3 py-3 space-y-0.5 ${isSidebarCollapsed ? "overflow-y-visible" : "overflow-y-auto overflow-x-hidden"}`}>
+          <CustomerNavItem
+            label="Dashboard"
+            icon={BarChart2}
+            active={activeTab === "dashboard"}
+            collapsed={isSidebarCollapsed}
+            isDark={isDark}
+            onClick={() => { setActiveTab("dashboard"); setSelectedTicketId(null); setSelectedArticle(null); }}
+          />
+          
+          <CustomerNavItem
+            label="My Tickets"
+            icon={MessageSquare}
+            active={activeTab === "tickets"}
+            collapsed={isSidebarCollapsed}
+            isDark={isDark}
+            onClick={() => { setActiveTab("tickets"); setSelectedTicketId(null); setSelectedArticle(null); }}
+            badge={activeTicketsCount}
+          />
+
+          <CustomerNavItem
+            label="Knowledge Base"
+            icon={BookOpen}
+            active={activeTab === "kb"}
+            collapsed={isSidebarCollapsed}
+            isDark={isDark}
+            onClick={() => { setActiveTab("kb"); setSelectedTicketId(null); setSelectedArticle(null); }}
+          />
+
+          <CustomerNavItem
+            label="Settings"
+            icon={Settings}
+            active={activeTab === "settings"}
+            collapsed={isSidebarCollapsed}
+            isDark={isDark}
+            onClick={() => { setActiveTab("settings"); setSelectedTicketId(null); setSelectedArticle(null); }}
+          />
+        </nav>
+
         {/* Sidebar Bottom Profile Section */}
-        <div className={`p-3 rounded-xl border flex flex-col space-y-3 transition-colors ${
-          isDark ? 'bg-[#111827]/80 border-[#1E293B]' : 'bg-slate-50 border-slate-200/80'
-        }`}>
-          <div className="flex items-center space-x-3 overflow-hidden">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 border ${
-              isDark 
-                ? 'bg-[#38b1f7]/20 border-[#38b1f7]/20 text-[#38b1f7]' 
-                : 'bg-[#38b1f7]/10 border-[#38b1f7]/20 text-[#0d7fc0]'
-            }`}>
+        <div className={`
+          px-3 py-3 border-t shrink-0
+          ${isDark ? "border-white/[0.06]" : "border-slate-100"}
+        `}>
+          <div className={`
+            flex items-center gap-3 p-2.5 rounded-xl transition-all duration-300
+            ${isDark ? "bg-white/[0.03]" : "bg-slate-50"}
+            ${isSidebarCollapsed ? "justify-center" : ""}
+          `}>
+            {/* Avatar */}
+            <div
+              className={`
+                w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 border
+                ${isDark
+                  ? "bg-[#38b1f7]/15 text-[#5fc0f9] border-[#38b1f7]/20"
+                  : "bg-[#38b1f7]/10 text-[#0d7fc0] border-[#38b1f7]/15"}
+              `}
+              title={isSidebarCollapsed ? user.name : undefined}
+            >
               {user.name.charAt(0).toUpperCase()}
             </div>
-            <div className={`overflow-hidden transition-all duration-300 ${
-              isSidebarCollapsed ? "opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto" : "opacity-100 w-auto"
-            }`}>
-              <p className={`text-xs font-semibold truncate whitespace-nowrap ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>{user.name}</p>
-              <p className={`text-[9px] font-mono uppercase tracking-wider whitespace-nowrap ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>{user.role}</p>
-            </div>
+
+            {!isSidebarCollapsed && (
+              <>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-semibold truncate leading-tight ${isDark ? "text-white" : "text-slate-900"}`}>
+                    {user.name}
+                  </p>
+                  <p className={`text-[11px] truncate leading-tight uppercase font-mono tracking-wider ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                    {user.role}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => logout()}
+                  className={`
+                    p-1.5 rounded-lg border transition-all shrink-0
+                    ${isDark
+                      ? "border-red-500/20 text-red-400 hover:bg-red-950/30 hover:text-red-300 hover:border-red-500/30"
+                      : "border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600"}
+                  `}
+                  title="Logout"
+                  aria-label="Logout"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
           </div>
-          <button
-            onClick={() => logout()}
-            className={`w-full flex items-center justify-center text-[11px] font-bold rounded-lg transition-all duration-150 active:scale-98 ${
-              isSidebarCollapsed ? "opacity-0 h-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:h-8 py-0" : "opacity-100 h-8 py-2"
-            } ${
-              isDark 
-                ? 'text-red-400 hover:text-white hover:bg-red-950/40 border border-red-500/20 hover:border-red-500/40' 
-                : 'text-red-600 hover:text-white hover:bg-red-600 border border-red-200 hover:border-red-600'
-            }`}
-          >
-            Logout Session
-          </button>
+
+          {isSidebarCollapsed && (
+            <button
+              onClick={() => logout()}
+              className={`
+                mt-2 w-full p-2 rounded-lg border transition-all flex items-center justify-center
+                ${isDark
+                  ? "border-red-500/20 text-red-400 hover:bg-red-950/30 hover:border-red-500/30"
+                  : "border-red-200 text-red-500 hover:bg-red-50"}
+              `}
+              title="Logout"
+              aria-label="Logout"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </aside>
 
@@ -960,10 +1080,10 @@ export default function CustomerDashboard() {
                   </div>
                   <button
                     onClick={() => setShowCreateModal(true)}
-                    className={`btn-cyber flex items-center space-x-2 ${isDark ? 'text-black' : 'text-white'}`}
+                    className="btn-cyber flex items-center space-x-2"
                   >
-                    <Plus className={`w-4 h-4 ${isDark ? 'text-[#005d89]' : 'text-white'}`} />
-                    <span className={isDark ? 'text-[#005d89]' : 'text-white'}>Create Ticket</span>
+                    <Plus className="w-4 h-4" />
+                    <span>Create Ticket</span>
                   </button>
                 </section>
 
@@ -1215,7 +1335,7 @@ export default function CustomerDashboard() {
                       className="btn-cyber h-9 text-xs px-4 py-0 flex items-center space-x-1.5 shadow-none"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span className="text-white">New Ticket</span>
+                      <span>New Ticket</span>
                     </button>
                   </div>
 
@@ -1419,7 +1539,7 @@ export default function CustomerDashboard() {
                                 disabled={submittingMessage || !newMessage.trim()}
                                 className="btn-cyber h-[48px] px-4 shrink-0 flex items-center justify-center shadow-none"
                               >
-                                <Send className="w-4 h-4 text-[#020617]" />
+                                <Send className="w-4 h-4" />
                               </button>
                             </form>
                           )}
@@ -1753,7 +1873,9 @@ export default function CustomerDashboard() {
       {/* 4. Ticket Creation Modal — 3-Step Wizard */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-          <div className={`w-full max-w-xl overflow-hidden shadow-2xl border transition-all duration-300 rounded-2xl my-8 ${
+          <div className={`w-full overflow-hidden shadow-2xl border transition-all duration-500 rounded-2xl my-8 ${
+            wizardStep === "choice" ? "max-w-3xl" : "max-w-xl"
+          } ${
             isDark ? 'glass-card border-white/[0.08]' : 'bg-white border-slate-200 shadow-2xl'
           }`}>
             {/* ── Modal Header with Step Progress ───────────────────────────── */}
@@ -1766,26 +1888,30 @@ export default function CustomerDashboard() {
                   <h3 className={`font-bold text-base tracking-tight ${
                     isDark ? 'text-[#F8FAFC]' : 'text-slate-900'
                   }`}>
+                    {wizardStep === "choice" && "Create Support Ticket"}
                     {wizardStep === "intake" && "New Support Request"}
-                    {wizardStep === "self-help" && "💡 We Found Some Articles"}
+                    {wizardStep === "self-help" && "💡 Search & Read Help Articles"}
                     {wizardStep === "routing" && "Review & Submit"}
                   </h3>
                   <p className={`text-[11px] mt-0.5 ${
                     isDark ? 'text-slate-400' : 'text-slate-500'
                   }`}>
+                    {wizardStep === "choice" && "Select whether to search self-help articles or raise a support ticket"}
                     {wizardStep === "intake" && "Tell us what's happening and we'll route it to the right team"}
-                    {wizardStep === "self-help" && "These articles might resolve your issue instantly"}
+                    {wizardStep === "self-help" && "Search for solutions instantly or read suggested articles"}
                     {wizardStep === "routing" && "Confirm your ticket details before sending"}
                   </p>
                 </div>
                 <button
                   onClick={() => {
                     setShowCreateModal(false);
-                    setWizardStep("intake");
+                    setWizardStep("choice");
                     setSelectedFile(null);
                     setSuggestedArticles([]);
                     setCreateError(null);
                     setFieldErrors({});
+                    setModalKbSearch("");
+                    setModalSelectedArticle(null);
                   }}
                   className={`p-1.5 rounded-lg transition-colors border shrink-0 ml-4 ${
                     isDark 
@@ -1798,25 +1924,165 @@ export default function CustomerDashboard() {
               </div>
 
               {/* Step progress bar */}
-              <div className="flex items-center gap-1 pb-4">
-                {(["intake", "self-help", "routing"] as const).map((step, idx) => {
-                  const stepIndex = ["intake", "self-help", "routing"].indexOf(wizardStep);
-                  const isActive = step === wizardStep;
-                  const isDone = idx < stepIndex;
-                  return (
-                    <div key={step} className="flex items-center gap-1 flex-1">
-                      <div className={`h-1 flex-1 rounded-full transition-all duration-500 ${
-                        isDone
-                          ? 'bg-[#38b1f7]'
-                          : isActive
-                            ? 'bg-[#38b1f7]/50'
-                            : isDark ? 'bg-slate-800' : 'bg-slate-200'
-                      }`} />
-                    </div>
-                  );
-                })}
-              </div>
+              {wizardStep !== "choice" && (
+                <div className="flex items-center gap-1 pb-4">
+                  {(["intake", "self-help", "routing"] as const).map((step, idx) => {
+                    const stepIndex = ["intake", "self-help", "routing"].indexOf(wizardStep);
+                    const isActive = step === wizardStep;
+                    const isDone = idx < stepIndex;
+                    return (
+                      <div key={step} className="flex items-center gap-1 flex-1">
+                        <div className={`h-1 flex-1 rounded-full transition-all duration-500 ${
+                          isDone
+                            ? 'bg-[#38b1f7]'
+                            : isActive
+                              ? 'bg-[#38b1f7]/50'
+                              : isDark ? 'bg-slate-800' : 'bg-slate-200'
+                        }`} />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
+
+            {/* ── STEP 0: CHOICE STEP ────────────────────────────────────────── */}
+            {wizardStep === "choice" && (
+              <div className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Option 1: Self-Help */}
+                  <div
+                    onClick={() => {
+                      setWizardStep("self-help");
+                      // Pre-load KB articles in modal
+                      searchModalKb("");
+                    }}
+                    className={`p-5 rounded-2xl border cursor-pointer text-left transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl ${
+                      isDark
+                        ? "bg-slate-900/60 border-white/[0.06] hover:border-[#38b1f7]/40 hover:bg-slate-900"
+                        : "bg-white border-slate-200 hover:border-[#38b1f7]/40 hover:shadow-md"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                        isDark ? "bg-[#38b1f7]/15 text-[#38b1f7]" : "bg-sky-50 text-[#0d7fc0]"
+                      }`}>
+                        <BookOpen className="w-5 h-5 shrink-0" />
+                      </div>
+                      <div>
+                        <h4 className={`text-sm font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+                          Option 1: Self-Help
+                        </h4>
+                        <p className={`text-[10px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                          Search Help Articles
+                        </p>
+                      </div>
+                    </div>
+                    <p className={`text-xs leading-relaxed mb-4 ${isDark ? "text-slate-350" : "text-slate-600"}`}>
+                      Solve basic requests (like password changes or email client setup) instantly using our extensive knowledge base guides to bypass ticket queue waits.
+                    </p>
+                    <div className="space-y-2">
+                      <p className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                        Quick Solutions
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          className={`text-[10px] px-2.5 py-1 rounded-full border transition-all ${
+                            isDark ? "bg-slate-800/40 border-slate-700 text-slate-300 hover:bg-slate-800" : "bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100"
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setWizardStep("self-help");
+                            setModalKbSearch("password");
+                            searchModalKb("password");
+                          }}
+                        >
+                          🔑 Password Reset
+                        </button>
+                        <button
+                          type="button"
+                          className={`text-[10px] px-2.5 py-1 rounded-full border transition-all ${
+                            isDark ? "bg-slate-800/40 border-slate-700 text-slate-300 hover:bg-slate-800" : "bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100"
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setWizardStep("self-help");
+                            setModalKbSearch("outlook");
+                            searchModalKb("outlook");
+                          }}
+                        >
+                          📧 Outlook Config
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Option 2: Raise Ticket */}
+                  <div
+                    onClick={() => {
+                      setWizardStep("intake");
+                      setCreateForm(prev => ({
+                        ...prev,
+                        issueType: "technical", // Default select technical support
+                      }));
+                    }}
+                    className={`p-5 rounded-2xl border cursor-pointer text-left transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl ${
+                      isDark
+                        ? "bg-slate-900/60 border-white/[0.06] hover:border-[#38b1f7]/40 hover:bg-slate-900"
+                        : "bg-white border-slate-200 hover:border-[#38b1f7]/40 hover:shadow-md"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                        isDark ? "bg-[#38b1f7]/15 text-[#38b1f7]" : "bg-sky-50 text-[#0d7fc0]"
+                      }`}>
+                        <MessageSquare className="w-5 h-5 shrink-0" />
+                      </div>
+                      <div>
+                        <h4 className={`text-sm font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+                          Option 2: Raise Ticket
+                        </h4>
+                        <p className={`text-[10px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                          Submit Ticket to Staff
+                        </p>
+                      </div>
+                    </div>
+                    <p className={`text-xs leading-relaxed mb-4 ${isDark ? "text-slate-350" : "text-slate-600"}`}>
+                      Proceed to generate a new support ticket. It will route directly to the responsible team based on your request department:
+                    </p>
+                    <div className="space-y-2 text-[10px] pt-1">
+                      <div className="flex items-center justify-between pb-1 border-b border-dashed dark:border-white/[0.03] border-slate-100">
+                        <span className={isDark ? "text-slate-400" : "text-slate-550"}>Billing & Renewals</span>
+                        <span className="font-semibold text-violet-400">Routes to Manjula</span>
+                      </div>
+                      <div className="flex items-center justify-between pb-1 border-b border-dashed dark:border-white/[0.03] border-slate-100">
+                        <span className={isDark ? "text-slate-400" : "text-slate-550"}>Technical Support</span>
+                        <span className="font-semibold text-[#38b1f7]">Routes to Support Team</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className={isDark ? "text-slate-400" : "text-slate-550"}>Critical Outages</span>
+                        <span className="font-semibold text-red-400">Escalates to L1 + Manager L2</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`px-6 py-4 border-t flex items-center justify-end ${
+                  isDark ? 'border-[#1E293B] bg-slate-900/20' : 'border-slate-100 bg-slate-50/50'
+                }`}>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className={`text-xs font-semibold px-4 py-2 rounded-lg transition-colors ${
+                      isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* ── STEP 1: INTAKE FORM ─────────────────────────────────────────── */}
             {wizardStep === "intake" && (
@@ -2172,10 +2438,13 @@ export default function CustomerDashboard() {
                     type="button"
                     onClick={() => {
                       setShowCreateModal(false);
-                      setWizardStep("intake");
+                      setWizardStep("choice");
                       setSelectedFile(null);
                       setSuggestedArticles([]);
                       setCreateError(null);
+                      setFieldErrors({});
+                      setModalKbSearch("");
+                      setModalSelectedArticle(null);
                     }}
                     className={`text-xs font-semibold px-4 py-2 rounded-lg transition-colors ${
                       isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
@@ -2199,93 +2468,194 @@ export default function CustomerDashboard() {
               </form>
             )}
 
-            {/* ── STEP 2: SELF-HELP KB ARTICLES ────────────────────────────── */}
+            {/* ── STEP 2: SELF-HELP KB ARTICLES & SEARCH ────────────────────── */}
             {wizardStep === "self-help" && (
               <div className="overflow-y-auto max-h-[75vh]">
-                <div className="p-6 space-y-4">
-                  <div className={`p-4 rounded-xl border ${
-                    isDark ? 'bg-[#38b1f7]/8 border-[#38b1f7]/15' : 'bg-sky-50 border-sky-200'
-                  }`}>
-                    <p className={`text-xs leading-relaxed ${
-                      isDark ? 'text-slate-300' : 'text-slate-700'
+                {modalSelectedArticle ? (
+                  /* Article Reader View inside Modal */
+                  <div className="p-6 space-y-4">
+                    <button
+                      type="button"
+                      onClick={() => setModalSelectedArticle(null)}
+                      className={`flex items-center space-x-1.5 px-3 py-1.5 border rounded-lg text-xs font-semibold transition-all ${
+                        isDark 
+                          ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700/50' 
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <span>Back to Search</span>
+                    </button>
+                    
+                    <h3 className={`text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      {modalSelectedArticle.title}
+                    </h3>
+                    
+                    <div 
+                      className={`prose prose-sm dark:prose-invert max-w-none pt-4 border-t whitespace-pre-wrap leading-relaxed text-xs ${
+                        isDark ? 'text-slate-200 border-white/[0.05]' : 'text-slate-700 border-slate-100'
+                      }`}
+                      dangerouslySetInnerHTML={{ __html: modalSelectedArticle.content }}
+                    />
+                    
+                    <div className={`mt-6 pt-4 border-t flex flex-col items-center justify-between gap-4 ${
+                      isDark ? 'border-white/[0.05]' : 'border-slate-150'
                     }`}>
-                      Before we raise a ticket, we found <strong className={isDark ? 'text-[#38b1f7]' : 'text-sky-700'}>{suggestedArticles.length} article{suggestedArticles.length !== 1 ? 's' : ''}</strong> that might resolve your issue right away. Take a look — it could save you the wait.
-                    </p>
+                      <p className={`text-xs text-center font-semibold ${isDark ? 'text-slate-400' : 'text-slate-650'}`}>
+                        Did this self-help guide resolve your support issue?
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-3 w-full">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowCreateModal(false);
+                            setWizardStep("choice");
+                            setModalSelectedArticle(null);
+                            setModalKbSearch("");
+                            toast.success("Awesome! We are glad this article solved your issue.");
+                          }}
+                          className="flex-1 px-4 py-2.5 text-xs font-semibold rounded-xl border border-emerald-500/20 text-emerald-450 bg-emerald-950/20 hover:bg-emerald-950/40 text-center animate-pulse"
+                        >
+                          ✅ Yes, this resolved my issue
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setModalSelectedArticle(null);
+                            setWizardStep("intake");
+                            setCreateForm(prev => ({
+                              ...prev,
+                              title: modalSelectedArticle.title.startsWith("How to ") ? modalSelectedArticle.title.replace("How to ", "") : modalSelectedArticle.title,
+                              description: "I reviewed the self-help guide \"" + modalSelectedArticle.title + "\" but still need support because: ",
+                            }));
+                          }}
+                          className="flex-1 btn-cyber h-9 text-xs flex items-center justify-center text-center shadow-none"
+                        >
+                          ❌ No, I need to raise a ticket
+                        </button>
+                      </div>
+                    </div>
                   </div>
-
-                  <div className="space-y-2.5">
-                    {suggestedArticles.map((art, idx) => (
-                      <div
-                        key={art.id}
-                        className={`p-4 rounded-xl border transition-all group ${
+                ) : (
+                  /* KB Search/List View inside Modal */
+                  <div className="p-6 space-y-4">
+                    {/* Search bar input */}
+                    <div className="relative mb-2">
+                      <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={modalKbSearch}
+                        onChange={(e) => {
+                          setModalKbSearch(e.target.value);
+                          searchModalKb(e.target.value);
+                        }}
+                        placeholder="Search for password, Outlook, billing, domain, etc..."
+                        className={`w-full pl-10 pr-4 py-2.5 text-xs h-[42px] rounded-xl outline-none focus:ring-1 transition-all ${
                           isDark
-                            ? 'bg-slate-900/50 border-white/[0.05] hover:border-[#38b1f7]/25 hover:bg-slate-900'
-                            : 'bg-white border-slate-200 hover:border-sky-300 hover:shadow-sm'
+                            ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
+                            : "bg-white border border-slate-200 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
+                        }`}
+                      />
+                    </div>
+
+                    {/* Quick shortcuts row */}
+                    <div className="flex flex-wrap items-center gap-1.5 pb-2">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-450'} mr-1`}>
+                        Shortcuts:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => { setModalKbSearch("password"); searchModalKb("password"); }}
+                        className={`px-2.5 py-1 text-[10px] rounded-full border transition-all ${
+                          isDark ? 'bg-slate-800/40 border-slate-700 text-slate-300 hover:bg-slate-850' : 'bg-slate-55 border-slate-200 text-slate-655 hover:bg-slate-100'
                         }`}
                       >
-                        <div className="flex items-start gap-3">
-                          <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 ${
-                            isDark ? 'bg-[#38b1f7]/15 text-[#38b1f7]' : 'bg-sky-100 text-sky-700'
-                          }`}>{idx + 1}</div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className={`text-sm font-bold mb-1 transition-colors ${
-                              isDark ? 'text-slate-100 group-hover:text-[#38b1f7]' : 'text-slate-800 group-hover:text-sky-700'
-                            }`}>{art.title}</h4>
-                            <p className={`text-xs line-clamp-2 leading-relaxed ${
-                              isDark ? 'text-slate-500' : 'text-slate-500'
-                            }`}>{art.content.replace(/<[^>]*>/g, '').substring(0, 140)}...</p>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                handleReadArticle(art);
-                                setActiveTab("kb");
-                                setShowCreateModal(false);
-                                setWizardStep("intake");
-                              }}
-                              className={`text-[11px] font-bold mt-2 inline-flex items-center gap-1 ${
-                                isDark ? 'text-[#38b1f7] hover:text-white' : 'text-sky-600 hover:text-sky-800'
-                              }`}
-                            >
-                              Read full article <ArrowRight className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                        🔑 Password Reset
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setModalKbSearch("outlook"); searchModalKb("outlook"); }}
+                        className={`px-2.5 py-1 text-[10px] rounded-full border transition-all ${
+                          isDark ? 'bg-slate-800/40 border-slate-700 text-slate-300 hover:bg-slate-850' : 'bg-slate-55 border-slate-200 text-slate-655 hover:bg-slate-100'
+                        }`}
+                      >
+                        📧 Outlook Config
+                      </button>
+                    </div>
 
-                <div className={`px-6 py-4 border-t flex flex-col sm:flex-row gap-3 ${
-                  isDark ? 'border-[#1E293B] bg-slate-900/20' : 'border-slate-100 bg-slate-50/50'
-                }`}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreateModal(false);
-                      setWizardStep("intake");
-                      setCreateForm(prev => ({ ...prev, title: "", description: "", affectedDomain: "", issueType: "" }));
-                      setSelectedFile(null);
-                      setSuggestedArticles([]);
-                      toast.success("Great! Glad the articles helped. Ticket creation cancelled.");
-                    }}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-xl border transition-all ${
-                      isDark
-                        ? 'border-emerald-500/25 text-emerald-400 bg-emerald-950/20 hover:bg-emerald-950/40'
-                        : 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100'
-                    }`}
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Yes, this resolved my issue</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWizardStep("routing")}
-                    className="flex-1 btn-cyber h-10 text-xs flex items-center justify-center gap-2"
-                  >
-                    <span>Still need help — raise ticket</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                    {/* Results list */}
+                    <div className="space-y-2.5 max-h-[40vh] overflow-y-auto pr-1">
+                      {loadingModalKb ? (
+                        <div className="space-y-3">
+                          <div className={`h-16 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
+                          <div className={`h-16 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
+                        </div>
+                      ) : modalKbArticles.length === 0 ? (
+                        <div className={`p-8 text-center text-xs ${isDark ? 'text-slate-550' : 'text-slate-450'} border border-dashed rounded-xl dark:border-white/[0.03] border-slate-100`}>
+                          No articles found for &quot;{modalKbSearch}&quot;. Search custom keywords or click shortcuts above.
+                        </div>
+                      ) : (
+                        modalKbArticles.map((art) => (
+                          <div
+                            key={art.id}
+                            onClick={() => setModalSelectedArticle(art)}
+                            className={`p-4 rounded-xl border cursor-pointer text-left transition-all group ${
+                              isDark
+                                ? 'bg-slate-900/50 border-white/[0.05] hover:border-[#38b1f7]/25 hover:bg-slate-900'
+                                : 'bg-white border-slate-200 hover:border-[#38b1f7]/30 hover:shadow-sm'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="min-w-0">
+                                <h4 className={`text-xs font-bold mb-1 transition-colors truncate ${
+                                  isDark ? 'text-slate-100 group-hover:text-[#38b1f7]' : 'text-slate-850 group-hover:text-[#0d7fc0]'
+                                }`}>{art.title}</h4>
+                                <p className={`text-[10px] line-clamp-2 leading-relaxed ${
+                                  isDark ? 'text-slate-400' : 'text-slate-550'
+                                }`}>{art.content.replace(/<[^>]*>/g, '').substring(0, 140)}...</p>
+                              </div>
+                              <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform mt-0.5 shrink-0" />
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Footer Nav inside Search view */}
+                    <div className={`px-6 py-4 -mx-6 -mb-6 border-t flex items-center justify-between ${
+                      isDark ? 'border-[#1E293B] bg-slate-900/20' : 'border-slate-100 bg-slate-50/50'
+                    }`}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWizardStep("choice");
+                          setModalKbSearch("");
+                          setModalKbArticles([]);
+                        }}
+                        className={`flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-lg transition-colors ${
+                          isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        Back
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWizardStep("intake");
+                          setCreateForm(prev => ({
+                            ...prev,
+                            issueType: "technical",
+                          }));
+                        }}
+                        className="btn-cyber h-10 px-5 text-xs flex items-center gap-2"
+                      >
+                        <span>Still need help — raise ticket</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

@@ -542,7 +542,7 @@ async function getPublicArticlesForSitemap() {
     });
 }
 async function getPublicArticleBySlug(slug) {
-    return prisma_js_1.prisma.knowledgeBaseArticle.findUnique({
+    const article = await prisma_js_1.prisma.knowledgeBaseArticle.findUnique({
         where: {
             slug,
             isPublished: true,
@@ -554,6 +554,26 @@ async function getPublicArticleBySlug(slug) {
             tags: { select: { name: true } },
         },
     });
+    if (!article)
+        return null;
+    return {
+        id: article.id,
+        title: article.title,
+        slug: article.slug,
+        content: article.content,
+        created_at: article.createdAt,
+        updated_at: article.updatedAt,
+        author_name: article.author?.name || null,
+        category_name: article.category?.name || null,
+        tags: article.tags.map((t) => t.name),
+        meta_title: article.metaTitle,
+        meta_description: article.metaDescription,
+        keywords: article.keywords,
+        canonical_url: article.canonicalUrl,
+        og_image: article.ogImage,
+        total_reads: article.totalReads,
+        unique_reads: article.uniqueReads,
+    };
 }
 // --- SECURITY MONITORING ---
 async function listSecurityEvents(filters) {

@@ -1235,7 +1235,7 @@ export default function AdminDashboard() {
                         className="admin-btn admin-btn-primary admin-btn-sm text-[11px] gap-1 px-2.5"
                         style={{ height: 26 }}
                       >
-                        <Check className="w-3.5 h-3.5 text-white" />
+                        <Check className="w-3.5 h-3.5" />
                         Resolve Ticket
                       </button>
                     )}

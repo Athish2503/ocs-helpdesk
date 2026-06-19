@@ -50,7 +50,9 @@ const fileFilter = (req, file, cb) => {
         cb(null, true);
     }
     else {
-        cb(new Error(`Invalid file type. Only ${allowedExts.join(", ")} files are allowed.`), false);
+        const err = new Error(`Invalid file type. Only ${allowedExts.join(", ")} files are allowed.`);
+        err.statusCode = 400;
+        cb(err, false);
     }
 };
 // Multer upload middleware

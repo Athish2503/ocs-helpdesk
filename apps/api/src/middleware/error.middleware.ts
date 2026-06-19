@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
+import multer from "multer";
 
 interface AppError extends Error {
   statusCode?: number;
@@ -11,6 +12,7 @@ interface AppError extends Error {
  *
  * Handles:
  *  - ZodError → 422 Unprocessable Entity with field-level details
+ *  - MulterError → 400 Bad Request with clean file size/type validation details
  *  - AppError  → statusCode from the thrown error
  *  - Unknown   → 500 Internal Server Error
  */
@@ -32,6 +34,22 @@ export function errorHandler(
           field: e.path.join("."),
           message: e.message,
         })),
+      },
+    });
+    return;
+  }
+
+  // ── Multer errors ────────────────────────────────────────────────────────
+  if (err instanceof multer.MulterError) {
+    let message = err.message;
+    if (err.code === "LIMIT_FILE_SIZE") {
+      message = "File too large. Maximum size allowed is 5MB.";
+    }
+    res.status(400).json({
+      success: false,
+      error: {
+        code: "UPLOAD_ERROR",
+        message,
       },
     });
     return;

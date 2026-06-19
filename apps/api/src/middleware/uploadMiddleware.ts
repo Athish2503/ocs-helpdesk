@@ -47,7 +47,9 @@ const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilt
   if (allowedTypes.includes(file.mimetype) && allowedExts.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new Error(`Invalid file type. Only ${allowedExts.join(", ")} files are allowed.`) as any, false);
+    const err = new Error(`Invalid file type. Only ${allowedExts.join(", ")} files are allowed.`);
+    (err as any).statusCode = 400;
+    cb(err as any, false);
   }
 };
 

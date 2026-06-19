@@ -108,6 +108,20 @@ body {
   transition: transform 150ms ease, background-color 150ms ease;
 }
 
+.btn-primary svg {
+  color: inherit;
+}
+
+.admin-dark .btn-primary,
+.dark .btn-primary {
+  color: #020617;
+}
+
+.admin-dark .btn-primary svg,
+.dark .btn-primary svg {
+  color: #020617;
+}
+
 .btn-primary:hover {
   background-color: var(--primary-600);
   transform: scale(1.02);
@@ -347,7 +361,7 @@ body {
   height: 48px;
   padding: 0 24px;
   background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
-  color: #020617;
+  color: #FFFFFF;
   font-weight: 700;
   font-size: 14px;
   letter-spacing: 0.025em;
@@ -358,6 +372,20 @@ body {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+}
+
+.btn-cyber svg {
+  color: inherit;
+}
+
+.admin-dark .btn-cyber,
+.dark .btn-cyber {
+  color: #020617;
+}
+
+.admin-dark .btn-cyber svg,
+.dark .btn-cyber svg {
+  color: #020617;
 }
 
 .btn-cyber:hover {
@@ -675,6 +703,20 @@ h1, h2, h3, h4, h5, h6 {
   color: #ffffff;
   border-color: transparent;
   box-shadow: 0 1px 3px rgba(56, 177, 247, 0.3);
+}
+
+.admin-btn-primary svg {
+  color: inherit;
+}
+
+.admin-dark .admin-btn-primary,
+.dark .admin-btn-primary {
+  color: #020617;
+}
+
+.admin-dark .admin-btn-primary svg,
+.dark .admin-btn-primary svg {
+  color: #020617;
 }
 .admin-btn-primary:hover:not(:disabled) {
   background: linear-gradient(135deg, #5fc0f9 0%, #38b1f7 100%);
@@ -1100,3 +1142,111 @@ h1, h2, h3, h4, h5, h6 {
 .admin-sidebar {
   transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* ── Prose rich text styling ─────────────────────────────────────── */
+.prose {
+  h1 {
+    font-size: 2.25rem;
+    font-weight: 800;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    line-height: 1.25;
+  }
+  h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-top: 1.75rem;
+    margin-bottom: 0.75rem;
+    line-height: 1.35;
+  }
+  h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+  h4 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+  }
+  p {
+    margin-bottom: 1rem;
+    line-height: 1.625;
+  }
+  strong {
+    font-weight: 700;
+  }
+  em {
+    font-style: italic;
+  }
+  u {
+    text-decoration: underline;
+  }
+  s {
+    text-decoration: line-through;
+  }
+  ul {
+    list-style-type: disc;
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  ol {
+    list-style-type: decimal;
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  li {
+    margin-bottom: 0.25rem;
+  }
+  a {
+    color: #38b1f7;
+    text-decoration: underline;
+    &:hover {
+      color: #129ff0;
+    }
+  }
+  blockquote {
+    border-left: 4px solid #1e293b;
+    padding-left: 1rem;
+    font-style: italic;
+    color: #94a3b8;
+    margin-bottom: 1rem;
+  }
+  pre {
+    background-color: #0f172a;
+    padding: 1rem;
+    border-radius: 0.75rem;
+    overflow-x: auto;
+    margin-bottom: 1rem;
+    code {
+      background-color: transparent;
+      padding: 0;
+      border-radius: 0;
+      color: #f8fafc;
+    }
+  }
+  code {
+    background-color: #1e293b;
+    color: #38b1f7;
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+    font-family: monospace;
+    font-size: 0.875em;
+  }
+  hr {
+    border: 0;
+    border-top: 1px solid #1e293b;
+    margin: 2rem 0;
+  }
+}
+
+/* Placeholder support for contenteditable elements */
+div[contenteditable]:empty::before {
+  content: attr(placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+  display: block;
+}
+

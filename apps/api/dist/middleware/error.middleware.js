@@ -1,13 +1,18 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.errorHandler = errorHandler;
 const zod_1 = require("zod");
+const multer_1 = __importDefault(require("multer"));
 /**
  * Centralised Express error-handling middleware.
  * Must be registered LAST (after all routes).
  *
  * Handles:
  *  - ZodError → 422 Unprocessable Entity with field-level details
+ *  - MulterError → 400 Bad Request with clean file size/type validation details
  *  - AppError  → statusCode from the thrown error
  *  - Unknown   → 500 Internal Server Error
  */
@@ -24,6 +29,21 @@ function errorHandler(err, _req, res, _next) {
                     field: e.path.join("."),
                     message: e.message,
                 })),
+            },
+        });
+        return;
+    }
+    // ── Multer errors ────────────────────────────────────────────────────────
+    if (err instanceof multer_1.default.MulterError) {
+        let message = err.message;
+        if (err.code === "LIMIT_FILE_SIZE") {
+            message = "File too large. Maximum size allowed is 5MB.";
+        }
+        res.status(400).json({
+            success: false,
+            error: {
+                code: "UPLOAD_ERROR",
+                message,
             },
         });
         return;

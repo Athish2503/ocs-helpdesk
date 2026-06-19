@@ -101,7 +101,7 @@ function ResetPasswordForm() {
 
         <Link 
           href="/forgot-password" 
-          className="w-full h-12 bg-[#38b1f7] hover:bg-[#004b70] text-white font-bold rounded-xl flex items-center justify-center transition-all duration-200 shadow-md cursor-pointer"
+          className="btn-cyber w-full h-12 text-base font-bold shadow-md"
         >
           Request new reset link
         </Link>
@@ -126,10 +126,10 @@ function ResetPasswordForm() {
 
         <Link 
           href="/login" 
-          className="w-full h-12 bg-[#38b1f7] hover:bg-[#004b70] text-white font-bold rounded-xl flex items-center justify-center space-x-2 shadow-lg shadow-[#005d89]/20 transition-all duration-200 cursor-pointer"
+          className="btn-cyber w-full h-12 text-base font-bold shadow-lg shadow-[#005d89]/20"
         >
           <span>Sign in with new password</span>
-          <ArrowRight className="w-4.5 h-4.5 text-white" />
+          <ArrowRight className="w-4.5 h-4.5" />
         </Link>
       </div>
     );
@@ -253,17 +253,17 @@ function ResetPasswordForm() {
       <button
         type="submit"
         disabled={isSubmitting || !isFormValid}
-        className="w-full h-12 bg-[#38b1f7] hover:bg-[#004b70] disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-xl flex items-center justify-center space-x-2 shadow-lg disabled:shadow-none shadow-[#005d89]/25 hover:shadow-xl hover:shadow-[#005d89]/35 hover:-translate-y-0.5 disabled:hover:translate-y-0 active:translate-y-0 transition-all duration-200 cursor-pointer disabled:pointer-events-none"
+        className="btn-cyber w-full h-12 text-base font-bold shadow-lg shadow-[#005d89]/25 hover:shadow-xl hover:shadow-[#005d89]/35 disabled:bg-slate-200 disabled:text-slate-400 disabled:pointer-events-none"
       >
         {isSubmitting ? (
           <>
-            <Loader2 className="w-4.5 h-4.5 animate-spin text-white" />
+            <Loader2 className="w-4.5 h-4.5 animate-spin" />
             <span>Resetting password...</span>
           </>
         ) : (
           <>
             <span>Reset Password</span>
-            <ArrowRight className="w-4.5 h-4.5 text-white" />
+            <ArrowRight className="w-4.5 h-4.5" />
           </>
         )}
       </button>

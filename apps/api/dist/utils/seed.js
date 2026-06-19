@@ -283,5 +283,106 @@ async function seedRedesignData() {
             secondaryAssigneeId: l2User.id,
         },
     });
+    // Seed KB articles for Self-Help
+    const generalInquiryCat = await prisma_js_1.prisma.category.findUnique({
+        where: { name: "General Inquiry" },
+    });
+    const emailCat = await prisma_js_1.prisma.category.findUnique({
+        where: { name: "Email" },
+    });
+    const passwordArticleTitle = "How to Reset Your Account Password";
+    const passwordArticleSlug = "reset-account-password";
+    await prisma_js_1.prisma.knowledgeBaseArticle.upsert({
+        where: { slug: passwordArticleSlug },
+        update: {
+            title: passwordArticleTitle,
+            content: `
+        <h2>Password Reset Instructions</h2>
+        <p>To change or reset your account password, follow these simple steps:</p>
+        <ol>
+          <li>Go to the login screen and click <strong>Forgot Password</strong>.</li>
+          <li>Enter your registered email address and click <strong>Send Link</strong>.</li>
+          <li>Check your inbox for the reset email, click the link, and enter a new password.</li>
+        </ol>
+        <p>If you're already logged in, you can update your password directly from the <strong>Profile Settings</strong> tab in your customer dashboard.</p>
+      `.trim(),
+            isPublished: true,
+            isInternal: false,
+            authorId: adminUser.id,
+            categoryId: generalInquiryCat?.id || null,
+        },
+        create: {
+            title: passwordArticleTitle,
+            slug: passwordArticleSlug,
+            content: `
+        <h2>Password Reset Instructions</h2>
+        <p>To change or reset your account password, follow these simple steps:</p>
+        <ol>
+          <li>Go to the login screen and click <strong>Forgot Password</strong>.</li>
+          <li>Enter your registered email address and click <strong>Send Link</strong>.</li>
+          <li>Check your inbox for the reset email, click the link, and enter a new password.</li>
+        </ol>
+        <p>If you're already logged in, you can update your password directly from the <strong>Profile Settings</strong> tab in your customer dashboard.</p>
+      `.trim(),
+            isPublished: true,
+            isInternal: false,
+            authorId: adminUser.id,
+            categoryId: generalInquiryCat?.id || null,
+        },
+    });
+    const outlookArticleTitle = "How to Configure Outlook IMAP/SMTP Client";
+    const outlookArticleSlug = "configure-outlook-imap-smtp";
+    await prisma_js_1.prisma.knowledgeBaseArticle.upsert({
+        where: { slug: outlookArticleSlug },
+        update: {
+            title: outlookArticleTitle,
+            content: `
+        <h2>Outlook Email Configuration</h2>
+        <p>Follow these settings to connect your OCS corporate email address to Microsoft Outlook:</p>
+        <h3>Incoming Mail (IMAP) Server</h3>
+        <ul>
+          <li><strong>Server:</strong> imap.ocs-mail.com</li>
+          <li><strong>Port:</strong> 993</li>
+          <li><strong>Encryption:</strong> SSL/TLS</li>
+        </ul>
+        <h3>Outgoing Mail (SMTP) Server</h3>
+        <ul>
+          <li><strong>Server:</strong> smtp.ocs-mail.com</li>
+          <li><strong>Port:</strong> 465</li>
+          <li><strong>Encryption:</strong> SSL/TLS</li>
+          <li><strong>Authentication:</strong> Enabled (same credentials as incoming)</li>
+        </ul>
+      `.trim(),
+            isPublished: true,
+            isInternal: false,
+            authorId: adminUser.id,
+            categoryId: emailCat?.id || null,
+        },
+        create: {
+            title: outlookArticleTitle,
+            slug: outlookArticleSlug,
+            content: `
+        <h2>Outlook Email Configuration</h2>
+        <p>Follow these settings to connect your OCS corporate email address to Microsoft Outlook:</p>
+        <h3>Incoming Mail (IMAP) Server</h3>
+        <ul>
+          <li><strong>Server:</strong> imap.ocs-mail.com</li>
+          <li><strong>Port:</strong> 993</li>
+          <li><strong>Encryption:</strong> SSL/TLS</li>
+        </ul>
+        <h3>Outgoing Mail (SMTP) Server</h3>
+        <ul>
+          <li><strong>Server:</strong> smtp.ocs-mail.com</li>
+          <li><strong>Port:</strong> 465</li>
+          <li><strong>Encryption:</strong> SSL/TLS</li>
+          <li><strong>Authentication:</strong> Enabled (same credentials as incoming)</li>
+        </ul>
+      `.trim(),
+            isPublished: true,
+            isInternal: false,
+            authorId: adminUser.id,
+            categoryId: emailCat?.id || null,
+        },
+    });
     console.log("✅  Redesign Users, Teams, Credits, and Routing Rules seeded successfully!");
 }

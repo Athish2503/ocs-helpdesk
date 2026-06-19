@@ -237,17 +237,17 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full h-12 bg-[#38b1f7] hover:bg-[#004b70] text-white font-bold rounded-xl flex items-center justify-center space-x-2 shadow-lg shadow-[#005d89]/25 hover:shadow-xl hover:shadow-[#005d89]/35 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+              className="btn-cyber w-full h-12 text-base font-bold shadow-lg shadow-[#005d89]/25 hover:shadow-xl hover:shadow-[#005d89]/35"
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="w-4.5 h-4.5 animate-spin text-white" />
+                  <Loader2 className="w-4.5 h-4.5 animate-spin" />
                   <span>Signing in...</span>
                 </>
               ) : (
                 <>
                   <span>Sign in to Dashboard</span>
-                  <ArrowRight className="w-4.5 h-4.5 text-white" />
+                  <ArrowRight className="w-4.5 h-4.5" />
                 </>
               )}
             </button>

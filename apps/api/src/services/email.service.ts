@@ -249,3 +249,160 @@ Please check your portal to respond.
     text,
   });
 }
+
+export async function sendCustomerTicketCreatedEmail(
+  email: string,
+  ticketDetails: {
+    id: string;
+    title: string;
+    description: string;
+    category: string;
+    priority: string;
+    customerName: string;
+  }
+): Promise<void> {
+  const text = `
+Dear ${ticketDetails.customerName},
+
+Thank you for contacting OCS Support. Your ticket has been successfully created.
+
+Ticket Details:
+- Ticket ID: ${ticketDetails.id}
+- Title: ${ticketDetails.title}
+- Category: ${ticketDetails.category}
+- Priority: ${ticketDetails.priority}
+
+Description:
+${ticketDetails.description}
+
+Our support team is reviewing your ticket and will get back to you as soon as possible. You can track the status of your ticket and add updates via the support portal.
+
+Best regards,
+OCS Helpdesk Team
+  `.trim();
+
+  const html = `
+    <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <span style="font-size: 24px; font-weight: 800; color: #0ea5e9; letter-spacing: -0.5px;">OCS Helpdesk</span>
+      </div>
+      <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px; color: #0f172a; text-align: center;">Ticket Received</h2>
+      <p style="font-size: 15px; color: #475569; line-height: 24px; margin-bottom: 24px;">
+        Hi ${ticketDetails.customerName},<br/><br/>
+        We've received your support request and our team is already looking into it. Here are the details of your ticket for your reference:
+      </p>
+      
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 14px; background-color: #f8fafc; border-radius: 12px; padding: 16px; display: table;">
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 12px; font-weight: 600; color: #64748b; width: 120px;">Ticket ID</td>
+          <td style="padding: 12px; color: #0f172a; font-family: monospace; font-weight: bold;">${ticketDetails.id}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 12px; font-weight: 600; color: #64748b;">Title</td>
+          <td style="padding: 12px; color: #0f172a;">${ticketDetails.title}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 12px; font-weight: 600; color: #64748b;">Category</td>
+          <td style="padding: 12px; color: #0f172a;">${ticketDetails.category}</td>
+        </tr>
+        <tr>
+          <td style="padding: 12px; font-weight: 600; color: #64748b;">Priority</td>
+          <td style="padding: 12px; font-weight: bold; color: ${ticketDetails.priority === 'HIGH' ? '#ef4444' : ticketDetails.priority === 'MEDIUM' ? '#f59e0b' : '#3b82f6'}">${ticketDetails.priority}</td>
+        </tr>
+      </table>
+
+      <div style="background-color: #f1f5f9; border-radius: 8px; padding: 16px; margin-bottom: 24px; font-size: 14px; color: #334155; border-left: 4px solid #0ea5e9;">
+        <h4 style="margin: 0 0 8px 0; font-weight: 600; color: #475569;">Description:</h4>
+        <p style="margin: 0; white-space: pre-wrap; line-height: 20px;">${ticketDetails.description}</p>
+      </div>
+
+      <div style="text-align: center; margin-bottom: 24px;">
+        <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/customer/tickets/${ticketDetails.id}" style="display: inline-block; background-color: #0ea5e9; color: #ffffff; font-weight: 600; font-size: 15px; padding: 12px 32px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(14, 165, 233, 0.2);">
+          View Ticket Portal
+        </a>
+      </div>
+
+      <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; text-align: center; font-size: 12px; color: #94a3b8;">
+        This is an automated notification. Please do not reply directly to this email.
+      </div>
+    </div>
+  `;
+
+  await sendEmail({
+    to: email,
+    subject: `[Ticket Received] #${ticketDetails.id}: ${ticketDetails.title}`,
+    html,
+    text,
+  });
+}
+
+export async function sendCustomerTicketResolvedEmail(
+  email: string,
+  ticketDetails: {
+    id: string;
+    title: string;
+    customerName: string;
+  }
+): Promise<void> {
+  const text = `
+Dear ${ticketDetails.customerName},
+
+Great news! Your support ticket has been resolved by our team.
+
+Ticket ID: ${ticketDetails.id}
+Title: ${ticketDetails.title}
+
+If your issue has been fully addressed, no further action is required. If you feel the issue has not been fully resolved, you can reopen it or contact us through the portal.
+
+Thank you for your patience!
+
+Best regards,
+OCS Helpdesk Team
+  `.trim();
+
+  const html = `
+    <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <span style="font-size: 24px; font-weight: 800; color: #10b981; letter-spacing: -0.5px;">OCS Helpdesk</span>
+      </div>
+      <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px; color: #0f172a; text-align: center;">Ticket Resolved!</h2>
+      <p style="font-size: 15px; color: #475569; line-height: 24px; margin-bottom: 24px;">
+        Hi ${ticketDetails.customerName},<br/><br/>
+        We are pleased to inform you that your support ticket has been marked as <strong>Resolved</strong>.
+      </p>
+      
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 14px; background-color: #f0fdf4; border-radius: 12px; padding: 16px; display: table; border: 1px solid #bbf7d0;">
+        <tr style="border-bottom: 1px solid #bbf7d0;">
+          <td style="padding: 12px; font-weight: 600; color: #166534; width: 120px;">Ticket ID</td>
+          <td style="padding: 12px; color: #14532d; font-family: monospace; font-weight: bold;">${ticketDetails.id}</td>
+        </tr>
+        <tr>
+          <td style="padding: 12px; font-weight: 600; color: #166534;">Title</td>
+          <td style="padding: 12px; color: #14532d;">${ticketDetails.title}</td>
+        </tr>
+      </table>
+
+      <p style="font-size: 14px; color: #475569; line-height: 22px; margin-bottom: 24px;">
+        If you have any further questions or if the issue persists, please feel free to view the ticket or reopen it through the portal.
+      </p>
+
+      <div style="text-align: center; margin-bottom: 24px;">
+        <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/customer/tickets/${ticketDetails.id}" style="display: inline-block; background-color: #10b981; color: #ffffff; font-weight: 600; font-size: 15px; padding: 12px 32px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);">
+          View Ticket Detail
+        </a>
+      </div>
+
+      <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; text-align: center; font-size: 12px; color: #94a3b8;">
+        Thank you for choosing OCS Support.
+      </div>
+    </div>
+  `;
+
+  await sendEmail({
+    to: email,
+    subject: `[Resolved] Ticket #${ticketDetails.id}: ${ticketDetails.title}`,
+    html,
+    text,
+  });
+}
+

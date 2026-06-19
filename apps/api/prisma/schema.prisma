@@ -345,7 +345,7 @@ model KnowledgeBaseArticleAttachment {
   mimeType         String   @map("mime_type") @db.VarChar(100)
   width            Int?
   height           Int?
-  uploadedBy       String   @map("uploaded_by") @db.VarChar(32)
+  uploadedBy       String   @map("uploaded_by") @db.VarChar(36)
   isFeatured       Boolean  @default(false) @map("is_featured")
   displayOrder     Int      @default(0) @map("display_order")
   createdAt        DateTime @default(now()) @map("created_at")

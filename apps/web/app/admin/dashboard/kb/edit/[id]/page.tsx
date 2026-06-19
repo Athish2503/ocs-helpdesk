@@ -35,6 +35,8 @@ import { useDialog } from "../../../../../../context/DialogContext";
 import ImageUploader from "../../../../../../components/kb/ImageUploader";
 import ImageGallery from "../../../../../../components/kb/ImageGallery";
 
+import RichTextEditor from "../../../../../../components/kb/RichTextEditor";
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }
@@ -42,7 +44,6 @@ interface PageProps {
 export default function EditArticlePage({ params }: PageProps) {
   const router = useRouter();
   const { id } = use(params);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dialog = useDialog();
 
   const [categories, setCategories] = useState<any[]>([]);
@@ -127,6 +128,8 @@ export default function EditArticlePage({ params }: PageProps) {
     loadData();
   }, [id]);
 
+
+
   const handleSave = async () => {
     if (!title.trim() || !content.trim()) {
       await dialog.alert("Title and content are required.", "Validation Error");
@@ -169,28 +172,7 @@ export default function EditArticlePage({ params }: PageProps) {
     }
   };
 
-  // Content helper toolbar function
-  const insertText = (before: string, after: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
 
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = textarea.value;
-    const selected = text.substring(start, end);
-    const replacement = before + (selected || "") + after;
-
-    setContent(text.substring(0, start) + replacement + text.substring(end));
-
-    // Refocus
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(
-        start + before.length,
-        start + before.length + (selected || "").length
-      );
-    }, 10);
-  };
 
   // Tag Add / Remove Handler
   const handleAddTag = () => {
@@ -390,50 +372,10 @@ export default function EditArticlePage({ params }: PageProps) {
                     </label>
                   </div>
 
-                  {/* Formatting helper toolbar */}
-                  <div className="flex flex-wrap gap-1 p-1.5 bg-slate-50/70 dark:bg-slate-950/60 border border-slate-100/80 dark:border-slate-800/80 rounded-2xl mb-1">
-                    {[
-                      { icon: <Bold size={13} />, before: "<strong>", after: "</strong>", title: "Bold" },
-                      { icon: <Italic size={13} />, before: "<em>", after: "</em>", title: "Italic" },
-                      { icon: <Underline size={13} />, before: "<u>", after: "</u>", title: "Underline" },
-                      { icon: <Strikethrough size={13} />, before: "<s>", after: "</s>", title: "Strikethrough" },
-                      { label: "H1", before: "<h2>", after: "</h2>", title: "Heading 1" },
-                      { label: "H2", before: "<h3>", after: "</h3>", title: "Heading 2" },
-                      { label: "H3", before: "<h4>", after: "</h4>", title: "Heading 3" },
-                      { label: "x₂", before: "<sub>", after: "</sub>", title: "Subscript" },
-                      { label: "x²", before: "<sup>", after: "</sup>", title: "Superscript" },
-                      { icon: <List size={13} />, before: "<ul>\n  <li>", after: "</li>\n</ul>", title: "Bulleted List" },
-                      { icon: <ListOrdered size={13} />, before: "<ol>\n  <li>", after: "</li>\n</ol>", title: "Numbered List" },
-                      { icon: <AlignLeft size={13} />, before: '<div className="text-left">', after: "</div>", title: "Align Left" },
-                      { icon: <AlignCenter size={13} />, before: '<div className="text-center">', after: "</div>", title: "Align Center" },
-                      { icon: <AlignRight size={13} />, before: '<div className="text-right">', after: "</div>", title: "Align Right" },
-                      { icon: <LinkIcon size={13} />, before: '<a href="https://example.com" target="_blank">', after: "</a>", title: "Insert Link" },
-                      { icon: <ImageIcon size={13} />, before: '<img src="https://example.com/image.png" alt="Description" />', after: "", title: "Insert Image" },
-                      { icon: <Quote size={13} />, before: "<blockquote>", after: "</blockquote>", title: "Blockquote" },
-                      { icon: <Code size={13} />, before: "<pre><code>", after: "</code></pre>", title: "Insert Code Block" },
-                      { icon: <Minus size={13} />, before: "<hr />", after: "", title: "Horizontal Line" },
-                      { icon: <Trash2 size={13} />, custom: () => setContent(""), title: "Clear All" },
-                    ].map((btn, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => btn.custom ? btn.custom() : insertText(btn.before, btn.after)}
-                        className="w-7 h-7 flex items-center justify-center border border-transparent hover:border-slate-200 dark:hover:border-slate-800 hover:bg-white dark:hover:bg-slate-900 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-all text-xs font-bold"
-                        title={btn.title}
-                      >
-                        {btn.icon || btn.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <textarea
-                    ref={textareaRef}
-                    required
+                  <RichTextEditor
                     value={content}
-                    onChange={(e) => setContent(e.target.value)}
+                    onChange={setContent}
                     placeholder="Write article details. HTML formatting is supported (e.g. <p>, <h2>, <ul>, <li>)."
-                    rows={18}
-                    className="w-full px-4 py-3 bg-slate-50/50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800 focus:border-blue-500 rounded-2xl text-sm placeholder-slate-400 focus:outline-none transition-all resize-y text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-blue-500/10 leading-relaxed font-sans"
                   />
                 </div>
               </div>
