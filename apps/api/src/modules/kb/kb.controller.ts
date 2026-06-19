@@ -8,7 +8,7 @@ import {
 } from "./kb.schemas.js";
 import * as KbService from "./kb.service.js";
 import { canAccessArticle } from "../../middleware/abac.middleware.js";
-import { generateSitemap } from "../../utils/seoHelper.js";
+import { generateSitemap, extractKeywords } from "../../utils/seoHelper.js";
 import { generateFingerprint, hashIP } from "../../utils/securityHelper.js";
 import { getImageDimensions, deleteUploadedFile } from "../../middleware/uploadMiddleware.js";
 import { sanitizeResponse } from "../../middleware/publicSecurity.js";
@@ -400,6 +400,51 @@ export async function getPublicArticleBySlugHandler(req: Request, res: Response,
 
     const sanitized = sanitizeResponse(article);
     ok(res, { article: sanitized });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getArticleSuggestionsHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const text = (req.query["text"] as string) || "";
+    const categoryId = (req.query["categoryId"] as string) || undefined;
+
+    if (!text.trim()) {
+      res.status(200).json({ success: true, data: { articles: [] } });
+      return;
+    }
+
+    const keywords = extractKeywords(text, 5);
+
+    if (keywords.length === 0) {
+      res.status(200).json({ success: true, data: { articles: [] } });
+      return;
+    }
+
+    const where: any = {
+      isPublished: true,
+      isInternal: false,
+    };
+
+    if (categoryId) {
+      where.categoryId = categoryId;
+    }
+
+    where.OR = keywords.flatMap((keyword) => [
+      { title: { contains: keyword, mode: "insensitive" } },
+      { content: { contains: keyword, mode: "insensitive" } },
+    ]);
+
+    const articles = await prisma.knowledgeBaseArticle.findMany({
+      where,
+      include: {
+        category: { select: { id: true, name: true } },
+      },
+      take: 5,
+    });
+
+    res.status(200).json({ success: true, data: { articles } });
   } catch (err) {
     next(err);
   }

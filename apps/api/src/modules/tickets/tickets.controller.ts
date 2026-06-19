@@ -57,3 +57,37 @@ export async function updateTicketHandler(req: Request, res: Response, next: Nex
     next(err);
   }
 }
+
+import { prisma } from "../../config/prisma.js";
+
+export async function uploadTicketAttachmentHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = req.params.id as string;
+    if (!req.file) {
+      res.status(400).json({ success: false, error: { message: "No file uploaded" } });
+      return;
+    }
+
+    const ticket = await prisma.ticket.findUnique({
+      where: { id },
+    });
+
+    if (!ticket) {
+      res.status(404).json({ success: false, error: { message: "Ticket not found" } });
+      return;
+    }
+
+    const attachment = await prisma.ticketAttachment.create({
+      data: {
+        ticketId: id,
+        filename: req.file.filename,
+        filePath: `/uploads/kb/images/${req.file.filename}`, // Reuse standard static uploads directory path
+        mimeType: req.file.mimetype,
+      },
+    });
+
+    res.status(201).json({ success: true, data: { attachment } });
+  } catch (err) {
+    next(err);
+  }
+}

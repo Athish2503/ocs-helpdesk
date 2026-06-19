@@ -4,23 +4,29 @@ import {
   createCategoryHandler,
   updateCategoryHandler,
   deleteCategoryHandler,
+  bulkDeleteCategoriesHandler,
 } from "./categories.controller.js";
 import { requireAuth } from "../../middleware/auth.middleware.js";
-import { requireRole } from "../../middleware/role.middleware.js";
+import { requireRole, requirePermission } from "../../middleware/role.middleware.js";
 
 const router = Router();
 
 // Retrieve categories - accessible by any logged-in user (filtered or unfiltered based on role/query)
 router.get("/", requireAuth, getCategoriesHandler);
 
-// Create a new category - ADMIN only
-router.post("/", requireAuth, requireRole("ADMIN"), createCategoryHandler);
+// Create a new category - ADMIN only (with permission)
+router.post("/", requireAuth, requirePermission("manage_categories_rules"), createCategoryHandler);
 
-// Update a category - ADMIN only
-router.patch("/:id", requireAuth, requireRole("ADMIN"), updateCategoryHandler);
+// Bulk delete categories - ADMIN only (with permission)
+router.post("/bulk-delete", requireAuth, requirePermission("manage_categories_rules"), bulkDeleteCategoriesHandler);
 
-// Delete a category - ADMIN only
-router.delete("/:id", requireAuth, requireRole("ADMIN"), deleteCategoryHandler);
+// Update a category - ADMIN only (with permission)
+router.patch("/:id", requireAuth, requirePermission("manage_categories_rules"), updateCategoryHandler);
+
+// Delete a category - ADMIN only (with permission)
+router.delete("/:id", requireAuth, requirePermission("manage_categories_rules"), deleteCategoryHandler);
+
 
 export default router;
+
 

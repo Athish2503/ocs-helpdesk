@@ -41,6 +41,7 @@ router.get("/public/articles/:slug", (0, publicSecurity_js_1.publicSecurityMiddl
 router.post("/public/articles/:articleId/read", (0, publicSecurity_js_1.publicSecurityMiddleware)(), kb_controller_js_1.recordArticleReadHandler);
 // --- ARTICLE ROUTING ---
 router.get("/", optionalAuth, kb_controller_js_1.listArticlesHandler);
+router.get("/suggest", optionalAuth, kb_controller_js_1.getArticleSuggestionsHandler);
 router.get("/:idOrSlug", optionalAuth, kb_controller_js_1.getArticleByIdOrSlugHandler);
 router.post("/", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), kb_controller_js_1.createArticleHandler);
 router.patch("/:id", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), kb_controller_js_1.updateArticleHandler);

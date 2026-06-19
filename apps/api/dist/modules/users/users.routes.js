@@ -9,11 +9,23 @@ const router = (0, express_1.Router)();
 router.use(auth_middleware_js_1.requireAuth);
 // Profile update accessible to any authenticated user
 router.patch("/me/profile", users_controller_js_1.updateProfileHandler);
-// Agents listing can be accessed by both admins and agents (e.g. for forwarding/assignment UI)
-router.get("/agents", (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), users_controller_js_1.getAgentsHandler);
-// Admin-only operations
-router.post("/", (0, role_middleware_js_1.requireRole)("ADMIN"), users_controller_js_1.createUserHandler);
-router.get("/", (0, role_middleware_js_1.requireRole)("ADMIN"), users_controller_js_1.listUsersHandler);
-router.get("/:id", (0, role_middleware_js_1.requireRole)("ADMIN"), users_controller_js_1.getUserByIdHandler);
-router.patch("/:id", (0, role_middleware_js_1.requireRole)("ADMIN"), users_controller_js_1.updateUserHandler);
+// Credits check for current user
+router.get("/me/credits", users_controller_js_1.getMyCreditsHandler);
+// Agents listing can be accessed by both admins and agents (or anyone with staff view access)
+router.get("/agents", (0, role_middleware_js_1.requireRole)("ADMIN", "SUPPORT_L1", "SUPPORT_L2", "BILLING", "AGENT"), users_controller_js_1.getAgentsHandler);
+// Admin / Permissions operations
+router.get("/role-permissions", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.listRolePermissionsHandler);
+router.patch("/role-permissions", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.updateRolePermissionsHandler);
+// Routing rules operations
+router.get("/routing-rules", (0, role_middleware_js_1.requirePermission)("manage_categories_rules"), users_controller_js_1.listRoutingRulesHandler);
+router.post("/routing-rules", (0, role_middleware_js_1.requirePermission)("manage_categories_rules"), users_controller_js_1.createRoutingRuleHandler);
+router.patch("/routing-rules/:id", (0, role_middleware_js_1.requirePermission)("manage_categories_rules"), users_controller_js_1.updateRoutingRuleHandler);
+router.delete("/routing-rules/:id", (0, role_middleware_js_1.requirePermission)("manage_categories_rules"), users_controller_js_1.deleteRoutingRuleHandler);
+// Credits adjustments
+router.patch("/:id/credits", (0, role_middleware_js_1.requirePermission)("adjust_credits"), users_controller_js_1.updateCustomerCreditsHandler);
+// User CRUD operations
+router.post("/", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.createUserHandler);
+router.get("/", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.listUsersHandler);
+router.get("/:id", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.getUserByIdHandler);
+router.patch("/:id", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.updateUserHandler);
 exports.default = router;

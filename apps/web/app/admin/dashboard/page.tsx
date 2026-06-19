@@ -27,27 +27,70 @@ import {
   Minus,
   ChevronDown,
   MessageSquare,
+  Eye,
+  EyeOff,
+  AlertTriangle,
+  ArrowUpRight,
+  History,
+  Calendar,
+  Check,
+  UserCheck,
+  Shield,
+  User,
+  Coins,
+  ArrowDownCircle,
 } from "lucide-react";
 import { useDialog } from "../../../context/DialogContext";
 import AdminShell, { AdminShellSkeleton } from "../../../components/admin/AdminShell";
 
 // ── Types ──────────────────────────────────────────────────────────
-interface Category { id: string; name: string; }
+interface Category { 
+  id: string; 
+  name: string; 
+  slug?: string | null;
+  description?: string | null;
+  isActive?: boolean;
+  parentId?: string | null;
+}
 interface Team {
   id: string; name: string; description: string | null;
   members: { id: string; name: string; email: string; role: string }[];
   _count?: { tickets: number };
 }
-interface Agent { id: string; name: string; email: string; }
+interface Agent { id: string; name: string; email: string; role: string; }
+interface CustomerCreditsData {
+  id: string;
+  allocatedHours: number;
+  usedHours: number;
+  remainingHours: number;
+  billableHours: number;
+}
 interface UserProfile {
   id: string; name: string; email: string;
-  role: "CUSTOMER" | "ADMIN" | "AGENT";
+  role: "CUSTOMER" | "ADMIN" | "AGENT" | "SUPPORT_L1" | "SUPPORT_L2" | "BILLING";
   isActive: boolean; emailVerified: boolean; createdAt: string;
   teams?: { id: string; name: string }[];
+  customerCredits?: CustomerCreditsData | null;
 }
 interface TicketMessage {
   id: string; message: string; createdAt: string;
   sender: { id: string; name: string; email: string; role: string };
+}
+interface StatusHistoryItem {
+  id: string;
+  fromStatus: string | null;
+  toStatus: string;
+  createdAt: string;
+  changedBy: { id: string; name: string; role: string } | null;
+}
+interface CreditTransactionItem {
+  id: string;
+  customerCreditsId: string;
+  ticketId: string | null;
+  hours: number;
+  type: string;
+  description: string | null;
+  createdAt: string;
 }
 interface TicketData {
   id: string; title: string; description: string;
@@ -59,12 +102,29 @@ interface TicketData {
   agent: { id: string; name: string; email: string } | null;
   team: { id: string; name: string } | null;
   messages?: TicketMessage[];
+  affectedDomain?: string | null;
+  issueCategory?: string | null;
+  firstResponseAt?: string | null;
+  resolvedAt?: string | null;
+  ttrHours?: number | null;
+  statusHistory?: StatusHistoryItem[];
+  creditTransactions?: CreditTransactionItem[];
 }
 interface KBArticle {
   id: string; title: string; slug: string; content: string;
   isPublished: boolean; isInternal: boolean; createdAt: string;
   author: { id: string; name: string };
   category: Category | null;
+}
+interface RoutingRule {
+  id: string;
+  issueCategory: string;
+  assigneeId: string | null;
+  teamId: string | null;
+  secondaryAssigneeId: string | null;
+  assignee?: { id: string; name: string; email: string } | null;
+  secondaryAssignee?: { id: string; name: string; email: string } | null;
+  team?: { id: string; name: string } | null;
 }
 
 // ── Status / Priority Helpers ──────────────────────────────────────
@@ -128,12 +188,12 @@ export default function AdminDashboard() {
   const isDark = theme === "dark";
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<"overview" | "tickets" | "teams" | "clients" | "admins" | "kb">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "tickets" | "teams" | "clients" | "admins" | "kb" | "routing" | "credits" | "sla" | "permissions">("overview");
   useEffect(() => {
     if (typeof window !== "undefined") {
       const p = new URLSearchParams(window.location.search).get("tab");
-      if (p === "overview" || p === "tickets" || p === "teams" || p === "clients" || p === "admins" || p === "kb") {
-        setActiveTab(p);
+      if (p === "overview" || p === "tickets" || p === "teams" || p === "clients" || p === "admins" || p === "kb" || p === "routing" || p === "credits" || p === "sla" || p === "permissions") {
+        setActiveTab(p as any);
       }
     }
   }, []);
@@ -145,6 +205,7 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [kbArticles, setKbArticles] = useState<KBArticle[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [routingRules, setRoutingRules] = useState<RoutingRule[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -153,6 +214,15 @@ export default function AdminDashboard() {
   const [ticketReply, setTicketReply] = useState("");
   const [ticketStatusFilter, setTicketStatusFilter] = useState("ALL");
   const [ticketPriorityFilter, setTicketPriorityFilter] = useState("ALL");
+  const [ticketSearch, setTicketSearch] = useState("");
+  const [ticketCategoryFilter, setTicketCategoryFilter] = useState("ALL");
+  const [ticketSortBy, setTicketSortBy] = useState("newest");
+
+  // Resolution modal state
+  const [showResolveModal, setShowResolveModal] = useState(false);
+  const [resolveTicketHours, setResolveTicketHours] = useState(1.0);
+  const [resolveTicketNotes, setResolveTicketNotes] = useState("");
+  const [pendingStatusChange, setPendingStatusChange] = useState<"RESOLVED" | "CLOSED" | null>(null);
 
   // Team state
   const [showCreateTeam, setShowCreateTeam] = useState(false);
@@ -172,7 +242,7 @@ export default function AdminDashboard() {
   const [userFormName, setUserFormName] = useState("");
   const [userFormEmail, setUserFormEmail] = useState("");
   const [userFormPassword, setUserFormPassword] = useState("");
-  const [userFormRole, setUserFormRole] = useState<"CUSTOMER" | "AGENT" | "ADMIN">("CUSTOMER");
+  const [userFormRole, setUserFormRole] = useState<"CUSTOMER" | "AGENT" | "ADMIN" | "SUPPORT_L1" | "SUPPORT_L2" | "BILLING">("CUSTOMER");
   const [userFormIsActive, setUserFormIsActive] = useState(true);
   const [userFormTeams, setUserFormTeams] = useState<string[]>([]);
   const [userSearch, setUserSearch] = useState("");
@@ -186,6 +256,33 @@ export default function AdminDashboard() {
   const [kbIsInternal, setKbIsInternal] = useState(false);
   const [kbCategoryId, setKbCategoryId] = useState("");
 
+  // Categories CRUD state
+  const [catFormName, setCatFormName] = useState("");
+  const [catFormDesc, setCatFormDesc] = useState("");
+  const [catFormParentId, setCatFormParentId] = useState("");
+  const [editingCatId, setEditingCatId] = useState<string | null>(null);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+
+  // Custom routing rule creation state
+  const [newRuleCategory, setNewRuleCategory] = useState("");
+  const [newRuleAssignee, setNewRuleAssignee] = useState("");
+  const [newRuleTeam, setNewRuleTeam] = useState("");
+  const [newRuleSecondary, setNewRuleSecondary] = useState("");
+
+  // Role permissions state
+  const [rolePermissions, setRolePermissions] = useState<{ role: string; permissions: string[] }[]>([]);
+  const [savingPermissionsRole, setSavingPermissionsRole] = useState<string | null>(null);
+
+  // Client credits state
+  const [creditsEditingUser, setCreditsEditingUser] = useState<UserProfile | null>(null);
+  const [creditsAllocated, setCreditsAllocated] = useState<number>(20);
+  const [creditsDescription, setCreditsDescription] = useState<string>("");
+
+  // Client detail view state
+  const [selectedClientView, setSelectedClientView] = useState<UserProfile | null>(null);
+  const [clientDetailLoading, setClientDetailLoading] = useState(false);
+
+
   // ── Data Fetching ────────────────────────────────────────────────
   const refreshAllData = async () => {
     setDataLoading(true);
@@ -196,7 +293,7 @@ export default function AdminDashboard() {
         fetchWithAuth("/teams"),
         fetchWithAuth("/users/agents"),
         fetchWithAuth("/kb"),
-        fetchWithAuth("/categories"),
+        fetchWithAuth("/categories?all=true"),
       ]);
       if (ticketsRes.ok) setTickets((await ticketsRes.json()).data.tickets);
       if (teamsRes.ok) setTeams((await teamsRes.json()).data.teams);
@@ -207,8 +304,14 @@ export default function AdminDashboard() {
         setCategories(r.data.categories || r.data);
       }
       if (user?.role === "ADMIN") {
-        const usersRes = await fetchWithAuth("/users");
+        const [usersRes, rulesRes, permRes] = await Promise.all([
+          fetchWithAuth("/users"),
+          fetchWithAuth("/users/routing-rules"),
+          fetchWithAuth("/users/role-permissions"),
+        ]);
         if (usersRes.ok) setUsers((await usersRes.json()).data.users);
+        if (rulesRes.ok) setRoutingRules((await rulesRes.json()).data.rules);
+        if (permRes.ok) setRolePermissions((await permRes.json()).data.permissions);
       }
     } catch (err) {
       console.error(err);
@@ -230,15 +333,49 @@ export default function AdminDashboard() {
     } catch (err) { console.error(err); }
   };
 
-  const updateTicketDetails = async (updates: { status?: string; priority?: string; teamId?: string | null; agentId?: string | null }) => {
+  const updateTicketDetails = async (
+    updates: { status?: string; priority?: string; teamId?: string | null; agentId?: string | null },
+    directHours?: number,
+    resolveNotes?: string
+  ) => {
     if (!selectedTicket) return;
     try {
-      const res = await fetchWithAuth(`/tickets/${selectedTicket.id}`, { method: "PATCH", body: JSON.stringify(updates) });
+      let hoursConsumed: number | null = null;
+      if (updates.status === "RESOLVED" || updates.status === "CLOSED") {
+        if (directHours !== undefined) {
+          hoursConsumed = directHours;
+        } else {
+          // Open custom Resolution Modal instead of using window.prompt
+          setPendingStatusChange(updates.status as any);
+          setResolveTicketHours(1.0);
+          setResolveTicketNotes("");
+          setShowResolveModal(true);
+          return;
+        }
+      }
+
+      // If we have resolveNotes, post it first as a ticket reply message
+      if (resolveNotes && resolveNotes.trim()) {
+        try {
+          await fetchWithAuth(`/tickets/${selectedTicket.id}/messages`, {
+            method: "POST",
+            body: JSON.stringify({ message: resolveNotes.trim() })
+          });
+        } catch (err) {
+          console.error("Failed to post resolution notes:", err);
+        }
+      }
+
+      const res = await fetchWithAuth(`/tickets/${selectedTicket.id}`, { 
+        method: "PATCH", 
+        body: JSON.stringify({ ...updates, hoursConsumed }) 
+      });
       if (res.ok) {
         const updated = (await res.json()).data.ticket;
         setSelectedTicket(prev => prev ? { ...prev, ...updated } : null);
         setTickets(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t));
-        toast.success("Ticket updated.");
+        toast.success("Ticket updated successfully.");
+        refreshAllData();
       } else toast.error("Failed to update ticket.");
     } catch { toast.error("Failed to update ticket."); }
   };
@@ -255,6 +392,14 @@ export default function AdminDashboard() {
         toast.success("Reply sent.");
       } else toast.error("Failed to send reply.");
     } catch { toast.error("Failed to send reply."); }
+  };
+
+  const handleResolveSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTicket || !pendingStatusChange) return;
+    await updateTicketDetails({ status: pendingStatusChange }, resolveTicketHours, resolveTicketNotes);
+    setShowResolveModal(false);
+    setPendingStatusChange(null);
   };
 
   // ── Team Actions ─────────────────────────────────────────────────
@@ -325,7 +470,11 @@ export default function AdminDashboard() {
     if (userFormPassword.trim()) payload.password = userFormPassword;
     try {
       const res = await fetchWithAuth(`/users/${selectedUser.id}`, { method: "PATCH", body: JSON.stringify(payload) });
-      if (res.ok) { toast.success("User updated."); setShowEditUser(false); setSelectedUser(null); refreshAllData(); }
+      if (res.ok) {
+        toast.success("User updated."); setShowEditUser(false); setSelectedUser(null);
+        setSelectedClientView(null);
+        refreshAllData();
+      }
       else toast.error((await res.json()).error?.message || "Error updating user");
     } catch { toast.error("Failed to update user."); }
   };
@@ -336,6 +485,8 @@ export default function AdminDashboard() {
       if (res.ok) {
         const updated = (await res.json()).data.user;
         setUsers(prev => prev.map(u => u.id === updated.id ? { ...u, ...updated } : u));
+        // Keep the client detail panel in sync if this user is currently selected
+        setSelectedClientView(prev => prev && prev.id === updated.id ? { ...prev, ...updated } : prev);
         toast.success("User updated.");
       } else toast.error("Failed to update user.");
     } catch { toast.error("Failed to update user."); }
@@ -373,18 +524,347 @@ export default function AdminDashboard() {
     } catch { toast.error("Failed to delete article."); }
   };
 
+  // ── Categories CRUD Actions ──────────────────────────────────────
+  const handleSaveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!catFormName.trim()) return;
+    const body = { 
+      name: catFormName.trim(), 
+      description: catFormDesc.trim() || null, 
+      parentId: catFormParentId || null 
+    };
+    try {
+      const res = editingCatId
+        ? await fetchWithAuth(`/categories/${editingCatId}`, { method: "PATCH", body: JSON.stringify(body) })
+        : await fetchWithAuth("/categories", { method: "POST", body: JSON.stringify(body) });
+      const data = await res.json();
+      if (res.ok) {
+        setCatFormName("");
+        setCatFormDesc("");
+        setCatFormParentId("");
+        setEditingCatId(null);
+        toast.success("Category saved.");
+        refreshAllData();
+      } else {
+        toast.error(data.error?.message || "Failed to save category.");
+      }
+    } catch {
+      toast.error("An unexpected error occurred.");
+    }
+  };
+
+  const handleEditCategory = (cat: Category) => {
+    setEditingCatId(cat.id);
+    setCatFormName(cat.name);
+    setCatFormDesc(cat.description || "");
+    setCatFormParentId(cat.parentId || "");
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    const cat = categories.find(c => c.id === id);
+    const hasAssociations = (cat as any)?.ticket_count > 0 || (cat as any)?.article_count > 0;
+    
+    let reassignToId: string | undefined = undefined;
+    if (hasAssociations) {
+      const otherCats = categories.filter(c => c.id !== id && c.isActive !== false);
+      if (otherCats.length === 0) {
+        toast.error("Cannot delete category: it has associated items, and there are no other active categories to merge into.");
+        return;
+      }
+      
+      const promptText = `This category is associated with tickets/articles. Select a replacement category ID to reassign them to:\n\n` +
+        otherCats.map(c => `- ${c.name} (ID: ${c.id})`).join("\n");
+      const reassignInput = window.prompt(promptText, otherCats[0].id);
+      if (reassignInput === null) return;
+      const chosen = otherCats.find(c => c.id === reassignInput.trim() || c.name.toLowerCase() === reassignInput.trim().toLowerCase());
+      if (!chosen) {
+        toast.error("Invalid replacement category selected.");
+        return;
+      }
+      reassignToId = chosen.id;
+    } else {
+      const confirmed = await dialog.confirm("Are you sure you want to delete this category?", "Delete Category");
+      if (!confirmed) return;
+    }
+
+    try {
+      const res = await fetchWithAuth(`/categories/${id}`, { 
+        method: "DELETE",
+        body: JSON.stringify({ reassignToId })
+      });
+      if (res.ok) {
+        toast.success("Category deleted.");
+        refreshAllData();
+      } else {
+        const data = await res.json();
+        toast.error(data.error?.message || "Failed to delete category.");
+      }
+    } catch {
+      toast.error("Failed to delete category.");
+    }
+  };
+
+  const handleBulkDeleteCategories = async () => {
+    if (selectedCategoryIds.length === 0) return;
+    
+    // Find selected categories
+    const selectedCats = categories.filter(c => selectedCategoryIds.includes(c.id));
+    
+    // Check if any selected category is associated with tickets or articles
+    const totalTicketCount = selectedCats.reduce((acc, c) => acc + ((c as any).ticket_count || 0), 0);
+    const totalArticleCount = selectedCats.reduce((acc, c) => acc + ((c as any).article_count || 0), 0);
+    const hasAssociations = totalTicketCount > 0 || totalArticleCount > 0;
+    
+    let reassignToId: string | undefined = undefined;
+    if (hasAssociations) {
+      const otherCats = categories.filter(c => !selectedCategoryIds.includes(c.id) && (c as any).isActive !== false);
+      if (otherCats.length === 0) {
+        toast.error("Cannot bulk-delete: selected categories have associated items, and there are no other active categories to merge into.");
+        return;
+      }
+      
+      const promptText = `One or more selected categories are associated with tickets or articles (${totalTicketCount} tickets, ${totalArticleCount} articles). Select a replacement category ID to reassign them to:\n\n` +
+        otherCats.map(c => `- ${c.name} (ID: ${c.id})`).join("\n");
+      const reassignInput = window.prompt(promptText, otherCats[0].id);
+      if (reassignInput === null) return;
+      const chosen = otherCats.find(c => c.id === reassignInput.trim() || c.name.toLowerCase() === reassignInput.trim().toLowerCase());
+      if (!chosen) {
+        toast.error("Invalid replacement category selected.");
+        return;
+      }
+      reassignToId = chosen.id;
+    } else {
+      const confirmed = await dialog.confirm(`Are you sure you want to delete the ${selectedCategoryIds.length} selected categories?`, "Bulk Delete Categories");
+      if (!confirmed) return;
+    }
+    
+    try {
+      const res = await fetchWithAuth("/categories/bulk-delete", {
+        method: "POST",
+        body: JSON.stringify({ ids: selectedCategoryIds, reassignToId }),
+      });
+      if (res.ok) {
+        toast.success("Selected categories deleted successfully.");
+        setSelectedCategoryIds([]);
+        refreshAllData();
+      } else {
+        const data = await res.json();
+        toast.error(data.error?.message || "Failed to bulk delete categories.");
+      }
+    } catch {
+      toast.error("Failed to bulk delete categories.");
+    }
+  };
+
+  // ── Routing Rules CRUD Actions ───────────────────────────────────
+  const handleCreateRoutingRule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRuleCategory.trim()) {
+      toast.error("Category name is required.");
+      return;
+    }
+
+    try {
+      const res = await fetchWithAuth("/users/routing-rules", {
+        method: "POST",
+        body: JSON.stringify({
+          issueCategory: newRuleCategory.trim(),
+          assigneeId: newRuleAssignee || null,
+          teamId: newRuleTeam || null,
+          secondaryAssigneeId: newRuleSecondary || null,
+        }),
+      });
+
+      if (res.ok) {
+        setNewRuleCategory("");
+        setNewRuleAssignee("");
+        setNewRuleTeam("");
+        setNewRuleSecondary("");
+        toast.success("Routing rule created.");
+        refreshAllData();
+      } else {
+        const data = await res.json();
+        toast.error(data.error?.message || "Failed to create rule.");
+      }
+    } catch {
+      toast.error("Failed to create routing rule.");
+    }
+  };
+
+  const handleDeleteRoutingRule = async (id: string) => {
+    const confirmed = await dialog.confirm("Delete this routing rule?", "Delete Routing Rule");
+    if (!confirmed) return;
+    try {
+      const res = await fetchWithAuth(`/users/routing-rules/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Routing rule deleted.");
+        refreshAllData();
+      } else {
+        toast.error("Failed to delete rule.");
+      }
+    } catch {
+      toast.error("Failed to delete routing rule.");
+    }
+  };
+
+  // ── Role Permissions Actions ─────────────────────────────────────
+  const handleTogglePermission = async (role: string, permission: string, checked: boolean) => {
+    const roleRecord = rolePermissions.find(p => p.role === role);
+    const currentPerms = roleRecord?.permissions ?? [];
+    const updatedPerms = checked
+      ? [...currentPerms, permission]
+      : currentPerms.filter(p => p !== permission);
+
+    setSavingPermissionsRole(role);
+    try {
+      const res = await fetchWithAuth("/users/role-permissions", {
+        method: "PATCH",
+        body: JSON.stringify({ role, permissions: updatedPerms }),
+      });
+      if (res.ok) {
+        setRolePermissions(prev => prev.map(p => p.role === role ? { ...p, permissions: updatedPerms } : p));
+        toast.success(`Permissions for ${role} updated successfully.`);
+      } else {
+        toast.error(`Failed to update permissions for ${role}.`);
+      }
+    } catch {
+      toast.error("An error occurred while saving permissions.");
+    } finally {
+      setSavingPermissionsRole(null);
+    }
+  };
+
   // ── Loading skeleton ─────────────────────────────────────────────
   if (authLoading || !user) {
     const isDarkTheme = typeof window !== "undefined" && localStorage.getItem("theme") === "dark";
     return <AdminShellSkeleton isDark={isDarkTheme} />;
   }
 
+  // Derived SLA logic helper
+  const getSlaDetails = (ticket: TicketData) => {
+    const isResolved = ticket.status === "RESOLVED" || ticket.status === "CLOSED";
+    const createdTime = new Date(ticket.createdAt).getTime();
+
+    // Response limits (hours)
+    const responseLimit = (ticket.priority === "URGENT" || ticket.priority === "HIGH") ? 2 : (ticket.priority === "MEDIUM" ? 8 : 24);
+    // Resolution limits (hours)
+    const resolutionLimit = (ticket.priority === "URGENT" || ticket.priority === "HIGH") ? 8 : (ticket.priority === "MEDIUM" ? 24 : 72);
+
+    let responseHours = 0;
+    let responseMet = false;
+    let responseState: "MET" | "BREACHED" | "WARNING" | "PENDING" = "PENDING";
+
+    if (ticket.firstResponseAt) {
+      responseHours = (new Date(ticket.firstResponseAt).getTime() - createdTime) / (1000 * 60 * 60);
+      responseMet = responseHours <= responseLimit;
+      responseState = responseMet ? "MET" : "BREACHED";
+    } else {
+      responseHours = (Date.now() - createdTime) / (1000 * 60 * 60);
+      if (responseHours > responseLimit) {
+        responseState = "BREACHED";
+      } else if (responseLimit - responseHours <= 1) {
+        responseState = "WARNING";
+      } else {
+        responseState = "PENDING";
+      }
+    }
+
+    let resolutionHours = 0;
+    let resolutionMet = false;
+    let resolutionState: "MET" | "BREACHED" | "WARNING" | "PENDING" = "PENDING";
+
+    if (ticket.resolvedAt) {
+      resolutionHours = ticket.ttrHours ?? (new Date(ticket.resolvedAt).getTime() - createdTime) / (1000 * 60 * 60);
+      resolutionMet = resolutionHours <= resolutionLimit;
+      resolutionState = resolutionMet ? "MET" : "BREACHED";
+    } else if (isResolved) {
+      resolutionState = "MET";
+    } else {
+      resolutionHours = (Date.now() - createdTime) / (1000 * 60 * 60);
+      if (resolutionHours > resolutionLimit) {
+        resolutionState = "BREACHED";
+      } else if (resolutionLimit - resolutionHours <= 2) {
+        resolutionState = "WARNING";
+      } else {
+        resolutionState = "PENDING";
+      }
+    }
+
+    return {
+      responseLimit,
+      resolutionLimit,
+      responseHours: Math.round(responseHours * 10) / 10,
+      responseState,
+      resolutionHours: Math.round(resolutionHours * 10) / 10,
+      resolutionState,
+      isResponded: !!ticket.firstResponseAt
+    };
+  };
+
+  // Helper component for priority badges
+  const PriorityIconComponent = ({ priority, className }: { priority: string, className?: string }) => {
+    const cls = className || "w-3 h-3";
+    switch (priority) {
+      case "URGENT": return <AlertTriangle className={`${cls} text-red-500 animate-pulse`} />;
+      case "HIGH": return <ArrowUp className={`${cls} text-amber-500`} />;
+      case "MEDIUM": return <Minus className={`${cls} text-blue-500`} />;
+      case "LOW": return <ArrowDownCircle className={`${cls} text-slate-400`} />;
+      default: return <Minus className={`${cls} text-slate-400`} />;
+    }
+  };
+
   // Derived data
-  const filteredTickets = tickets.filter(t => {
-    if (ticketStatusFilter !== "ALL" && t.status !== ticketStatusFilter) return false;
-    if (ticketPriorityFilter !== "ALL" && t.priority !== ticketPriorityFilter) return false;
-    return true;
-  });
+  const filteredTickets = tickets
+    .filter(t => {
+      if (ticketStatusFilter !== "ALL" && t.status !== ticketStatusFilter) return false;
+      if (ticketPriorityFilter !== "ALL" && t.priority !== ticketPriorityFilter) return false;
+      if (ticketCategoryFilter !== "ALL" && t.category.id !== ticketCategoryFilter) return false;
+
+      if (ticketSearch.trim()) {
+        const query = ticketSearch.toLowerCase();
+        const matches = 
+          t.title.toLowerCase().includes(query) ||
+          t.description.toLowerCase().includes(query) ||
+          t.customer.name.toLowerCase().includes(query) ||
+          t.customer.email.toLowerCase().includes(query) ||
+          t.id.toLowerCase().includes(query) ||
+          (t.team?.name.toLowerCase() || "").includes(query) ||
+          (t.agent?.name.toLowerCase() || "").includes(query);
+        if (!matches) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (ticketSortBy === "newest") {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+      if (ticketSortBy === "oldest") {
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+      if (ticketSortBy === "priority-desc" || ticketSortBy === "priority-asc") {
+        const prioMap: Record<string, number> = { LOW: 1, MEDIUM: 2, HIGH: 3, URGENT: 4 };
+        const valA = prioMap[a.priority] || 0;
+        const valB = prioMap[b.priority] || 0;
+        return ticketSortBy === "priority-desc" ? valB - valA : valA - valB;
+      }
+      if (ticketSortBy === "sla-urgency") {
+        const getSlaHours = (priority: string) => {
+          if (priority === "URGENT" || priority === "HIGH") return 8;
+          if (priority === "MEDIUM") return 24;
+          return 72;
+        };
+
+        const getBreachScore = (t: TicketData) => {
+          if (t.status === "RESOLVED" || t.status === "CLOSED") return 1000000;
+          const elapsed = (Date.now() - new Date(t.createdAt).getTime()) / (1000 * 60 * 60);
+          const limit = getSlaHours(t.priority);
+          return limit - elapsed;
+        };
+
+        return getBreachScore(a) - getBreachScore(b);
+      }
+      return 0;
+    });
 
   const tabTitles: Record<string, { title: string; description: string }> = {
     overview: { title: "Overview", description: "Operational summary & quick actions" },
@@ -393,6 +873,10 @@ export default function AdminDashboard() {
     clients: { title: "Client Accounts", description: "External customer profiles" },
     admins: { title: "Staff Directory", description: "Agents, admins, and permissions" },
     kb: { title: "Knowledge Base", description: "Self-service articles & documentation" },
+    routing: { title: "Categories & Routing", description: "Manage ticket categories and team assignment routing rules" },
+    permissions: { title: "Role Permissions", description: "View and configure access control permissions for user roles" },
+    credits: { title: "Client Credits", description: "Manage support credits and billing hours for customer accounts" },
+    sla: { title: "SLA Metrics", description: "Real-time compliance and SLA metrics" },
   };
 
   const current = tabTitles[activeTab] || tabTitles.overview;
@@ -531,14 +1015,42 @@ export default function AdminDashboard() {
             {/* Ticket List */}
             <div className={`lg:col-span-3 admin-card ${isDark ? "admin-dark" : ""} overflow-hidden`}>
               {/* Toolbar */}
-              <div className={`px-5 py-4 border-b flex flex-col sm:flex-row items-stretch sm:items-center gap-3 ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
-                <h2 className={`text-sm font-semibold flex-1 ${isDark ? "text-white" : "text-slate-900"}`}>
-                  All Tickets
-                  {filteredTickets.length !== tickets.length && (
-                    <span className={`ml-2 text-xs font-normal ${isDark ? "text-slate-500" : "text-slate-400"}`}>({filteredTickets.length} shown)</span>
-                  )}
-                </h2>
-                <div className="flex items-center gap-2">
+              <div className={`px-5 py-4 border-b flex flex-col gap-4 ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className={`text-sm font-semibold flex-1 ${isDark ? "text-white" : "text-slate-900"}`}>
+                    Ticket Queue
+                    {filteredTickets.length !== tickets.length && (
+                      <span className={`ml-2 text-xs font-normal ${isDark ? "text-slate-500" : "text-slate-400"}`}>({filteredTickets.length} of {tickets.length} shown)</span>
+                    )}
+                  </h2>
+                  <button 
+                    onClick={() => {
+                      setTicketSearch("");
+                      setTicketStatusFilter("ALL");
+                      setTicketPriorityFilter("ALL");
+                      setTicketCategoryFilter("ALL");
+                      setTicketSortBy("newest");
+                    }}
+                    className={`text-xs hover:underline ${isDark ? "text-[#38b1f7]" : "text-blue-600"}`}
+                  >
+                    Reset Filters
+                  </button>
+                </div>
+                
+                {/* Search & filters row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5">
+                  <div className="relative md:col-span-2">
+                    <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? "text-slate-500" : "text-slate-400"}`} />
+                    <input 
+                      type="text" 
+                      value={ticketSearch} 
+                      onChange={e => setTicketSearch(e.target.value)} 
+                      placeholder="Search tickets..." 
+                      className={`admin-input ${isDark ? "admin-dark" : ""} w-full text-xs`} 
+                      style={{ height: 36, paddingLeft: "2.25rem" }} 
+                    />
+                  </div>
+                  
                   <select
                     value={ticketStatusFilter}
                     onChange={e => setTicketStatusFilter(e.target.value)}
@@ -551,6 +1063,7 @@ export default function AdminDashboard() {
                     <option value="RESOLVED">Resolved</option>
                     <option value="CLOSED">Closed</option>
                   </select>
+
                   <select
                     value={ticketPriorityFilter}
                     onChange={e => setTicketPriorityFilter(e.target.value)}
@@ -563,44 +1076,115 @@ export default function AdminDashboard() {
                     <option value="HIGH">High</option>
                     <option value="URGENT">Urgent</option>
                   </select>
+
+                  <select
+                    value={ticketCategoryFilter}
+                    onChange={e => setTicketCategoryFilter(e.target.value)}
+                    className={`admin-select ${isDark ? "admin-dark" : ""} h-9 text-xs`}
+                    style={{ height: 36 }}
+                  >
+                    <option value="ALL">All Categories</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2 justify-end text-xs">
+                  <span className={isDark ? "text-slate-500" : "text-slate-400"}>Sort by:</span>
+                  <select
+                    value={ticketSortBy}
+                    onChange={e => setTicketSortBy(e.target.value)}
+                    className={`admin-select ${isDark ? "admin-dark" : ""} text-xs`}
+                    style={{ height: 28, width: 140, paddingRight: 24, paddingLeft: 8, backgroundPosition: "right 6px center" }}
+                  >
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                    <option value="priority-desc">Priority: High-Low</option>
+                    <option value="priority-asc">Priority: Low-High</option>
+                    <option value="sla-urgency">SLA Breach Urgency</option>
+                  </select>
                 </div>
               </div>
 
               {/* List */}
-              <div className={`divide-y overflow-y-auto max-h-[600px] ${isDark ? "divide-white/[0.04]" : "divide-slate-100"}`}>
+              <div className={`divide-y overflow-y-auto max-h-[650px] ${isDark ? "divide-white/[0.04]" : "divide-slate-100"}`}>
                 {filteredTickets.length === 0 ? (
                   <EmptyState icon={<Ticket className="w-8 h-8" />} title="No tickets found" description="No tickets match the active filters." isDark={isDark} />
-                ) : filteredTickets.map(t => (
-                  <div
-                    key={t.id}
-                    onClick={() => selectTicket(t)}
-                    className={`flex items-start justify-between px-5 py-4 cursor-pointer transition-colors ${
-                      selectedTicket?.id === t.id
-                        ? isDark ? "bg-[#38b1f7]/8 border-l-2 border-[#38b1f7]" : "bg-blue-50/60 border-l-2 border-[#38b1f7]"
-                        : isDark ? "hover:bg-white/[0.025] border-l-2 border-transparent" : "hover:bg-slate-50 border-l-2 border-transparent"
-                    }`}
-                  >
-                    <div className="space-y-1.5 flex-1 min-w-0 mr-3">
-                      <p className={`text-sm font-medium leading-tight truncate ${isDark ? "text-slate-100" : "text-slate-800"}`}>{t.title}</p>
-                      <div className="flex items-center flex-wrap gap-1.5">
-                        <span className={statusBadgeClass(t.status)}>
-                          <StatusIcon status={t.status} />
-                          {t.status.replace("_", " ")}
-                        </span>
-                        <span className={priorityBadgeClass(t.priority)}>{t.priority}</span>
-                        {t.team && (
-                          <span className={`admin-badge ${isDark ? "bg-[#38b1f7]/10 text-[#5fc0f9] border-[#38b1f7]/20" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
-                            {t.team.name}
+                ) : filteredTickets.map(t => {
+                  const initials = t.customer.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+                  const sla = getSlaDetails(t);
+                  const isSlaBreached = sla.responseState === "BREACHED" || sla.resolutionState === "BREACHED";
+                  const isSlaWarning = sla.responseState === "WARNING" || sla.resolutionState === "WARNING";
+                  
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => selectTicket(t)}
+                      className={`flex items-start gap-4 px-5 py-4 cursor-pointer transition-all duration-200 border-l-2 ${
+                        selectedTicket?.id === t.id
+                          ? isDark ? "bg-[#38b1f7]/8 border-[#38b1f7] shadow-md" : "bg-blue-50/60 border-[#38b1f7] shadow-sm"
+                          : t.status === "OPEN"
+                            ? "border-blue-500 hover:translate-x-1"
+                            : t.status === "IN_PROGRESS"
+                              ? "border-amber-500 hover:translate-x-1"
+                              : "border-transparent hover:translate-x-1"
+                      } ${
+                        isDark ? "hover:bg-white/[0.025]" : "hover:bg-slate-50"
+                      }`}
+                    >
+                      {/* Avatar */}
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${isDark ? "bg-slate-800 text-slate-350" : "bg-slate-100 text-slate-700"}`}>
+                        {initials}
+                      </div>
+
+                      <div className="space-y-1.5 flex-1 min-w-0 mr-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className={`text-sm font-semibold leading-tight truncate ${isDark ? "text-slate-100" : "text-slate-855"}`}>{t.title}</p>
+                          <span className={`text-[10px] shrink-0 ${isDark ? "text-slate-550" : "text-slate-455"}`}>
+                            {new Date(t.createdAt).toLocaleDateString()}
                           </span>
+                        </div>
+                        
+                        <div className="flex items-center flex-wrap gap-1.5">
+                          <span className={statusBadgeClass(t.status)}>
+                            <StatusIcon status={t.status} />
+                            {t.status.replace("_", " ")}
+                          </span>
+                          <span className={priorityBadgeClass(t.priority)}>
+                            <PriorityIconComponent priority={t.priority} />
+                            {t.priority}
+                          </span>
+                          {t.category && (
+                            <span className={`admin-badge ${isDark ? "bg-white/[0.04] text-slate-455 border-white/[0.08]" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                              {t.category.name}
+                            </span>
+                          )}
+                          {t.team && (
+                            <span className={`admin-badge ${isDark ? "bg-[#38b1f7]/10 text-[#5fc0f9] border-[#38b1f7]/20" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
+                              {t.team.name}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* SLA warning on item */}
+                        {(isSlaBreached || isSlaWarning) && (
+                          <div className="pt-1 flex items-center gap-1.5">
+                            {isSlaBreached ? (
+                              <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 animate-pulse">
+                                <AlertTriangle className="w-3 h-3 text-red-500" />
+                                SLA BREACHED
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-500">
+                                <Clock className="w-3 h-3 text-amber-500" />
+                                SLA AT RISK
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className={`text-xs font-medium ${isDark ? "text-slate-300" : "text-slate-700"}`}>{t.customer.name}</p>
-                      <p className={`text-xs mt-0.5 ${isDark ? "text-slate-600" : "text-slate-400"}`}>{new Date(t.createdAt).toLocaleDateString()}</p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -611,7 +1195,7 @@ export default function AdminDashboard() {
                   {/* Panel header */}
                   <div className={`px-5 py-4 border-b flex items-start justify-between gap-3 ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
                     <div className="min-w-0 flex-1">
-                      <p className={`text-[11px] font-mono mb-1 ${isDark ? "text-[#5fc0f9]" : "text-[#0d7fc0]"}`}>#{selectedTicket.id.slice(0, 8)}</p>
+                      <p className={`text-[10px] font-mono font-bold mb-0.5 ${isDark ? "text-[#5fc0f9]" : "text-[#0d7fc0]"}`}>#{selectedTicket.id.slice(0, 8).toUpperCase()}</p>
                       <h3 className={`text-sm font-semibold leading-tight ${isDark ? "text-white" : "text-slate-900"}`}>{selectedTicket.title}</h3>
                     </div>
                     <button onClick={() => setSelectedTicket(null)} className={`p-1.5 rounded-lg transition-colors shrink-0 ${isDark ? "text-slate-500 hover:text-white hover:bg-white/[0.05]" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"}`}>
@@ -619,98 +1203,352 @@ export default function AdminDashboard() {
                     </button>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto">
+                  {/* Quick Actions Action bar */}
+                  <div className={`px-5 py-2.5 border-b flex flex-wrap gap-2 items-center bg-slate-50/50 dark:bg-white/[0.01] ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
+                    <span className={`text-[10px] uppercase font-bold tracking-wider ${isDark ? "text-slate-500" : "text-slate-450"}`}>Actions:</span>
+                    
+                    {selectedTicket.agent?.id !== user.id && (
+                      <button 
+                        onClick={() => updateTicketDetails({ agentId: user.id })}
+                        className="admin-btn admin-btn-ghost admin-btn-sm text-[11px] gap-1 px-2.5"
+                        style={{ height: 26 }}
+                      >
+                        <UserCheck className="w-3.5 h-3.5 text-[#38b1f7]" />
+                        Assign to Me
+                      </button>
+                    )}
+                    
+                    {selectedTicket.status === "OPEN" && (
+                      <button 
+                        onClick={() => updateTicketDetails({ status: "IN_PROGRESS" })}
+                        className="admin-btn admin-btn-ghost admin-btn-sm text-[11px] gap-1 px-2.5"
+                        style={{ height: 26 }}
+                      >
+                        <Clock className="w-3.5 h-3.5 text-amber-500" />
+                        Start Working
+                      </button>
+                    )}
+                    
+                    {(selectedTicket.status === "OPEN" || selectedTicket.status === "IN_PROGRESS") && (
+                      <button 
+                        onClick={() => updateTicketDetails({ status: "RESOLVED" })}
+                        className="admin-btn admin-btn-primary admin-btn-sm text-[11px] gap-1 px-2.5"
+                        style={{ height: 26 }}
+                      >
+                        <Check className="w-3.5 h-3.5 text-white" />
+                        Resolve Ticket
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto space-y-4">
                     {/* Description */}
-                    <div className="px-5 py-4">
-                      <p className={`text-xs leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>{selectedTicket.description}</p>
-                    </div>
-
-                    {/* Metadata controls */}
-                    <div className={`mx-5 mb-4 p-4 rounded-xl border space-y-3 ${isDark ? "bg-white/[0.02] border-white/[0.05]" : "bg-slate-50 border-slate-200"}`}>
-                      {[
-                        {
-                          label: "Priority", value: selectedTicket.priority,
-                          options: ["LOW", "MEDIUM", "HIGH", "URGENT"],
-                          onChange: (v: string) => updateTicketDetails({ priority: v }),
-                        },
-                        {
-                          label: "Status", value: selectedTicket.status,
-                          options: ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"],
-                          onChange: (v: string) => updateTicketDetails({ status: v }),
-                        },
-                      ].map(({ label, value, options, onChange }) => (
-                        <div key={label} className="flex items-center justify-between gap-3">
-                          <span className={`text-xs font-medium shrink-0 ${isDark ? "text-slate-400" : "text-slate-500"}`}>{label}</span>
-                          <select
-                            value={value}
-                            onChange={e => onChange(e.target.value)}
-                            className={`admin-select text-xs flex-1 max-w-[160px] ${isDark ? "admin-dark" : ""}`}
-                            style={{ height: 32 }}
-                          >
-                            {options.map(o => <option key={o} value={o}>{o.replace("_", " ")}</option>)}
-                          </select>
-                        </div>
-                      ))}
-
-                      <div className="flex items-center justify-between gap-3">
-                        <span className={`text-xs font-medium shrink-0 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Team</span>
-                        <select
-                          value={selectedTicket.team?.id || ""}
-                          onChange={e => updateTicketDetails({ teamId: e.target.value || null, agentId: null })}
-                          className={`admin-select text-xs flex-1 max-w-[160px] ${isDark ? "admin-dark" : ""}`}
-                          style={{ height: 32 }}
-                        >
-                          <option value="">Unassigned</option>
-                          {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                        </select>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-3">
-                        <span className={`text-xs font-medium shrink-0 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Agent</span>
-                        <select
-                          value={selectedTicket.agent?.id || ""}
-                          onChange={e => updateTicketDetails({ agentId: e.target.value || null })}
-                          className={`admin-select text-xs flex-1 max-w-[160px] ${isDark ? "admin-dark" : ""}`}
-                          style={{ height: 32 }}
-                        >
-                          <option value="">Unassigned</option>
-                          {(selectedTicket.team
-                            ? agents.filter(a => teams.find(t => t.id === selectedTicket.team?.id)?.members.some(m => m.id === a.id))
-                            : agents
-                          ).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                        </select>
+                    <div className="px-5 pt-4">
+                      <p className={`text-xs font-semibold uppercase tracking-wider mb-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                        Issue Description
+                      </p>
+                      <div className={`p-4 rounded-xl border leading-relaxed text-xs whitespace-pre-wrap ${isDark ? "bg-[#111827] border-white/[0.04] text-slate-350" : "bg-white border-slate-200 text-slate-650"}`}>
+                        {selectedTicket.description}
                       </div>
                     </div>
 
-                    {/* Messages */}
-                    <div className="px-5 pb-4 space-y-3">
-                      <h4 className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-slate-500" : "text-slate-400"}`}>
-                        <MessageSquare className="w-3.5 h-3.5 inline mr-1.5" />
-                        Conversation
-                      </h4>
-                      <div className="space-y-2 max-h-48 overflow-y-auto">
-                        {selectedTicket.messages?.map(msg => (
-                          <div key={msg.id} className={`p-3 rounded-xl border text-sm ${
-                            msg.sender.role === "CUSTOMER"
-                              ? isDark ? "bg-[#38b1f7]/6 border-[#38b1f7]/15" : "bg-blue-50/60 border-blue-100"
-                              : isDark ? "bg-white/[0.03] border-white/[0.04]" : "bg-slate-50 border-slate-100"
-                          }`}>
-                            <div className="flex items-center justify-between mb-1.5">
-                              <span className={`text-xs font-semibold ${
-                                msg.sender.role === "CUSTOMER"
-                                  ? isDark ? "text-[#5fc0f9]" : "text-blue-700"
-                                  : isDark ? "text-amber-400" : "text-amber-700"
-                              }`}>{msg.sender.name}</span>
-                              <span className={`text-[10px] ${isDark ? "text-slate-600" : "text-slate-400"}`}>
-                                {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                              </span>
+                    {/* SLA Progress Bar Panel */}
+                    <div className="px-5">
+                      {(() => {
+                        const sla = getSlaDetails(selectedTicket);
+                        return (
+                          <div className={`p-4 rounded-xl border flex flex-col md:flex-row gap-4 justify-between items-stretch text-xs ${isDark ? "bg-[#38b1f7]/4 border-white/[0.04]" : "bg-slate-50 border-slate-200"}`}>
+                            <div className="flex-1 space-y-1.5">
+                              <div className="flex items-center gap-2 font-medium">
+                                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                <span className={isDark ? "text-slate-300" : "text-slate-600"}>Response SLA</span>
+                                <span className={`ml-auto font-mono text-[10px] ${
+                                  sla.responseState === "MET" ? "text-green-500 font-semibold" :
+                                  sla.responseState === "BREACHED" ? "text-red-500 font-bold" :
+                                  sla.responseState === "WARNING" ? "text-amber-500 font-bold" : "text-slate-400"
+                                }`}>
+                                  {sla.responseState === "MET" && `Met: ${sla.responseHours}h`}
+                                  {sla.responseState === "BREACHED" && `BREACHED (${sla.responseHours}h)`}
+                                  {sla.responseState === "WARNING" && `Breach in ${Math.round((sla.responseLimit - sla.responseHours)*10)/10}h`}
+                                  {sla.responseState === "PENDING" && `Elapsed: ${sla.responseHours}h`}
+                                </span>
+                              </div>
+                              <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-500 ${
+                                    sla.responseState === "MET" ? "bg-green-500" :
+                                    sla.responseState === "BREACHED" ? "bg-red-500" :
+                                    sla.responseState === "WARNING" ? "bg-amber-500" : "bg-[#38b1f7]"
+                                  }`}
+                                  style={{ width: `${Math.min(100, (sla.responseHours / sla.responseLimit) * 100)}%` }}
+                                />
+                              </div>
                             </div>
-                            <p className={`text-xs leading-relaxed whitespace-pre-wrap ${isDark ? "text-slate-300" : "text-slate-700"}`}>{msg.message}</p>
+
+                            <div className="flex-1 space-y-1.5">
+                              <div className="flex items-center gap-2 font-medium">
+                                <CheckCircle className="w-3.5 h-3.5 text-slate-400" />
+                                <span className={isDark ? "text-slate-300" : "text-slate-600"}>Resolution SLA</span>
+                                <span className={`ml-auto font-mono text-[10px] ${
+                                  sla.resolutionState === "MET" ? "text-green-500 font-semibold" :
+                                  sla.resolutionState === "BREACHED" ? "text-red-500 font-bold" :
+                                  sla.resolutionState === "WARNING" ? "text-amber-500 font-bold" : "text-slate-400"
+                                }`}>
+                                  {sla.resolutionState === "MET" && `Met: ${sla.resolutionHours}h`}
+                                  {sla.resolutionState === "BREACHED" && `BREACHED (${sla.resolutionHours}h)`}
+                                  {sla.resolutionState === "WARNING" && `Breach in ${Math.round((sla.resolutionLimit - sla.resolutionHours)*10)/10}h`}
+                                  {sla.resolutionState === "PENDING" && `Elapsed: ${sla.resolutionHours}h`}
+                                </span>
+                              </div>
+                              <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-500 ${
+                                    sla.resolutionState === "MET" ? "bg-green-500" :
+                                    sla.resolutionState === "BREACHED" ? "bg-red-500" :
+                                    sla.resolutionState === "WARNING" ? "bg-amber-500" : "bg-emerald-500"
+                                  }`}
+                                  style={{ width: `${Math.min(100, (sla.resolutionHours / sla.resolutionLimit) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Metadata controls grid */}
+                    <div className="px-5">
+                      <div className={`p-4 rounded-xl border grid grid-cols-1 md:grid-cols-2 gap-3.5 bg-slate-50/50 dark:bg-white/[0.01] ${isDark ? "border-white/[0.04]" : "border-slate-100"}`}>
+                        {[
+                          {
+                            label: "Priority", value: selectedTicket.priority,
+                            options: ["LOW", "MEDIUM", "HIGH", "URGENT"],
+                            onChange: (v: string) => updateTicketDetails({ priority: v }),
+                          },
+                          {
+                            label: "Status", value: selectedTicket.status,
+                            options: ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"],
+                            onChange: (v: string) => updateTicketDetails({ status: v }),
+                          },
+                        ].map(({ label, value, options, onChange }) => (
+                          <div key={label} className="flex items-center justify-between gap-3 text-xs">
+                            <span className={`font-semibold shrink-0 ${isDark ? "text-slate-400" : "text-slate-500"}`}>{label}</span>
+                            <select
+                              value={value}
+                              onChange={e => onChange(e.target.value)}
+                              className={`admin-select text-xs flex-1 max-w-[150px] ${isDark ? "admin-dark" : ""}`}
+                              style={{ height: 32 }}
+                            >
+                              {options.map(o => <option key={o} value={o}>{o.replace("_", " ")}</option>)}
+                            </select>
                           </div>
                         ))}
-                        {(!selectedTicket.messages || selectedTicket.messages.length === 0) && (
-                          <p className={`text-xs text-center py-3 ${isDark ? "text-slate-600" : "text-slate-400"}`}>No messages yet.</p>
+
+                        <div className="flex items-center justify-between gap-3 text-xs">
+                          <span className={`font-semibold shrink-0 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Team</span>
+                          <select
+                            value={selectedTicket.team?.id || ""}
+                            onChange={e => updateTicketDetails({ teamId: e.target.value || null, agentId: null })}
+                            className={`admin-select text-xs flex-1 max-w-[150px] ${isDark ? "admin-dark" : ""}`}
+                            style={{ height: 32 }}
+                          >
+                            <option value="">Unassigned</option>
+                            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                          </select>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-3 text-xs">
+                          <span className={`font-semibold shrink-0 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Agent</span>
+                          <select
+                            value={selectedTicket.agent?.id || ""}
+                            onChange={e => updateTicketDetails({ agentId: e.target.value || null })}
+                            className={`admin-select text-xs flex-1 max-w-[150px] ${isDark ? "admin-dark" : ""}`}
+                            style={{ height: 32 }}
+                          >
+                            <option value="">Unassigned</option>
+                            {(selectedTicket.team
+                              ? agents.filter(a => teams.find(t => t.id === selectedTicket.team?.id)?.members.some(m => m.id === a.id))
+                              : agents
+                            ).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                          </select>
+                        </div>
+
+                        {selectedTicket.affectedDomain && (
+                          <div className="flex items-center justify-between gap-3 text-xs">
+                            <span className={`font-semibold shrink-0 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Domain</span>
+                            <span className={`font-mono text-slate-700 dark:text-slate-350 truncate max-w-[150px]`} title={selectedTicket.affectedDomain}>
+                              {selectedTicket.affectedDomain}
+                            </span>
+                          </div>
                         )}
+
+                        {selectedTicket.issueCategory && (
+                          <div className="flex items-center justify-between gap-3 text-xs">
+                            <span className={`font-semibold shrink-0 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Issue Class</span>
+                            <span className={`text-slate-700 dark:text-slate-350 truncate max-w-[150px]`} title={selectedTicket.issueCategory}>
+                              {selectedTicket.issueCategory}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Client Credits Tracker */}
+                    <div className="px-5">
+                      {(() => {
+                        const customerUser = users.find(u => u.id === selectedTicket.customer.id);
+                        const credits = customerUser?.customerCredits;
+                        if (!credits) return null;
+                        const remaining = credits.remainingHours;
+                        const allocated = credits.allocatedHours || 20;
+                        const used = credits.usedHours;
+                        const percent = Math.min(100, (remaining / allocated) * 100);
+
+                        return (
+                          <div className={`p-4 rounded-xl border space-y-2.5 bg-slate-50/50 dark:bg-white/[0.01] ${isDark ? "border-white/[0.04]" : "border-slate-100"}`}>
+                            <div className="flex items-center justify-between">
+                              <h4 className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-slate-550" : "text-slate-450"}`}>
+                                Client Service Credits
+                              </h4>
+                              <span className={`text-xs font-mono font-bold ${remaining <= 2 ? "text-red-500" : "text-green-500"}`}>
+                                {remaining} / {allocated} hrs left
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  remaining <= 2 ? "bg-red-500 animate-pulse" : remaining <= 5 ? "bg-amber-500" : "bg-green-500"
+                                }`}
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
+                            <div className="flex justify-between text-[10px] text-slate-450 font-medium">
+                              <span>Allocated: {allocated}h</span>
+                              <span>Used: {used}h</span>
+                              {credits.billableHours > 0 && <span className="text-red-500 font-bold">Overage: {credits.billableHours}h</span>}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Activity Stream Chronological Timeline */}
+                    <div className="px-5 pb-4 space-y-4">
+                      <h4 className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                        <History className="w-3.5 h-3.5 inline mr-1.5" />
+                        Activity Stream & Discussion
+                      </h4>
+                      
+                      <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1">
+                        {(() => {
+                          const timelineEvents = [
+                            ...(selectedTicket.messages || []).map(m => ({
+                              id: m.id,
+                              type: "message" as const,
+                              createdAt: m.createdAt,
+                              sender: m.sender,
+                              content: m.message
+                            })),
+                            ...(selectedTicket.statusHistory || []).map(h => ({
+                              id: h.id,
+                              type: "status_change" as const,
+                              createdAt: h.createdAt,
+                              sender: h.changedBy,
+                              fromStatus: h.fromStatus,
+                              toStatus: h.toStatus
+                            })),
+                            ...(selectedTicket.creditTransactions || []).map(tx => ({
+                              id: tx.id,
+                              type: "credits" as const,
+                              createdAt: tx.createdAt,
+                              hours: tx.hours,
+                              txType: tx.type,
+                              description: tx.description
+                            }))
+                          ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+                          if (timelineEvents.length === 0) {
+                            return <p className={`text-xs text-center py-4 ${isDark ? "text-slate-600" : "text-slate-400"}`}>No activity or messages yet.</p>;
+                          }
+
+                          return timelineEvents.map(event => {
+                            if (event.type === "message") {
+                              const isCustomer = event.sender.role === "CUSTOMER";
+                              return (
+                                <div key={event.id} className={`flex gap-3 items-start ${isCustomer ? "" : "flex-row-reverse"}`}>
+                                  {/* Avatar */}
+                                  <div 
+                                    title={`${event.sender.name} (${event.sender.role})`}
+                                    className={`w-7 h-7 rounded-xl flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                                      isCustomer
+                                        ? isDark ? "bg-[#38b1f7]/15 text-[#5fc0f9]" : "bg-blue-50 text-blue-700 border border-blue-100"
+                                        : isDark ? "bg-amber-500/10 text-amber-400" : "bg-amber-50 text-amber-700 border border-amber-100"
+                                    }`}
+                                  >
+                                    {event.sender.name.charAt(0).toUpperCase()}
+                                  </div>
+                                  
+                                  {/* Message bubble */}
+                                  <div className={`flex-1 max-w-[85%] p-3 rounded-2xl border text-xs shadow-sm ${
+                                    isCustomer
+                                      ? isDark ? "bg-[#38b1f7]/6 border-[#38b1f7]/12 rounded-tl-none" : "bg-blue-50/70 border-blue-100 rounded-tl-none"
+                                      : isDark ? "bg-[#1e293b]/60 border-white/[0.04] rounded-tr-none" : "bg-slate-50/70 border-slate-200 rounded-tr-none"
+                                  }`}>
+                                    <div className="flex items-center justify-between mb-1 gap-3">
+                                      <span className={`font-semibold ${
+                                        isCustomer
+                                          ? isDark ? "text-[#5fc0f9]" : "text-blue-700"
+                                          : isDark ? "text-amber-400" : "text-amber-700"
+                                      }`}>
+                                        {event.sender.name}
+                                        <span className={`ml-1.5 text-[9px] font-normal px-1.5 py-0.5 rounded-full uppercase ${
+                                          isCustomer
+                                            ? isDark ? "bg-[#38b1f7]/15 text-[#5fc0f9]" : "bg-blue-50 text-blue-600"
+                                            : isDark ? "bg-amber-500/15 text-amber-400" : "bg-amber-50 text-amber-600"
+                                        }`}>
+                                          {event.sender.role}
+                                        </span>
+                                      </span>
+                                      <span className={`text-[9px] font-medium ${isDark ? "text-slate-550" : "text-slate-400"}`}>
+                                        {new Date(event.createdAt).toLocaleDateString()} {new Date(event.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                      </span>
+                                    </div>
+                                    <p className={`leading-relaxed whitespace-pre-wrap ${isDark ? "text-slate-300" : "text-slate-700"}`}>{event.content}</p>
+                                  </div>
+                                </div>
+                              );
+                            } else if (event.type === "status_change") {
+                              return (
+                                <div key={event.id} className="flex items-center justify-center gap-2 my-2 py-1 px-4 text-[10px] text-slate-550 font-medium">
+                                  <div className="h-[1px] bg-slate-200 dark:bg-slate-800 flex-1" />
+                                  <div className="flex items-center gap-1.5 shrink-0 bg-slate-50/50 dark:bg-slate-900/50 px-2 py-0.5 rounded-full border border-slate-100 dark:border-slate-800 shadow-sm">
+                                    <History className="w-3 h-3 text-slate-450" />
+                                    <span>
+                                      Status: <span className="font-semibold text-slate-700 dark:text-slate-300">{event.fromStatus || "NONE"}</span> →{" "}
+                                      <span className="font-semibold text-slate-700 dark:text-slate-300">{event.toStatus}</span>
+                                      {event.sender && ` by ${event.sender.name}`}
+                                    </span>
+                                  </div>
+                                  <div className="h-[1px] bg-slate-200 dark:bg-slate-800 flex-1" />
+                                </div>
+                              );
+                            } else if (event.type === "credits") {
+                              return (
+                                <div key={event.id} className="flex items-center justify-center gap-2 my-2 py-1 px-4 text-[10px] text-amber-650 dark:text-amber-400 font-medium">
+                                  <div className="h-[1px] bg-amber-200/50 dark:bg-amber-950/20 flex-1" />
+                                  <div className="flex items-center gap-1.5 shrink-0 bg-amber-55 dark:bg-amber-950/20 px-2 py-0.5 rounded-full border border-amber-250 dark:border-amber-500/20 shadow-sm">
+                                    <Coins className="w-3 h-3 text-amber-500" />
+                                    <span>
+                                      {event.hours} Support Credits ({event.description || "Resolution charge"})
+                                    </span>
+                                  </div>
+                                  <div className="h-[1px] bg-amber-200/50 dark:bg-amber-950/20 flex-1" />
+                                </div>
+                              );
+                            }
+                            return null;
+                          });
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -883,63 +1721,410 @@ export default function AdminDashboard() {
             TAB: CLIENTS
         ══════════════════════════════════════════════════════════ */}
         {activeTab === "clients" && user.role === "ADMIN" && (
-          <div className="space-y-5">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-              <div>
-                <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Client Accounts</h2>
-                <p className={`text-sm mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>External customers and support submitters.</p>
-              </div>
-              <div className="flex items-center gap-2">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
+
+            {/* ── Client List (left column) ── */}
+            <div className={`lg:col-span-2 admin-card ${isDark ? "admin-dark" : ""} overflow-hidden`}>
+              {/* Toolbar */}
+              <div className={`px-5 py-4 border-b flex flex-col gap-3 ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className={`text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>
+                    Client Accounts
+                    <span className={`ml-2 text-xs font-normal ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                      ({users.filter(u => u.role === "CUSTOMER").length})
+                    </span>
+                  </h2>
+                  <button
+                    onClick={() => { setUserFormName(""); setUserFormEmail(""); setUserFormPassword(""); setUserFormRole("CUSTOMER"); setUserFormTeams([]); setShowCreateUser(true); }}
+                    className="admin-btn admin-btn-primary admin-btn-sm"
+                    style={{ height: 30, fontSize: 11 }}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    New
+                  </button>
+                </div>
                 <div className="relative">
                   <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? "text-slate-500" : "text-slate-400"}`} />
-                  <input type="text" value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Search clients..." className={`admin-input ${isDark ? "admin-dark" : ""} pl-9 w-64 text-sm`} style={{ height: 38 }} />
+                  <input
+                    type="text"
+                    value={userSearch}
+                    onChange={e => setUserSearch(e.target.value)}
+                    placeholder="Search by name or email..."
+                    className={`admin-input ${isDark ? "admin-dark" : ""} w-full text-xs`}
+                    style={{ height: 34, paddingLeft: "2.25rem" }}
+                  />
                 </div>
-                <button
-                  onClick={() => { setUserFormName(""); setUserFormEmail(""); setUserFormPassword(""); setUserFormRole("CUSTOMER"); setUserFormTeams([]); setShowCreateUser(true); }}
-                  className="admin-btn admin-btn-primary"
-                >
-                  <Plus className="w-4 h-4" />
-                  New Client
-                </button>
+              </div>
+
+              {/* Client list */}
+              <div className={`divide-y overflow-y-auto max-h-[680px] ${isDark ? "divide-white/[0.04]" : "divide-slate-100"}`}>
+                {users
+                  .filter(u => u.role === "CUSTOMER")
+                  .filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase()))
+                  .length === 0 ? (
+                    <EmptyState icon={<Users className="w-8 h-8" />} title="No clients found" description="No client accounts match your search." isDark={isDark} />
+                  ) : users
+                    .filter(u => u.role === "CUSTOMER")
+                    .filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase()))
+                    .map(u => {
+                      const initials = u.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+                      const credits = u.customerCredits;
+                      const utilPct = credits ? Math.min(100, Math.round((credits.usedHours / Math.max(credits.allocatedHours, 0.01)) * 100)) : 0;
+                      const isSelected = selectedClientView?.id === u.id;
+                      const clientTickets = tickets.filter(t => t.customer.id === u.id);
+                      const openCount = clientTickets.filter(t => t.status === "OPEN" || t.status === "IN_PROGRESS").length;
+
+                      return (
+                        <div
+                          key={u.id}
+                          onClick={() => setSelectedClientView(u)}
+                          className={`flex items-start gap-3.5 px-5 py-4 cursor-pointer transition-all duration-200 border-l-2 ${
+                            isSelected
+                              ? isDark ? "bg-[#38b1f7]/8 border-[#38b1f7]" : "bg-blue-50/60 border-[#38b1f7]"
+                              : `border-transparent ${isDark ? "hover:bg-white/[0.025]" : "hover:bg-slate-50"} hover:translate-x-0.5`
+                          }`}
+                        >
+                          {/* Avatar */}
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${
+                            isSelected
+                              ? isDark ? "bg-[#38b1f7]/20 text-[#5fc0f9]" : "bg-blue-100 text-blue-700"
+                              : isDark ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"
+                          }`}>
+                            {initials}
+                          </div>
+
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className={`text-sm font-semibold truncate ${isDark ? "text-slate-100" : "text-slate-900"}`}>{u.name}</p>
+                              <span className={`admin-badge shrink-0 ${u.isActive ? "admin-badge-active" : "admin-badge-suspended"}`}>
+                                {u.isActive ? "Active" : "Suspended"}
+                              </span>
+                            </div>
+                            <p className={`text-xs truncate ${isDark ? "text-slate-500" : "text-slate-400"}`}>{u.email}</p>
+                            <div className="flex items-center gap-3">
+                              {/* Credit bar */}
+                              {credits && (
+                                <div className="flex-1 flex items-center gap-1.5">
+                                  <div className={`flex-1 h-1 rounded-full overflow-hidden ${isDark ? "bg-white/[0.06]" : "bg-slate-200"}`}>
+                                    <div
+                                      className={`h-full rounded-full transition-all ${
+                                        utilPct >= 90 ? "bg-red-500" : utilPct >= 70 ? "bg-amber-500" : "bg-emerald-500"
+                                      }`}
+                                      style={{ width: `${utilPct}%` }}
+                                    />
+                                  </div>
+                                  <span className={`text-[10px] shrink-0 font-medium ${
+                                    utilPct >= 90 ? "text-red-500" : utilPct >= 70 ? "text-amber-500" : isDark ? "text-slate-500" : "text-slate-400"
+                                  }`}>{credits.remainingHours}h left</span>
+                                </div>
+                              )}
+                              {openCount > 0 && (
+                                <span className={`text-[10px] shrink-0 font-semibold px-1.5 py-0.5 rounded-md ${
+                                  isDark ? "bg-amber-500/15 text-amber-400" : "bg-amber-50 text-amber-700"
+                                }`}>
+                                  {openCount} open
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                }
               </div>
             </div>
 
-            <div className={`admin-card overflow-hidden ${isDark ? "admin-dark" : ""}`}>
-              <div className="overflow-x-auto">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Email</th>
-                      <th>Status</th>
-                      <th>Created</th>
-                      <th className="text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.filter(u => u.role === "CUSTOMER").filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).length === 0 ? (
-                      <tr><td colSpan={5} className="text-center py-8"><span className={isDark ? "text-slate-500" : "text-slate-400"}>No clients found.</span></td></tr>
-                    ) : users.filter(u => u.role === "CUSTOMER").filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).map(u => (
-                      <tr key={u.id}>
-                        <td><span className={`font-medium text-sm ${isDark ? "text-slate-100" : "text-slate-900"}`}>{u.name}</span></td>
-                        <td><span className={`text-sm ${isDark ? "text-slate-400" : "text-slate-600"}`}>{u.email}</span></td>
-                        <td>
-                          <button onClick={() => handleUpdateUser(u.id, { isActive: !u.isActive })} className={`admin-badge cursor-pointer transition-opacity hover:opacity-80 ${u.isActive ? "admin-badge-active" : "admin-badge-suspended"}`}>
-                            {u.isActive ? "Active" : "Suspended"}
-                          </button>
-                        </td>
-                        <td><span className={`text-sm ${isDark ? "text-slate-500" : "text-slate-400"}`}>{new Date(u.createdAt).toLocaleDateString()}</span></td>
-                        <td className="text-center">
-                          <button onClick={() => handleEditUserClick(u)} className={`admin-btn admin-btn-ghost admin-btn-sm`}>
-                            <Edit2 className="w-3.5 h-3.5" />
-                            Edit
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            {/* ── Client Detail Panel (right column) ── */}
+            <div className={`lg:col-span-3 admin-card sticky top-6 ${isDark ? "admin-dark" : ""} overflow-hidden`}>
+              {selectedClientView ? (() => {
+                const cv = selectedClientView;
+                const credits = cv.customerCredits;
+                const clientTickets = tickets.filter(t => t.customer.id === cv.id);
+                const openTickets = clientTickets.filter(t => t.status === "OPEN" || t.status === "IN_PROGRESS");
+                const resolvedTickets = clientTickets.filter(t => t.status === "RESOLVED" || t.status === "CLOSED");
+                const allocH = credits?.allocatedHours ?? 0;
+                const usedH = credits?.usedHours ?? 0;
+                const remH = credits?.remainingHours ?? 0;
+                const billH = credits?.billableHours ?? 0;
+                const utilPct = allocH > 0 ? Math.min(100, Math.round((usedH / allocH) * 100)) : 0;
+                const initials = cv.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+
+                return (
+                  <div className="flex flex-col max-h-[85vh] overflow-y-auto">
+                    {/* Header */}
+                    <div className={`px-6 py-5 border-b flex items-start gap-4 ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
+                      {/* Big avatar */}
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-base font-bold shrink-0 ${
+                        isDark ? "bg-[#38b1f7]/15 text-[#5fc0f9]" : "bg-blue-100 text-blue-700"
+                      }`}>
+                        {initials}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>{cv.name}</h3>
+                          <span className={`admin-badge ${cv.isActive ? "admin-badge-active" : "admin-badge-suspended"}`}>
+                            {cv.isActive ? "Active" : "Suspended"}
+                          </span>
+                        </div>
+                        <p className={`text-sm mt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>{cv.email}</p>
+                        <p className={`text-[11px] mt-1 ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                          ID: {cv.id.slice(0, 16)}… · Member since {new Date(cv.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedClientView(null)}
+                        className={`p-1.5 rounded-lg shrink-0 transition-colors ${isDark ? "text-slate-500 hover:text-white hover:bg-white/[0.05]" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"}`}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Quick Actions */}
+                    <div className={`px-6 py-3 border-b flex flex-wrap gap-2 items-center ${isDark ? "border-white/[0.05] bg-white/[0.01]" : "border-slate-100 bg-slate-50/50"}`}>
+                      <span className={`text-[10px] uppercase font-bold tracking-wider ${isDark ? "text-slate-500" : "text-slate-450"}`}>Actions:</span>
+                      <button
+                        onClick={() => handleEditUserClick(cv)}
+                        className={`admin-btn admin-btn-ghost admin-btn-sm`}
+                      >
+                        <Edit2 className="w-3 h-3" />
+                        Edit Profile
+                      </button>
+                      <button
+                        onClick={() => handleUpdateUser(cv.id, { isActive: !cv.isActive })}
+                        className={`admin-btn admin-btn-sm ${
+                          cv.isActive
+                            ? "text-amber-600 border border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-400"
+                            : "text-emerald-600 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400"
+                        }`}
+                        style={{ height: 28, gap: 4 }}
+                      >
+                        {cv.isActive ? <MinusCircle className="w-3 h-3" /> : <CheckCircle className="w-3 h-3" />}
+                        {cv.isActive ? "Suspend" : "Reactivate"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setCreditsEditingUser(cv);
+                          setCreditsAllocated(cv.customerCredits?.allocatedHours ?? 20);
+                          setCreditsDescription("");
+                          setActiveTab("credits");
+                          setSelectedClientView(null);
+                        }}
+                        className={`admin-btn admin-btn-sm ${
+                          isDark ? "text-[#5fc0f9] border-[#38b1f7]/25 bg-[#38b1f7]/8 hover:bg-[#38b1f7]/15" : "text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100"
+                        }`}
+                        style={{ height: 28, gap: 4 }}
+                      >
+                        <Coins className="w-3 h-3" />
+                        Adjust Credits
+                      </button>
+                      <button
+                        onClick={() => { setActiveTab("tickets"); }}
+                        className={`admin-btn admin-btn-sm ${
+                          isDark ? "text-slate-300 border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06]" : "text-slate-600 border-slate-200 bg-white hover:bg-slate-50"
+                        }`}
+                        style={{ height: 28, gap: 4 }}
+                      >
+                        <Ticket className="w-3 h-3" />
+                        View Tickets
+                      </button>
+                    </div>
+
+                    <div className="px-6 py-5 space-y-6">
+
+                      {/* Credits Overview Card */}
+                      <div className={`rounded-2xl border p-5 space-y-4 ${
+                        isDark ? "border-white/[0.06] bg-white/[0.02]" : "border-slate-200 bg-slate-50/50"
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                            isDark ? "text-slate-400" : "text-slate-500"
+                          }`}>
+                            <Coins className="w-3.5 h-3.5" />
+                            Support Credits
+                          </h4>
+                          {!credits && (
+                            <span className={`text-[10px] ${isDark ? "text-slate-600" : "text-slate-400"}`}>No credit record</span>
+                          )}
+                        </div>
+
+                        {credits ? (
+                          <>
+                            {/* Credit bar */}
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between text-xs">
+                                <span className={isDark ? "text-slate-500" : "text-slate-400"}>{usedH}h used of {allocH}h allocated</span>
+                                <span className={`font-semibold ${
+                                  utilPct >= 90 ? "text-red-500" : utilPct >= 70 ? "text-amber-500" : isDark ? "text-emerald-400" : "text-emerald-600"
+                                }`}>{utilPct}%</span>
+                              </div>
+                              <div className={`h-2.5 rounded-full overflow-hidden ${isDark ? "bg-white/[0.06]" : "bg-slate-200"}`}>
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    utilPct >= 90 ? "bg-red-500" : utilPct >= 70 ? "bg-amber-500" : "bg-emerald-500"
+                                  }`}
+                                  style={{ width: `${utilPct}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Credit stats grid */}
+                            <div className="grid grid-cols-4 gap-3">
+                              {[
+                                { label: "Allocated", value: allocH, unit: "hrs", color: isDark ? "text-slate-200" : "text-slate-800" },
+                                { label: "Used", value: usedH, unit: "hrs", color: isDark ? "text-amber-400" : "text-amber-600" },
+                                { label: "Remaining", value: remH, unit: "hrs", color: remH <= 0 ? "text-red-500" : isDark ? "text-emerald-400" : "text-emerald-600" },
+                                { label: "Billable", value: billH, unit: "hrs", color: billH > 0 ? "text-red-500" : isDark ? "text-slate-500" : "text-slate-400" },
+                              ].map(stat => (
+                                <div key={stat.label} className={`rounded-xl p-3 text-center ${
+                                  isDark ? "bg-white/[0.03] border border-white/[0.04]" : "bg-white border border-slate-100 shadow-sm"
+                                }`}>
+                                  <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
+                                  <p className={`text-[9px] uppercase tracking-wider font-medium mt-0.5 ${isDark ? "text-slate-600" : "text-slate-400"}`}>{stat.label}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        ) : (
+                          <p className={`text-sm text-center py-2 ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                            No support credits allocated yet.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Ticket Stats */}
+                      <div className={`rounded-2xl border p-5 space-y-4 ${
+                        isDark ? "border-white/[0.06] bg-white/[0.02]" : "border-slate-200 bg-slate-50/50"
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                            isDark ? "text-slate-400" : "text-slate-500"
+                          }`}>
+                            <Ticket className="w-3.5 h-3.5" />
+                            Support Tickets
+                          </h4>
+                          <span className={`text-xs font-medium ${isDark ? "text-slate-500" : "text-slate-400"}`}>{clientTickets.length} total</span>
+                        </div>
+
+                        {/* Summary chips */}
+                        <div className="grid grid-cols-4 gap-2">
+                          {[
+                            { label: "Open", count: clientTickets.filter(t => t.status === "OPEN").length, color: isDark ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-700 border-blue-200" },
+                            { label: "In Progress", count: clientTickets.filter(t => t.status === "IN_PROGRESS").length, color: isDark ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-700 border-amber-200" },
+                            { label: "Resolved", count: clientTickets.filter(t => t.status === "RESOLVED").length, color: isDark ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                            { label: "Closed", count: clientTickets.filter(t => t.status === "CLOSED").length, color: isDark ? "bg-slate-700/50 text-slate-400 border-slate-600/40" : "bg-slate-100 text-slate-600 border-slate-200" },
+                          ].map(s => (
+                            <div key={s.label} className={`rounded-xl p-3 text-center border ${s.color}`}>
+                              <p className="text-lg font-bold">{s.count}</p>
+                              <p className="text-[9px] uppercase tracking-wider font-medium mt-0.5 opacity-70">{s.label}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Recent tickets list */}
+                        {clientTickets.length > 0 && (
+                          <div className="space-y-2">
+                            <p className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? "text-slate-600" : "text-slate-400"}`}>Recent Tickets</p>
+                            <div className={`divide-y rounded-xl border overflow-hidden ${
+                              isDark ? "border-white/[0.05] divide-white/[0.04]" : "border-slate-200 divide-slate-100"
+                            }`}>
+                              {clientTickets
+                                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                                .slice(0, 5)
+                                .map(t => (
+                                  <div
+                                    key={t.id}
+                                    onClick={() => { setActiveTab("tickets"); selectTicket(t); setSelectedClientView(null); }}
+                                    className={`flex items-center gap-3 px-3.5 py-2.5 cursor-pointer transition-colors ${
+                                      isDark ? "hover:bg-white/[0.03]" : "hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    <StatusIcon status={t.status} />
+                                    <div className="flex-1 min-w-0">
+                                      <p className={`text-xs font-medium truncate ${isDark ? "text-slate-200" : "text-slate-800"}`}>{t.title}</p>
+                                      <p className={`text-[10px] ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                                        {new Date(t.createdAt).toLocaleDateString()} · {t.category.name}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      <span className={priorityBadgeClass(t.priority)}>
+                                        <PriorityIconComponent priority={t.priority} />
+                                        {t.priority}
+                                      </span>
+                                      <ArrowUpRight className={`w-3 h-3 ${isDark ? "text-slate-600" : "text-slate-300"}`} />
+                                    </div>
+                                  </div>
+                                ))
+                              }
+                              {clientTickets.length > 5 && (
+                                <div
+                                  onClick={() => { setActiveTab("tickets"); setSelectedClientView(null); }}
+                                  className={`px-3.5 py-2 text-center text-xs cursor-pointer transition-colors ${
+                                    isDark ? "text-[#5fc0f9] hover:bg-white/[0.02]" : "text-blue-600 hover:bg-slate-50"
+                                  }`}
+                                >
+                                  View all {clientTickets.length} tickets →
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {clientTickets.length === 0 && (
+                          <p className={`text-sm text-center py-2 ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                            No support tickets submitted yet.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Account Info */}
+                      <div className={`rounded-2xl border p-5 space-y-3 ${
+                        isDark ? "border-white/[0.06] bg-white/[0.02]" : "border-slate-200 bg-slate-50/50"
+                      }`}>
+                        <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                          isDark ? "text-slate-400" : "text-slate-500"
+                        }`}>
+                          <User className="w-3.5 h-3.5" />
+                          Account Details
+                        </h4>
+                        {[
+                          { label: "User ID", value: cv.id.slice(0, 20) + "…" },
+                          { label: "Email Verified", value: cv.emailVerified ? "Yes" : "No" },
+                          { label: "Account Status", value: cv.isActive ? "Active" : "Suspended" },
+                          { label: "Role", value: cv.role },
+                          { label: "Member Since", value: new Date(cv.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) },
+                          { label: "Priority Tickets", value: clientTickets.filter(t => t.priority === "HIGH" || t.priority === "URGENT").length.toString() },
+                          { label: "SLA Breaches", value: clientTickets.filter(t => {
+                            if (t.status === "RESOLVED" || t.status === "CLOSED") return false;
+                            const elapsed = (Date.now() - new Date(t.createdAt).getTime()) / (1000 * 60 * 60);
+                            const limit = t.priority === "URGENT" || t.priority === "HIGH" ? 8 : t.priority === "MEDIUM" ? 24 : 72;
+                            return elapsed > limit;
+                          }).length.toString() + " active" },
+                        ].map(row => (
+                          <div key={row.label} className={`flex items-center justify-between py-2 border-b text-sm last:border-0 ${
+                            isDark ? "border-white/[0.05]" : "border-slate-100"
+                          }`}>
+                            <span className={isDark ? "text-slate-500" : "text-slate-400"}>{row.label}</span>
+                            <span className={`font-medium text-right ${isDark ? "text-slate-200" : "text-slate-800"}`}>{row.value}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                    </div>
+                  </div>
+                );
+              })() : (
+                <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 ${
+                    isDark ? "bg-white/[0.04]" : "bg-slate-100"
+                  }`}>
+                    <User className={`w-7 h-7 ${isDark ? "text-slate-600" : "text-slate-400"}`} />
+                  </div>
+                  <h3 className={`text-sm font-semibold mb-1 ${isDark ? "text-slate-300" : "text-slate-700"}`}>Select a Client</h3>
+                  <p className={`text-xs max-w-xs ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                    Click on any client from the list to view their detailed profile, credits, and support history.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Create Client Modal */}
@@ -1000,8 +2185,8 @@ export default function AdminDashboard() {
               </div>
               <div className="flex items-center gap-3">
                 <div className="relative">
-                  <Search className={`absolute right-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? "text-slate-500" : "text-slate-400"}`} />
-                  <input type="text" value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Search staff..." className={`admin-input ${isDark ? "admin-dark" : ""} pl-9 w-50 text-sm`} style={{ height: 40 }} />
+                  <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? "text-slate-500" : "text-slate-400"}`} />
+                  <input type="text" value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Search staff..." className={`admin-input ${isDark ? "admin-dark" : ""} w-50 text-sm`} style={{ height: 40, paddingLeft: "2.25rem" }} />
                 </div>
                 <button
                   onClick={() => { setUserFormName(""); setUserFormEmail(""); setUserFormPassword(""); setUserFormRole("AGENT"); setUserFormTeams([]); setShowCreateUser(true); }}
@@ -1229,6 +2414,685 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* ══════════════════════════════════════════════════════════
+            TAB: CATEGORIES & ROUTING
+        ══════════════════════════════════════════════════════════ */}
+        {activeTab === "routing" && user.role === "ADMIN" && (
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+            
+            {/* Categories Pane (Left, 2/5 columns) */}
+            <div className="lg:col-span-2 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Support Categories</h2>
+                  <p className={`text-xs mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>CRUD ticket categories for clients and team routing.</p>
+                </div>
+              </div>
+
+              {/* Form card */}
+              <div className={`admin-card p-4 space-y-4 ${isDark ? "admin-dark" : ""}`}>
+                <h3 className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  {editingCatId ? "Edit Support Category" : "Add Support Category"}
+                </h3>
+                <form onSubmit={handleSaveCategory} className="space-y-3">
+                  <div className="admin-form-group">
+                    <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Name <span className="text-red-500">*</span></label>
+                    <input 
+                      type="text" 
+                      required 
+                      value={catFormName} 
+                      onChange={e => setCatFormName(e.target.value)} 
+                      placeholder="e.g., Domain Hosting, Google Workspace" 
+                      className={`admin-input ${isDark ? "admin-dark" : ""} text-xs`}
+                      style={{ height: 34 }}
+                    />
+                  </div>
+                  <div className="admin-form-group">
+                    <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Parent Category</label>
+                    <select 
+                      value={catFormParentId} 
+                      onChange={e => setCatFormParentId(e.target.value)} 
+                      className={`admin-select ${isDark ? "admin-dark" : ""} text-xs`}
+                      style={{ height: 34 }}
+                    >
+                      <option value="">None (Top Level)</option>
+                      {categories.filter(c => c.id !== editingCatId).map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="admin-form-group">
+                    <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Description</label>
+                    <textarea 
+                      value={catFormDesc} 
+                      onChange={e => setCatFormDesc(e.target.value)} 
+                      placeholder="Covered issues details..." 
+                      rows={2} 
+                      className={`admin-textarea ${isDark ? "admin-dark" : ""} text-xs`}
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button type="submit" className="admin-btn admin-btn-primary flex-1 text-xs" style={{ height: 34 }}>
+                      {editingCatId ? "Save Changes" : "Create Category"}
+                    </button>
+                    {editingCatId && (
+                      <button 
+                        type="button" 
+                        onClick={() => { setEditingCatId(null); setCatFormName(""); setCatFormDesc(""); setCatFormParentId(""); }} 
+                        className="admin-btn admin-btn-ghost text-xs"
+                        style={{ height: 34 }}
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </div>
+
+              {/* Categories Tree/List */}
+              <div className={`admin-card p-4 space-y-3 ${isDark ? "admin-dark" : ""}`}>
+                <div className="flex items-center justify-between">
+                  <h3 className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    Active Categories
+                  </h3>
+                  {categories.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedCategoryIds.length === categories.length) {
+                          setSelectedCategoryIds([]);
+                        } else {
+                          setSelectedCategoryIds(categories.map(c => c.id));
+                        }
+                      }}
+                      className={`text-[10px] font-semibold hover:underline ${isDark ? "text-[#38b1f7]" : "text-blue-600"}`}
+                    >
+                      {selectedCategoryIds.length === categories.length ? "Deselect All" : "Select All"}
+                    </button>
+                  )}
+                </div>
+
+                {/* Bulk Action Alert Bar */}
+                {selectedCategoryIds.length > 0 && (
+                  <div className={`flex items-center justify-between p-2.5 rounded-xl border text-xs ${
+                    isDark ? "bg-red-950/20 border-red-500/20 text-red-300" : "bg-red-50 border-red-200 text-red-700"
+                  }`}>
+                    <span>Selected: {selectedCategoryIds.length}</span>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        type="button" 
+                        onClick={() => setSelectedCategoryIds([])}
+                        className="underline cursor-pointer font-medium hover:opacity-80"
+                      >
+                        Deselect
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={handleBulkDeleteCategories}
+                        className="admin-btn bg-red-600 hover:bg-red-500 text-white font-semibold text-[10px] py-1 px-2.5 rounded-lg flex items-center gap-1.5"
+                        style={{ height: 26 }}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Delete Selected
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                  {categories.length === 0 ? (
+                    <p className={`text-xs text-center py-6 ${isDark ? "text-slate-650" : "text-slate-400"}`}>No support categories.</p>
+                  ) : categories.map(cat => {
+                    const hasParent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null;
+                    return (
+                      <div 
+                        key={cat.id} 
+                        className={`flex items-center justify-between p-2.5 rounded-xl border text-xs transition-colors ${
+                          editingCatId === cat.id
+                            ? isDark ? "bg-[#38b1f7]/8 border-[#38b1f7]/30" : "bg-blue-50 border-blue-200"
+                            : isDark ? "bg-white/[0.01] border-white/[0.04] hover:bg-white/[0.03]" : "bg-white border-slate-200 hover:bg-slate-50 shadow-sm"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedCategoryIds.includes(cat.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedCategoryIds(prev => [...prev, cat.id]);
+                              } else {
+                                setSelectedCategoryIds(prev => prev.filter(id => id !== cat.id));
+                              }
+                            }}
+                            className="mr-1 rounded border-slate-350 dark:border-white/[0.08] accent-[#38b1f7] cursor-pointer"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className={`font-semibold truncate ${isDark ? "text-slate-100" : "text-slate-800"}`}>{cat.name}</p>
+                            {hasParent && (
+                              <p className={`text-[10px] truncate ${isDark ? "text-slate-500" : "text-slate-400"}`}>Parent: {hasParent.name}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button 
+                            onClick={() => handleEditCategory(cat)} 
+                            className={`p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-800"}`}
+                            title="Edit"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteCategory(cat.id)} 
+                            className={`p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors ${isDark ? "text-slate-400 hover:text-red-400" : "text-slate-500 hover:text-red-500"}`}
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Routing Rules Pane (Right, 3/5 columns) */}
+            <div className="lg:col-span-3 space-y-4">
+              <div>
+                <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Support Ticket Routing</h2>
+                <p className={`text-xs mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Configure primary assignees, teams, and L2 escalation paths.</p>
+              </div>
+
+              {/* Add rule card */}
+              <div className={`admin-card p-4 space-y-4 ${isDark ? "admin-dark" : ""}`}>
+                <h3 className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  Create Custom Routing Rule
+                </h3>
+                <form onSubmit={handleCreateRoutingRule} className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                  <div className="admin-form-group">
+                    <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Issue Category (e.g. Category Name)</label>
+                    <SearchableSelect
+                      value={newRuleCategory}
+                      onChange={setNewRuleCategory}
+                      options={[
+                        "Billing / Renewals",
+                        "Critical Issues",
+                        "Technical Support",
+                        ...categories.map(c => c.name)
+                      ]}
+                      placeholder="Search or select category..."
+                      isDark={isDark}
+                    />
+                  </div>
+                  <div className="admin-form-group">
+                    <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Primary Assignee</label>
+                    <select 
+                      value={newRuleAssignee} 
+                      onChange={e => setNewRuleAssignee(e.target.value)} 
+                      className={`admin-select ${isDark ? "admin-dark" : ""} text-xs`}
+                      style={{ height: 34 }}
+                    >
+                      <option value="">Unassigned</option>
+                      {agents.map(a => <option key={a.id} value={a.id}>{a.name} ({a.role})</option>)}
+                    </select>
+                  </div>
+                  <div className="admin-form-group">
+                    <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Primary Support Team</label>
+                    <select 
+                      value={newRuleTeam} 
+                      onChange={e => setNewRuleTeam(e.target.value)} 
+                      className={`admin-select ${isDark ? "admin-dark" : ""} text-xs`}
+                      style={{ height: 34 }}
+                    >
+                      <option value="">No Team</option>
+                      {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="admin-form-group">
+                    <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Secondary Assignee (L2 Manager)</label>
+                    <select 
+                      value={newRuleSecondary} 
+                      onChange={e => setNewRuleSecondary(e.target.value)} 
+                      className={`admin-select ${isDark ? "admin-dark" : ""} text-xs`}
+                      style={{ height: 34 }}
+                    >
+                      <option value="">None</option>
+                      {agents.filter(a => a.role === "SUPPORT_L2" || a.role === "ADMIN").map(a => (
+                        <option key={a.id} value={a.id}>{a.name} ({a.role})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2 flex justify-end">
+                    <button type="submit" className="admin-btn admin-btn-primary px-5 text-xs" style={{ height: 34 }}>
+                      Add Rule
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Rules table */}
+              <div className={`admin-card overflow-hidden ${isDark ? "admin-dark" : ""}`}>
+                <div className="overflow-x-auto">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Issue Category</th>
+                        <th>Primary Assignee</th>
+                        <th>Support Team</th>
+                        <th>L2 Escalation</th>
+                        <th className="text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {routingRules.length === 0 ? (
+                        <tr><td colSpan={5} className="text-center py-8"><span className={isDark ? "text-slate-500" : "text-slate-400"}>No routing rules defined.</span></td></tr>
+                      ) : routingRules.map(rule => {
+                        return (
+                          <tr key={rule.id}>
+                            <td className="font-semibold text-xs whitespace-normal max-w-[140px] truncate" title={rule.issueCategory}>
+                              {rule.issueCategory}
+                            </td>
+                            <td>
+                              <select 
+                                defaultValue={rule.assigneeId || ""} 
+                                id={`rule-assignee-${rule.id}`}
+                                className={`admin-select text-xs ${isDark ? "admin-dark" : ""}`}
+                                style={{ height: 30, width: "100%", minWidth: 120 }}
+                              >
+                                <option value="">Unassigned</option>
+                                {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                              </select>
+                            </td>
+                            <td>
+                              <select 
+                                defaultValue={rule.teamId || ""} 
+                                id={`rule-team-${rule.id}`}
+                                className={`admin-select text-xs ${isDark ? "admin-dark" : ""}`}
+                                style={{ height: 30, width: "100%", minWidth: 120 }}
+                              >
+                                <option value="">No Team</option>
+                                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                              </select>
+                            </td>
+                            <td>
+                              <select 
+                                defaultValue={rule.secondaryAssigneeId || ""} 
+                                id={`rule-secondary-${rule.id}`}
+                                className={`admin-select text-xs ${isDark ? "admin-dark" : ""}`}
+                                style={{ height: 30, width: "100%", minWidth: 120 }}
+                              >
+                                <option value="">None</option>
+                                {agents.filter(a => a.role === "SUPPORT_L2" || a.role === "ADMIN").map(a => (
+                                  <option key={a.id} value={a.id}>{a.name}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="text-center">
+                              <div className="flex gap-1 justify-center">
+                                <button 
+                                  onClick={async () => {
+                                    const assigneeId = (document.getElementById(`rule-assignee-${rule.id}`) as HTMLSelectElement)?.value || null;
+                                    const teamId = (document.getElementById(`rule-team-${rule.id}`) as HTMLSelectElement)?.value || null;
+                                    const secondaryAssigneeId = (document.getElementById(`rule-secondary-${rule.id}`) as HTMLSelectElement)?.value || null;
+                                    
+                                    try {
+                                      const res = await fetchWithAuth(`/users/routing-rules/${rule.id}`, {
+                                        method: "PATCH",
+                                        body: JSON.stringify({ teamId, assigneeId, secondaryAssigneeId }),
+                                      });
+                                      if (res.ok) {
+                                        toast.success("Routing rule saved.");
+                                        refreshAllData();
+                                      } else {
+                                        toast.error("Failed to update rule.");
+                                      }
+                                    } catch {
+                                      toast.error("Failed to update rule.");
+                                    }
+                                  }}
+                                  className="admin-btn admin-btn-primary admin-btn-sm text-[11px] px-2.5 py-1"
+                                  style={{ height: 28 }}
+                                >
+                                  Save
+                                </button>
+                                <button 
+                                  onClick={() => handleDeleteRoutingRule(rule.id)}
+                                  className={`p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-950/20 text-slate-400 hover:text-red-500 transition-colors`}
+                                  title="Delete Routing Rule"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════
+            TAB: ROLE PERMISSIONS
+        ══════════════════════════════════════════════════════════ */}
+        {activeTab === "permissions" && user.role === "ADMIN" && (
+          <div className="space-y-6">
+            <div>
+              <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Role Permissions</h2>
+              <p className={`text-sm mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                Configure access control matrix for system roles. Changes are saved dynamically.
+              </p>
+            </div>
+
+            <div className={`admin-card overflow-hidden ${isDark ? "admin-dark" : ""}`}>
+              <div className="overflow-x-auto">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th className="w-[280px]">Permission Action</th>
+                      {rolePermissions.map(rp => (
+                        <th key={rp.role} className="text-center min-w-[120px]">
+                          <span className={`admin-badge uppercase ${
+                            rp.role === "ADMIN" ? "admin-badge-admin" : "admin-badge-agent"
+                          }`}>
+                            {rp.role}
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { key: "view_tickets", name: "View Tickets", desc: "Allows viewing ticket queues and tickets" },
+                      { key: "reply_tickets", name: "Reply to Tickets", desc: "Allows sending replies and messages in tickets" },
+                      { key: "assign_tickets", name: "Assign Tickets", desc: "Allows assigning teams or agents to support tickets" },
+                      { key: "manage_teams", name: "Manage Teams", desc: "Allows creating, updating and deleting agent groups" },
+                      { key: "manage_kb", name: "Manage KB", desc: "Allows creating/editing knowledge base articles" },
+                      { key: "adjust_credits", name: "Adjust Client Credits", desc: "Allows adjusting support credit hours" },
+                      { key: "manage_categories_rules", name: "Manage Categories & Rules", desc: "Allows CRUD on ticket categories & routing rules" },
+                      { key: "manage_permissions", name: "Manage Permissions", desc: "Allows configuring role permissions and staff" },
+                    ].map(perm => (
+                      <tr key={perm.key} className={isDark ? "hover:bg-white/[0.01]" : "hover:bg-slate-50"}>
+                        <td>
+                          <p className={`font-semibold text-sm ${isDark ? "text-slate-200" : "text-slate-800"}`}>{perm.name}</p>
+                          <p className={`text-[10px] ${isDark ? "text-slate-500" : "text-slate-400"}`}>{perm.desc}</p>
+                        </td>
+                        {rolePermissions.map(rp => {
+                          const hasPerm = rp.permissions.includes(perm.key);
+                          const isSaving = savingPermissionsRole === rp.role;
+                          return (
+                            <td key={rp.role} className="text-center">
+                              <input 
+                                type="checkbox"
+                                checked={hasPerm}
+                                disabled={isSaving || (rp.role === "ADMIN" && perm.key === "manage_permissions")}
+                                onChange={(e) => handleTogglePermission(rp.role, perm.key, e.target.checked)}
+                                className={`rounded w-4 h-4 cursor-pointer accent-[#38b1f7] disabled:opacity-40`}
+                              />
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════
+            TAB: CLIENT CREDITS
+        ══════════════════════════════════════════════════════════ */}
+        {activeTab === "credits" && user.role === "ADMIN" && (
+          <div className="space-y-5">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div>
+                <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Service Credit Hours</h2>
+                <p className={`text-sm mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Manage support credits and billing hours for customer accounts.</p>
+              </div>
+              <div className="relative">
+                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? "text-slate-500" : "text-slate-400"}`} />
+                <input 
+                  type="text" 
+                  value={userSearch} 
+                  onChange={e => setUserSearch(e.target.value)} 
+                  placeholder="Search customer credits..." 
+                  className={`admin-input ${isDark ? "admin-dark" : ""} w-64 text-sm`} 
+                  style={{ height: 38, paddingLeft: "2.25rem" }} 
+                />
+              </div>
+            </div>
+
+            <div className={`admin-card overflow-hidden ${isDark ? "admin-dark" : ""}`}>
+              <div className="overflow-x-auto">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Customer Name</th>
+                      <th>Email</th>
+                      <th>Allocated Credit</th>
+                      <th>Used Credits</th>
+                      <th>Remaining Credits</th>
+                      <th>Billable Credits</th>
+                      <th className="text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.filter(u => u.role === "CUSTOMER").filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).length === 0 ? (
+                      <tr><td colSpan={7} className="text-center py-8"><span className={isDark ? "text-slate-500" : "text-slate-400"}>No customers found.</span></td></tr>
+                    ) : users.filter(u => u.role === "CUSTOMER").filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).map(u => (
+                      <tr key={u.id}>
+                        <td><span className={`font-semibold text-sm ${isDark ? "text-slate-100" : "text-slate-900"}`}>{u.name}</span></td>
+                        <td><span className={`text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>{u.email}</span></td>
+                        <td><span className="font-semibold">{u.customerCredits?.allocatedHours ?? 20} hrs</span></td>
+                        <td><span className="text-amber-500 font-semibold">{u.customerCredits?.usedHours ?? 0} hrs</span></td>
+                        <td><span className="text-green-500 font-semibold">{u.customerCredits?.remainingHours ?? 20} hrs</span></td>
+                        <td><span className="text-red-500 font-semibold">{u.customerCredits?.billableHours ?? 0} hrs</span></td>
+                        <td className="text-center">
+                          <button 
+                            onClick={() => {
+                              setCreditsEditingUser(u);
+                              setCreditsAllocated(u.customerCredits?.allocatedHours ?? 20);
+                              setCreditsDescription("");
+                            }}
+                            className="admin-btn admin-btn-secondary admin-btn-sm"
+                          >
+                            Adjust Credits
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════
+            TAB: SLA METRICS
+        ══════════════════════════════════════════════════════════ */}
+        {activeTab === "sla" && (
+          <div className="space-y-6">
+            <div>
+              <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>SLA & Turnaround Analytics</h2>
+              <p className={`text-sm mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Real-time response compliance, resolution durations, and breach summaries.</p>
+            </div>
+
+            {(() => {
+              const resolvedTickets = tickets.filter(t => t.status === "RESOLVED" || t.status === "CLOSED");
+              const respondedTickets = tickets.filter(t => t.firstResponseAt);
+
+              let avgFrt = 0;
+              if (respondedTickets.length > 0) {
+                const sum = respondedTickets.reduce((acc, t) => {
+                  const created = new Date(t.createdAt).getTime();
+                  const responded = new Date(t.firstResponseAt!).getTime();
+                  return acc + (responded - created) / (1000 * 60 * 60);
+                }, 0);
+                avgFrt = Math.round((sum / respondedTickets.length) * 10) / 10;
+              }
+
+              let avgTtr = 0;
+              const resolvedWithTtr = resolvedTickets.filter(t => t.ttrHours !== null && t.ttrHours !== undefined);
+              if (resolvedWithTtr.length > 0) {
+                const sum = resolvedWithTtr.reduce((acc, t) => acc + t.ttrHours!, 0);
+                avgTtr = Math.round((sum / resolvedWithTtr.length) * 10) / 10;
+              }
+
+              let responseBreaches = 0;
+              let resolutionBreaches = 0;
+              tickets.forEach(t => {
+                const created = new Date(t.createdAt).getTime();
+                
+                // Response breach
+                if (t.firstResponseAt) {
+                  const responded = new Date(t.firstResponseAt).getTime();
+                  const responseDuration = (responded - created) / (1000 * 60 * 60);
+                  if (t.priority === "HIGH" || t.priority === "URGENT") {
+                    if (responseDuration > 2) responseBreaches++;
+                  } else if (t.priority === "MEDIUM") {
+                    if (responseDuration > 8) responseBreaches++;
+                  } else if (t.priority === "LOW") {
+                    if (responseDuration > 24) responseBreaches++;
+                  }
+                } else {
+                  const duration = (Date.now() - created) / (1000 * 60 * 60);
+                  if (t.priority === "HIGH" || t.priority === "URGENT") {
+                    if (duration > 2) responseBreaches++;
+                  } else if (t.priority === "MEDIUM") {
+                    if (duration > 8) responseBreaches++;
+                  } else if (t.priority === "LOW") {
+                    if (duration > 24) responseBreaches++;
+                  }
+                }
+
+                // Resolution breach
+                if (t.ttrHours !== null && t.ttrHours !== undefined) {
+                  if (t.priority === "HIGH" || t.priority === "URGENT") {
+                    if (t.ttrHours > 8) resolutionBreaches++;
+                  } else if (t.priority === "MEDIUM") {
+                    if (t.ttrHours > 24) resolutionBreaches++;
+                  } else if (t.priority === "LOW") {
+                    if (t.ttrHours > 72) resolutionBreaches++;
+                  }
+                } else if (t.status !== "RESOLVED" && t.status !== "CLOSED") {
+                  const duration = (Date.now() - created) / (1000 * 60 * 60);
+                  if (t.priority === "HIGH" || t.priority === "URGENT") {
+                    if (duration > 8) resolutionBreaches++;
+                  } else if (t.priority === "MEDIUM") {
+                    if (duration > 24) resolutionBreaches++;
+                  } else if (t.priority === "LOW") {
+                    if (duration > 72) resolutionBreaches++;
+                  }
+                }
+              });
+
+              return (
+                <>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+                    <div className={`admin-card p-5 ${isDark ? "admin-dark" : ""}`}>
+                      <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Avg Response Time</p>
+                      <p className="text-3xl font-extrabold text-[#38b1f7]">{avgFrt} hrs</p>
+                      <p className={`text-[10px] mt-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>First response target metric</p>
+                    </div>
+                    <div className={`admin-card p-5 ${isDark ? "admin-dark" : ""}`}>
+                      <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Avg Resolution (TTR)</p>
+                      <p className="text-3xl font-extrabold text-emerald-500">{avgTtr} hrs</p>
+                      <p className={`text-[10px] mt-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Based on {resolvedTickets.length} resolved tickets</p>
+                    </div>
+                    <div className={`admin-card p-5 ${isDark ? "admin-dark" : ""}`}>
+                      <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Response Breaches</p>
+                      <p className="text-3xl font-extrabold text-red-500">{responseBreaches}</p>
+                      <p className={`text-[10px] mt-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Exceeded response SLA time limit</p>
+                    </div>
+                    <div className={`admin-card p-5 ${isDark ? "admin-dark" : ""}`}>
+                      <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${isDark ? "text-[#94a3b8]" : "text-slate-400"}`}>Resolution Breaches</p>
+                      <p className="text-3xl font-extrabold text-red-500">{resolutionBreaches}</p>
+                      <p className={`text-[10px] mt-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Exceeded resolution SLA time limit</p>
+                    </div>
+                  </div>
+
+                  <div className={`admin-card p-6 space-y-4 ${isDark ? "admin-dark" : ""}`}>
+                    <h3 className={`text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>SLA Threshold Guidelines</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                      <div className={`p-4 border rounded-xl ${isDark ? "bg-[#38b1f7]/5 border-[#38b1f7]/15" : "bg-blue-50 border-blue-100"}`}>
+                        <p className="font-bold text-red-500">Urgent / High Priority</p>
+                        <p className="mt-1">Response: Within 2 hours</p>
+                        <p>Resolution: Within 8 hours</p>
+                      </div>
+                      <div className={`p-4 border rounded-xl ${isDark ? "bg-amber-500/5 border-amber-500/15" : "bg-amber-50 border-amber-100"}`}>
+                        <p className="font-bold text-amber-500">Medium Priority</p>
+                        <p className="mt-1">Response: Within 8 hours</p>
+                        <p>Resolution: Within 24 hours</p>
+                      </div>
+                      <div className={`p-4 border rounded-xl ${isDark ? "bg-slate-500/5 border-slate-500/15" : "bg-slate-50 border-slate-200"}`}>
+                        <p className="font-bold text-slate-655 dark:text-slate-350">Low Priority</p>
+                        <p className="mt-1">Response: Within 24 hours</p>
+                        <p>Resolution: Within 72 hours</p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        )}
+
+        {creditsEditingUser && (
+          <AdjustCreditsModal
+            user={creditsEditingUser}
+            allocated={creditsAllocated}
+            description={creditsDescription}
+            isDark={isDark}
+            onClose={() => setCreditsEditingUser(null)}
+            onAllocatedChange={setCreditsAllocated}
+            onDescriptionChange={setCreditsDescription}
+            onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                const res = await fetchWithAuth(`/users/${creditsEditingUser.id}/credits`, {
+                  method: "PATCH",
+                  body: JSON.stringify({
+                    allocatedHours: creditsAllocated,
+                    description: creditsDescription || undefined
+                  }),
+                });
+                if (res.ok) {
+                  toast.success("Credits adjusted successfully.");
+                  setCreditsEditingUser(null);
+                  refreshAllData();
+                } else {
+                  toast.error("Failed to adjust credits.");
+                }
+              } catch {
+                toast.error("Failed to adjust credits.");
+              }
+            }}
+          />
+        )}
+
+        {showResolveModal && selectedTicket && (
+          <ResolveTicketModal
+            ticket={selectedTicket}
+            customerUser={users.find(u => u.id === selectedTicket.customer.id)}
+            hours={resolveTicketHours}
+            notes={resolveTicketNotes}
+            isDark={isDark}
+            onClose={() => {
+              setShowResolveModal(false);
+              setPendingStatusChange(null);
+            }}
+            onHoursChange={setResolveTicketHours}
+            onNotesChange={setResolveTicketNotes}
+            onSubmit={handleResolveSubmit}
+          />
+        )}
       </div>
     </AdminShell>
   );
@@ -1265,6 +3129,108 @@ function EmptyState({ icon, title, description, isDark }: {
   );
 }
 
+interface AdjustCreditsModalProps {
+  user: UserProfile;
+  allocated: number;
+  description: string;
+  isDark: boolean;
+  onClose: () => void;
+  onAllocatedChange: (v: number) => void;
+  onDescriptionChange: (v: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+}
+
+function AdjustCreditsModal({
+  user, allocated, description, isDark, onClose, onAllocatedChange, onDescriptionChange, onSubmit
+}: AdjustCreditsModalProps) {
+  const currentAllocated = user.customerCredits?.allocatedHours ?? 20;
+  const currentUsed = user.customerCredits?.usedHours ?? 0;
+  const diff = allocated - currentAllocated;
+  const previewRemaining = Math.max(0, allocated - currentUsed);
+  const previewBillable = Math.max(0, currentUsed - allocated);
+
+  return (
+    <div className={`admin-modal-overlay ${isDark ? "admin-dark" : ""}`} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="admin-modal w-full max-w-[460px]">
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <h3 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Adjust Support Credits</h3>
+            <p className={`text-xs mt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Account: {user.name} ({user.email})</p>
+          </div>
+          <button type="button" onClick={onClose} className={`p-1.5 rounded-lg mt-0.5 ${isDark ? "text-slate-400 hover:text-white hover:bg-white/[0.05]" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"}`}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl border text-xs bg-slate-50 dark:bg-white/[0.02] border-slate-200 dark:border-white/[0.05]">
+            <div>
+              <p className={isDark ? "text-slate-400" : "text-slate-500"}>Current Allocation</p>
+              <p className={`text-sm font-bold mt-0.5 ${isDark ? "text-slate-200" : "text-slate-800"}`}>{currentAllocated} hrs</p>
+            </div>
+            <div>
+              <p className={isDark ? "text-slate-400" : "text-slate-500"}>Used to Date</p>
+              <p className={`text-sm font-bold mt-0.5 ${isDark ? "text-slate-200" : "text-slate-800"}`}>{currentUsed} hrs</p>
+            </div>
+          </div>
+
+          <div className="admin-form-group">
+            <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>New Allocated Hours</label>
+            <div className="flex items-center gap-3">
+              <input 
+                type="number" 
+                required 
+                min={0}
+                step={0.5}
+                value={allocated} 
+                onChange={e => onAllocatedChange(parseFloat(e.target.value) || 0)} 
+                className={`admin-input ${isDark ? "admin-dark" : ""} flex-1`} 
+                style={{ height: 38 }}
+              />
+              <span className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border ${
+                diff > 0 
+                  ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/20 dark:text-green-400 dark:border-green-500/20" 
+                  : diff < 0 
+                    ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/20 dark:text-red-400 dark:border-red-500/20" 
+                    : isDark ? "bg-white/[0.05] text-slate-400 border-white/[0.06]" : "bg-slate-100 text-slate-600 border-slate-200"
+              }`}>
+                {diff > 0 ? `+${diff}` : diff} hrs
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl border text-xs bg-blue-50/40 dark:bg-[#38b1f7]/5 border-blue-100 dark:border-[#38b1f7]/10">
+            <div>
+              <p className={isDark ? "text-slate-400" : "text-slate-500"}>New Remaining Balance</p>
+              <p className="text-sm font-bold mt-0.5 text-green-500">{previewRemaining} hrs</p>
+            </div>
+            <div>
+              <p className={isDark ? "text-slate-400" : "text-slate-500"}>New Billable Overage</p>
+              <p className="text-sm font-bold mt-0.5 text-red-500">{previewBillable} hrs</p>
+            </div>
+          </div>
+
+          <div className="admin-form-group">
+            <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Adjustment Reason / Description <span className="text-red-500">*</span></label>
+            <textarea 
+              required
+              value={description} 
+              onChange={e => onDescriptionChange(e.target.value)} 
+              placeholder="e.g. Added 10 hours for enterprise tier upgrade support..." 
+              rows={2} 
+              className={`admin-textarea ${isDark ? "admin-dark" : ""} text-xs`}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="admin-btn admin-btn-ghost text-xs" style={{ height: 36 }}>Cancel</button>
+            <button type="submit" className="admin-btn admin-btn-primary text-xs" style={{ height: 36 }}>Apply Adjustment</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // Shared User Create/Edit Modal
 interface UserModalProps {
   title: string; subtitle: string; isDark: boolean;
@@ -1272,7 +3238,7 @@ interface UserModalProps {
   formName: string; setFormName: (v: string) => void;
   formEmail: string; setFormEmail: (v: string) => void;
   formPassword: string; setFormPassword: (v: string) => void;
-  formRole: "CUSTOMER" | "AGENT" | "ADMIN"; setFormRole: (v: any) => void;
+  formRole: "CUSTOMER" | "ADMIN" | "AGENT" | "SUPPORT_L1" | "SUPPORT_L2" | "BILLING"; setFormRole: (v: any) => void;
   formIsActive: boolean; setFormIsActive: (v: boolean) => void;
   formTeams: string[]; setFormTeams: (v: string[]) => void;
   teams: { id: string; name: string }[];
@@ -1281,15 +3247,16 @@ interface UserModalProps {
 }
 
 function UserModal({ title, subtitle, isDark, showRole, showTeams, showStatusToggle, formName, setFormName, formEmail, setFormEmail, formPassword, setFormPassword, formRole, setFormRole, formIsActive, setFormIsActive, formTeams, setFormTeams, teams, onClose, onSubmit, submitLabel }: UserModalProps) {
+  const [showPassword, setShowPassword] = useState(false);
   return (
-    <div className="admin-modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={`admin-modal ${isDark ? "admin-dark" : ""}`}>
+    <div className={`admin-modal-overlay ${isDark ? "admin-dark" : ""}`} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="admin-modal">
         <div className="flex items-start justify-between mb-5">
           <div>
             <h3 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>{title}</h3>
-            <p className={`text-xs mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>{subtitle}</p>
+            <p className={`text-xs mt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>{subtitle}</p>
           </div>
-          <button onClick={onClose} className={`p-1.5 rounded-lg mt-0.5 ${isDark ? "text-slate-400 hover:text-white hover:bg-white/[0.05]" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"}`}>
+          <button type="button" onClick={onClose} className={`p-1.5 rounded-lg mt-0.5 ${isDark ? "text-slate-400 hover:text-white hover:bg-white/[0.05]" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"}`}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -1304,7 +3271,25 @@ function UserModal({ title, subtitle, isDark, showRole, showTeams, showStatusTog
           </div>
           <div className="admin-form-group">
             <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Password {!showStatusToggle && <span className="text-red-500">*</span>}</label>
-            <input type="password" required={!showStatusToggle} value={formPassword} onChange={e => setFormPassword(e.target.value)} placeholder={showStatusToggle ? "Leave blank to keep current" : "••••••••"} className={`admin-input ${isDark ? "admin-dark" : ""}`} />
+            <div className="relative">
+              <input 
+                type={showPassword ? "text" : "password"} 
+                required={!showStatusToggle} 
+                value={formPassword} 
+                onChange={e => setFormPassword(e.target.value)} 
+                placeholder={showStatusToggle ? "Leave blank to keep current" : "••••••••"} 
+                className={`admin-input ${isDark ? "admin-dark" : ""} pr-10`} 
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${
+                  isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
           {showRole && (
             <div className="admin-form-group">
@@ -1391,18 +3376,18 @@ function TeamModal({
 
   return (
     <div
-      className="admin-modal-overlay"
+      className={`admin-modal-overlay ${isDark ? "admin-dark" : ""}`}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className={`admin-modal w-full max-w-[520px] ${isDark ? "admin-dark" : ""}`}
+        className="admin-modal w-full max-w-[520px]"
         style={{ maxHeight: "92vh", overflowY: "auto" }}
       >
         {/* Header */}
         <div className={`flex items-start justify-between mb-6 pb-5 border-b ${isDark ? "border-white/[0.06]" : "border-slate-100"}`}>
           <div>
             <h3 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>{title}</h3>
-            <p className={`text-xs mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>{subtitle}</p>
+            <p className={`text-xs mt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>{subtitle}</p>
           </div>
           <button
             type="button"
@@ -1554,6 +3539,206 @@ function TeamModal({
             <button type="submit" className="admin-btn admin-btn-primary">
               {submitLabel}
             </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Searchable Select component for issue category ──────────────────
+interface SearchableSelectProps {
+  value: string;
+  onChange: (val: string) => void;
+  options: string[];
+  placeholder: string;
+  isDark: boolean;
+}
+
+function SearchableSelect({ value, onChange, options, placeholder, isDark }: SearchableSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setSearch(value);
+  }, [value]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+        setSearch(value);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [value]);
+
+  const filteredOptions = options.filter(opt =>
+    opt.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <div className="relative">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setIsOpen(true);
+            if (e.target.value === "") {
+              onChange("");
+            }
+          }}
+          onFocus={() => setIsOpen(true)}
+          placeholder={placeholder}
+          className={`admin-input ${isDark ? "admin-dark" : ""} w-full text-xs pr-8`}
+          style={{ height: 34 }}
+        />
+        <div 
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center text-slate-400 cursor-pointer" 
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          <ChevronDown className="w-3.5 h-3.5" />
+        </div>
+      </div>
+      {isOpen && (
+        <div className={`absolute z-10 w-full mt-1 max-h-56 overflow-y-auto rounded-xl border shadow-lg ${
+          isDark 
+            ? "bg-[#0b0f19] border-white/[0.08] text-slate-200" 
+            : "bg-white border-slate-200 text-slate-800"
+        }`}>
+          {filteredOptions.length === 0 ? (
+            <div className="p-2.5 text-xs text-slate-400 text-center">No categories found</div>
+          ) : (
+            filteredOptions.map((opt) => (
+              <div
+                key={opt}
+                onClick={() => {
+                  onChange(opt);
+                  setSearch(opt);
+                  setIsOpen(false);
+                }}
+                className={`px-3 py-2 text-xs cursor-pointer transition-colors ${
+                  value === opt
+                    ? isDark 
+                      ? "bg-white/[0.08] text-white" 
+                      : "bg-blue-50 text-blue-600 font-semibold"
+                    : isDark 
+                      ? "hover:bg-white/[0.04]" 
+                      : "hover:bg-slate-50"
+                }`}
+              >
+                {opt}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Custom Resolve Ticket Modal ──────────────────────────────────────
+interface ResolveTicketModalProps {
+  ticket: TicketData;
+  customerUser: UserProfile | undefined;
+  hours: number;
+  notes: string;
+  isDark: boolean;
+  onClose: () => void;
+  onHoursChange: (v: number) => void;
+  onNotesChange: (v: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+}
+
+function ResolveTicketModal({
+  ticket, customerUser, hours, notes, isDark, onClose, onHoursChange, onNotesChange, onSubmit
+}: ResolveTicketModalProps) {
+  const credits = customerUser?.customerCredits;
+  const currentAllocated = credits?.allocatedHours ?? 20;
+  const currentUsed = credits?.usedHours ?? 0;
+  const currentRemaining = credits?.remainingHours ?? 20;
+  const currentBillable = credits?.billableHours ?? 0;
+
+  const newUsed = currentUsed + hours;
+  const newRemaining = Math.max(0, currentRemaining - hours);
+  const overage = hours > currentRemaining ? (hours - currentRemaining) : 0;
+  const newBillable = currentBillable + overage;
+
+  return (
+    <div className={`admin-modal-overlay ${isDark ? "admin-dark" : ""}`} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="admin-modal w-full max-w-[480px]">
+        <div className="flex items-start justify-between mb-5 border-b pb-4 dark:border-white/[0.06] border-slate-100">
+          <div>
+            <h3 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Resolve Support Ticket</h3>
+            <p className={`text-xs mt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Ticket: #{ticket.id.slice(0, 8)} — {ticket.title}</p>
+          </div>
+          <button type="button" onClick={onClose} className={`p-1.5 rounded-lg mt-0.5 ${isDark ? "text-slate-400 hover:text-white hover:bg-white/[0.05]" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"}`}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <h4 className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Client Credits Preview</h4>
+            <div className="grid grid-cols-3 gap-2 p-3 rounded-xl border text-xs bg-slate-50 dark:bg-white/[0.01] border-slate-200 dark:border-white/[0.05]">
+              <div className="text-center border-r dark:border-white/[0.04] border-slate-200 last:border-r-0">
+                <p className={isDark ? "text-slate-550" : "text-slate-400"}>Remaining</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">{currentRemaining} hrs</p>
+                <p className={`text-[10px] mt-0.5 font-bold ${newRemaining === 0 ? "text-red-500" : "text-green-500"}`}>
+                  → {newRemaining} hrs
+                </p>
+              </div>
+              <div className="text-center border-r dark:border-white/[0.04] border-slate-200 last:border-r-0">
+                <p className={isDark ? "text-slate-550" : "text-slate-400"}>Used</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">{currentUsed} hrs</p>
+                <p className="text-amber-500 text-[10px] mt-0.5 font-medium">
+                  → {newUsed} hrs
+                </p>
+              </div>
+              <div className="text-center">
+                <p className={isDark ? "text-slate-550" : "text-slate-400"}>Billable Overage</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">{currentBillable} hrs</p>
+                <p className={`text-[10px] mt-0.5 font-medium ${overage > 0 ? "text-red-500 font-bold" : "text-slate-400"}`}>
+                  → {newBillable} hrs {overage > 0 && `(+${overage})`}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="admin-form-group">
+            <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Support Credit Hours to Consume</label>
+            <input 
+              type="number" 
+              required 
+              min={0}
+              step={0.1}
+              value={hours} 
+              onChange={e => onHoursChange(parseFloat(e.target.value) || 0)} 
+              className={`admin-input ${isDark ? "admin-dark" : ""}`} 
+              style={{ height: 38 }}
+            />
+          </div>
+
+          <div className="admin-form-group">
+            <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Resolution Summary / Notes (Optional)</label>
+            <textarea 
+              value={notes} 
+              onChange={e => onNotesChange(e.target.value)} 
+              placeholder="Explain how this issue was resolved. These notes will be saved and posted to the ticket." 
+              rows={3} 
+              className={`admin-textarea ${isDark ? "admin-dark" : ""} text-xs`}
+            />
+            <p className={`text-[10px] mt-1 ${isDark ? "text-slate-550" : "text-slate-400"}`}>
+              If provided, this summary will automatically be posted as a message reply on this ticket.
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t dark:border-white/[0.06] border-slate-100">
+            <button type="button" onClick={onClose} className="admin-btn admin-btn-ghost text-xs" style={{ height: 36 }}>Cancel</button>
+            <button type="submit" className="admin-btn admin-btn-primary text-xs" style={{ height: 36 }}>Confirm Resolution</button>
           </div>
         </form>
       </div>

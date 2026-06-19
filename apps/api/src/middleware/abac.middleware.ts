@@ -23,7 +23,7 @@ export async function canAccessTicket(
     return ticket.customerId === userId;
   }
 
-  if (userRole === "AGENT") {
+  if (userRole === "AGENT" || userRole === "SUPPORT_L1" || userRole === "SUPPORT_L2" || userRole === "BILLING") {
     // Assigned agent check
     if (ticket.agentId === userId) return true;
 
@@ -65,7 +65,7 @@ export async function canAccessArticle(
 
   if (article.isPublished) {
     if (!article.isInternal) return true; // Public
-    return !!(userRole && (userRole === "ADMIN" || userRole === "AGENT")); // Internal
+    return !!(userRole && (userRole === "ADMIN" || userRole === "AGENT" || userRole === "SUPPORT_L1" || userRole === "SUPPORT_L2" || userRole === "BILLING")); // Internal
   }
 
   // Drafts are only accessible by admins or the author (checked above)

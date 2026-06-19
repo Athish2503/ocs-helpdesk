@@ -11,32 +11,31 @@ interface UserContext {
 /**
  * Create a new ticket for a customer.
  */
-export async function createTicket(input: CreateTicketInput, customerId: string, userRole: Role) {
+export async function createTicket(
+  input: CreateTicketInput & { affectedDomain?: string | null; issueCategory?: string | null },
+  customerId: string,
+  userRole: Role
+) {
   let categoryId = input.categoryId;
 
-  if (userRole === "CUSTOMER" || !categoryId) {
-    // Customers cannot select category. Default to "General Inquiry"
+  if (!categoryId) {
     let generalCategory = await prisma.category.findFirst({
+      where: { name: "Other Services" },
+    }) || await prisma.category.findFirst({
       where: { name: "General Inquiry" },
     });
 
     if (!generalCategory) {
       generalCategory = await prisma.category.create({
         data: {
-          name: "General Inquiry",
-          slug: "general-inquiry",
-          description: "Any general questions not covered by other categories.",
+          name: "Other Services",
+          slug: "other-services",
+          description: "General support inquiries.",
           isActive: true,
         },
       });
     }
     categoryId = generalCategory.id;
-  }
-
-  let priority = input.priority;
-  if (userRole === "CUSTOMER") {
-    // Customers cannot set priority level. Force to MEDIUM
-    priority = "MEDIUM";
   }
 
   // Verify category exists and is active
@@ -50,7 +49,45 @@ export async function createTicket(input: CreateTicketInput, customerId: string,
     throw error;
   }
 
-  return prisma.ticket.create({
+  const categoryName = category.name;
+  let priority = input.priority || "MEDIUM";
+
+  // Determine Routing Category
+  // 1. Check if there is a rule matching the category name exactly
+  let rule = await prisma.routingRule.findUnique({
+    where: { issueCategory: categoryName },
+  });
+
+  let issueCategory = categoryName;
+
+  // 2. If not, fallback to priority/general category routing
+  if (!rule) {
+    issueCategory = "Technical Support";
+    if (priority === "HIGH" || priority === "URGENT") {
+      issueCategory = "Critical Issues";
+    } else if (
+      categoryName.toLowerCase().includes("billing") ||
+      categoryName.toLowerCase().includes("renew") ||
+      input.issueCategory === "Billing / Renewals"
+    ) {
+      issueCategory = "Billing / Renewals";
+    }
+
+    rule = await prisma.routingRule.findUnique({
+      where: { issueCategory },
+    });
+  }
+
+  let agentId: string | null = null;
+  let teamId: string | null = null;
+
+  if (rule) {
+    agentId = rule.assigneeId;
+    teamId = rule.teamId;
+  }
+
+
+  const ticket = await prisma.ticket.create({
     data: {
       title: input.title,
       description: input.description,
@@ -58,11 +95,87 @@ export async function createTicket(input: CreateTicketInput, customerId: string,
       status: "OPEN",
       categoryId: categoryId,
       customerId,
+      agentId,
+      teamId,
+      affectedDomain: input.affectedDomain,
+      issueCategory,
     },
     include: {
       category: true,
+      customer: true,
+      agent: true,
+      team: {
+        include: {
+          members: true,
+        },
+      },
     },
   });
+
+  // Log status history
+  await prisma.ticketStatusHistory.create({
+    data: {
+      ticketId: ticket.id,
+      toStatus: "OPEN",
+      changedById: customerId,
+    },
+  });
+
+  // Send notifications
+  try {
+    const emailRecipients: string[] = [];
+
+    // Notify assigned agent
+    if (ticket.agent) {
+      emailRecipients.push(ticket.agent.email);
+    }
+
+    // Notify assigned team members
+    if (ticket.team && ticket.team.members) {
+      ticket.team.members.forEach((m) => {
+        if (!emailRecipients.includes(m.email)) {
+          emailRecipients.push(m.email);
+        }
+      });
+    }
+
+    // If it's a critical issue, escalate to Manager L2 as well
+    if (issueCategory === "Critical Issues" && rule && rule.secondaryAssigneeId) {
+      const secondaryAssignee = await prisma.user.findUnique({
+        where: { id: rule.secondaryAssigneeId },
+      });
+      if (secondaryAssignee && !emailRecipients.includes(secondaryAssignee.email)) {
+        emailRecipients.push(secondaryAssignee.email);
+      }
+    }
+
+    // If no recipients matched, notify any system admin
+    if (emailRecipients.length === 0) {
+      const admins = await prisma.user.findMany({
+        where: { role: "ADMIN" },
+      });
+      admins.forEach((a) => emailRecipients.push(a.email));
+    }
+
+    // Send emails using email service
+    const { sendTicketNotificationEmail } = await import("../../services/email.service.js");
+    for (const email of emailRecipients) {
+      await sendTicketNotificationEmail(email, {
+        id: ticket.id,
+        title: ticket.title,
+        description: ticket.description,
+        category: ticket.category.name,
+        priority: ticket.priority,
+        customerName: ticket.customer.name,
+        customerEmail: ticket.customer.email,
+        affectedDomain: ticket.affectedDomain,
+      });
+    }
+  } catch (err) {
+    console.error("Failed to send ticket creation email notifications:", err);
+  }
+
+  return ticket;
 }
 
 /**
@@ -73,7 +186,7 @@ export async function listTickets(user: UserContext) {
 
   if (user.role === "CUSTOMER") {
     where.customerId = user.id;
-  } else if (user.role === "AGENT") {
+  } else if (user.role === "AGENT" || user.role === "SUPPORT_L1" || user.role === "SUPPORT_L2" || user.role === "BILLING") {
     // ABAC Filter: Agents can see tickets assigned to them, tickets in their teams, or unassigned tickets.
     where.OR = [
       { agentId: user.id },
@@ -162,6 +275,22 @@ export async function getTicketById(id: string, user: UserContext) {
           createdAt: "asc",
         },
       },
+      attachments: true,
+      statusHistory: {
+        include: {
+          changedBy: {
+            select: {
+              id: true,
+              name: true,
+              role: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      },
+      creditTransactions: true,
     },
   });
 
@@ -178,7 +307,7 @@ export async function getTicketById(id: string, user: UserContext) {
       error.statusCode = 403;
       throw error;
     }
-  } else if (user.role === "AGENT") {
+  } else if (user.role === "AGENT" || user.role === "SUPPORT_L1" || user.role === "SUPPORT_L2" || user.role === "BILLING") {
     const isAssignedAgent = ticket.agentId === user.id;
     let isTeamMember = false;
 
@@ -214,7 +343,16 @@ export async function addTicketMessage(
   user: UserContext
 ) {
   // Verify ticket exists and user has access (triggers getTicketById checks)
-  await getTicketById(ticketId, user);
+  const ticket = await getTicketById(ticketId, user);
+
+  // If sender is staff and firstResponseAt is not set, set it now
+  const isStaff = user.role === "ADMIN" || user.role === "AGENT" || user.role === "SUPPORT_L1" || user.role === "SUPPORT_L2" || user.role === "BILLING";
+  if (isStaff && !ticket.firstResponseAt) {
+    await prisma.ticket.update({
+      where: { id: ticketId },
+      data: { firstResponseAt: new Date() },
+    });
+  }
 
   const message = await prisma.ticketMessage.create({
     data: {
@@ -246,10 +384,14 @@ export async function addTicketMessage(
 /**
  * Update ticket status, priority, team, or agent.
  */
-export async function updateTicket(id: string, input: UpdateTicketInput, user: UserContext) {
+export async function updateTicket(
+  id: string,
+  input: UpdateTicketInput & { hoursConsumed?: number | null },
+  user: UserContext
+) {
   const ticket = await getTicketById(id, user);
 
-  const isStaff = user.role === "ADMIN" || user.role === "AGENT";
+  const isStaff = user.role === "ADMIN" || user.role === "AGENT" || user.role === "SUPPORT_L1" || user.role === "SUPPORT_L2" || user.role === "BILLING";
 
   // Customer restrictions
   if (!isStaff) {
@@ -270,6 +412,67 @@ export async function updateTicket(id: string, input: UpdateTicketInput, user: U
     }
   }
 
+  // Handle SLA & Resolution logic
+  let resolvedAt: Date | undefined = undefined;
+  let ttrHours: number | undefined = undefined;
+
+  if (input.status && input.status !== ticket.status) {
+    // Audit log
+    await prisma.ticketStatusHistory.create({
+      data: {
+        ticketId: id,
+        fromStatus: ticket.status,
+        toStatus: input.status,
+        changedById: user.id,
+      },
+    });
+
+    if (input.status === "RESOLVED" || input.status === "CLOSED") {
+      resolvedAt = new Date();
+      const creationTime = new Date(ticket.createdAt).getTime();
+      ttrHours = (resolvedAt.getTime() - creationTime) / (1000 * 60 * 60); // In hours
+
+      // Deduct support credit hours
+      if (input.hoursConsumed && input.hoursConsumed > 0) {
+        const hours = input.hoursConsumed;
+        const credits = await prisma.customerCredits.findUnique({
+          where: { customerId: ticket.customerId },
+        });
+        if (credits) {
+          let remaining = credits.remainingHours - hours;
+          let used = credits.usedHours + hours;
+          let billable = credits.billableHours;
+          let txType = "USAGE";
+
+          if (remaining < 0) {
+            billable += Math.abs(remaining);
+            remaining = 0;
+            txType = "BILLABLE_OVERAGE";
+          }
+
+          await prisma.customerCredits.update({
+            where: { id: credits.id },
+            data: {
+              usedHours: used,
+              remainingHours: remaining,
+              billableHours: billable,
+            },
+          });
+
+          await prisma.creditTransaction.create({
+            data: {
+              customerCreditsId: credits.id,
+              ticketId: id,
+              hours,
+              type: txType,
+              description: `Consumed ${hours} hours resolving ticket: ${ticket.title}`,
+            },
+          });
+        }
+      }
+    }
+  }
+
   return prisma.ticket.update({
     where: { id },
     data: {
@@ -277,6 +480,8 @@ export async function updateTicket(id: string, input: UpdateTicketInput, user: U
       ...(input.priority ? { priority: input.priority } : {}),
       ...(input.teamId !== undefined ? { teamId: input.teamId } : {}),
       ...(input.agentId !== undefined ? { agentId: input.agentId } : {}),
+      ...(resolvedAt ? { resolvedAt } : {}),
+      ...(ttrHours !== undefined ? { ttrHours } : {}),
     },
     include: {
       category: true,

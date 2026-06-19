@@ -9,6 +9,8 @@ exports.createTicketSchema = zod_1.z.object({
     description: zod_1.z.string().min(10, "Description must be at least 10 characters"),
     categoryId: zod_1.z.string().uuid("Invalid category ID").optional().nullable(),
     priority: TicketPriorityEnum.optional().default("MEDIUM"),
+    affectedDomain: zod_1.z.string().optional().nullable(),
+    issueCategory: zod_1.z.string().optional().nullable(),
 });
 exports.addMessageSchema = zod_1.z.object({
     message: zod_1.z.string().min(1, "Message content cannot be empty"),
@@ -18,4 +20,5 @@ exports.updateTicketSchema = zod_1.z.object({
     priority: TicketPriorityEnum.optional(),
     teamId: zod_1.z.string().uuid().nullable().optional(),
     agentId: zod_1.z.string().uuid().nullable().optional(),
+    hoursConsumed: zod_1.z.number().optional().nullable(),
 });

@@ -34,6 +34,15 @@ export async function listUsers(query: { search?: string; role?: string; isActiv
       teams: {
         select: { id: true, name: true },
       },
+      customerCredits: {
+        select: {
+          id: true,
+          allocatedHours: true,
+          usedHours: true,
+          remainingHours: true,
+          billableHours: true,
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -53,6 +62,15 @@ export async function getUserById(id: string) {
       updatedAt: true,
       teams: {
         select: { id: true, name: true },
+      },
+      customerCredits: {
+        select: {
+          id: true,
+          allocatedHours: true,
+          usedHours: true,
+          remainingHours: true,
+          billableHours: true,
+        },
       },
     },
   });
@@ -145,12 +163,11 @@ export async function updateUser(id: string, input: UpdateUserInput) {
 export async function getAgents() {
   return prisma.user.findMany({
     where: {
-      OR: [
-        { role: "AGENT" },
-        { role: "ADMIN" } // Admins can be treated as agents as well for team assignment purposes
-      ]
+      role: {
+        in: ["AGENT", "SUPPORT_L1", "SUPPORT_L2", "BILLING", "ADMIN"]
+      }
     },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true, email: true, role: true },
     orderBy: { name: "asc" },
   });
 }

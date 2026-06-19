@@ -11,7 +11,7 @@ router.use(auth_middleware_js_1.requireAuth);
 router.get("/", (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), teams_controller_js_1.listTeamsHandler);
 router.get("/:id", (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), teams_controller_js_1.getTeamByIdHandler);
 // Administrative mutations
-router.post("/", (0, role_middleware_js_1.requireRole)("ADMIN"), teams_controller_js_1.createTeamHandler);
-router.patch("/:id", (0, role_middleware_js_1.requireRole)("ADMIN"), teams_controller_js_1.updateTeamHandler);
-router.delete("/:id", (0, role_middleware_js_1.requireRole)("ADMIN"), teams_controller_js_1.deleteTeamHandler);
+router.post("/", (0, role_middleware_js_1.requirePermission)("manage_teams"), teams_controller_js_1.createTeamHandler);
+router.patch("/:id", (0, role_middleware_js_1.requirePermission)("manage_teams"), teams_controller_js_1.updateTeamHandler);
+router.delete("/:id", (0, role_middleware_js_1.requirePermission)("manage_teams"), teams_controller_js_1.deleteTeamHandler);
 exports.default = router;

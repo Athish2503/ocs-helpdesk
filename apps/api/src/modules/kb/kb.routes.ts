@@ -24,6 +24,7 @@ import {
   promoteTicketToKbHandler,
   getPublicSitemapHandler,
   getPublicArticleBySlugHandler,
+  getArticleSuggestionsHandler,
 } from "./kb.controller.js";
 import { requireAuth } from "../../middleware/auth.middleware.js";
 import { requireRole } from "../../middleware/role.middleware.js";
@@ -84,6 +85,7 @@ router.post(
 
 // --- ARTICLE ROUTING ---
 router.get("/", optionalAuth, listArticlesHandler);
+router.get("/suggest", optionalAuth, getArticleSuggestionsHandler);
 router.get("/:idOrSlug", optionalAuth, getArticleByIdOrSlugHandler);
 router.post("/", requireAuth, requireRole("ADMIN", "AGENT"), createArticleHandler);
 router.patch("/:id", requireAuth, requireRole("ADMIN", "AGENT"), updateArticleHandler);

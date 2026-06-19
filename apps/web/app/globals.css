@@ -515,6 +515,22 @@ h1, h2, h3, h4, h5, h6 {
   animation: toast-slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+@keyframes tooltip-slide-in {
+  from {
+    transform: translateX(-6px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.tooltip-premium-animate {
+  animation: tooltip-slide-in 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+
 /* ═══════════════════════════════════════════════════════════════════
    ADMIN DESIGN SYSTEM v3 — Unified tokens for all admin pages
    ═══════════════════════════════════════════════════════════════════ */

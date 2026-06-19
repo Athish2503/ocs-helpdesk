@@ -5,8 +5,10 @@ import {
   getTicketByIdHandler,
   addTicketMessageHandler,
   updateTicketHandler,
+  uploadTicketAttachmentHandler,
 } from "./tickets.controller.js";
 import { requireAuth } from "../../middleware/auth.middleware.js";
+import { uploadKBImage } from "../../middleware/uploadMiddleware.js";
 
 const router = Router();
 
@@ -18,5 +20,6 @@ router.get("/", listTicketsHandler);
 router.get("/:id", getTicketByIdHandler);
 router.post("/:id/messages", addTicketMessageHandler);
 router.patch("/:id", updateTicketHandler);
+router.post("/:id/attachments", uploadKBImage.single("file"), uploadTicketAttachmentHandler);
 
 export default router;

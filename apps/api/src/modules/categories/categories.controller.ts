@@ -55,3 +55,18 @@ export async function deleteCategoryHandler(req: Request, res: Response, next: N
   }
 }
 
+export async function bulkDeleteCategoriesHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { ids, reassignToId } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ success: false, error: { message: "ids array is required and cannot be empty" } });
+      return;
+    }
+    await CategoriesService.bulkDeleteCategories(ids, reassignToId);
+    ok(res, { message: "Categories deleted successfully" });
+  } catch (err) {
+    next(err);
+  }
+}
+
+

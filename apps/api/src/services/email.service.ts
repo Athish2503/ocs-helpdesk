@@ -166,3 +166,86 @@ If you did not request a password reset, you can safely ignore this email.
     text,
   });
 }
+
+export async function sendTicketNotificationEmail(
+  email: string,
+  ticketDetails: {
+    id: string;
+    title: string;
+    description: string;
+    category: string;
+    priority: string;
+    customerName: string;
+    customerEmail: string;
+    affectedDomain?: string | null;
+  }
+): Promise<void> {
+  const text = `
+New ticket assigned to you/your team:
+Ticket ID: ${ticketDetails.id}
+Title: ${ticketDetails.title}
+Customer: ${ticketDetails.customerName} (${ticketDetails.customerEmail})
+Category: ${ticketDetails.category}
+Priority: ${ticketDetails.priority}
+Affected Domain: ${ticketDetails.affectedDomain || "N/A"}
+
+Description:
+${ticketDetails.description}
+
+Please check your portal to respond.
+  `.trim();
+
+  const html = `
+    <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <span style="font-size: 24px; font-weight: bold; color: #0f172a;">OCS Helpdesk</span>
+      </div>
+      <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 16px; color: #0f172a;">New Ticket Assigned</h2>
+      <p style="font-size: 15px; color: #475569; margin-bottom: 20px;">
+        A new ticket has been assigned to you or your department. Below are the details:
+      </p>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 14px;">
+        <tr style="border-bottom: 1px solid #f1f5f9;">
+          <td style="padding: 10px 0; font-weight: 600; color: #64748b; width: 150px;">Ticket ID</td>
+          <td style="padding: 10px 0; color: #0f172a; font-family: monospace;">${ticketDetails.id}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f1f5f9;">
+          <td style="padding: 10px 0; font-weight: 600; color: #64748b;">Title</td>
+          <td style="padding: 10px 0; color: #0f172a;">${ticketDetails.title}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f1f5f9;">
+          <td style="padding: 10px 0; font-weight: 600; color: #64748b;">Customer</td>
+          <td style="padding: 10px 0; color: #0f172a;">${ticketDetails.customerName} (${ticketDetails.customerEmail})</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f1f5f9;">
+          <td style="padding: 10px 0; font-weight: 600; color: #64748b;">Category</td>
+          <td style="padding: 10px 0; color: #0f172a;">${ticketDetails.category}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f1f5f9;">
+          <td style="padding: 10px 0; font-weight: 600; color: #64748b;">Priority</td>
+          <td style="padding: 10px 0; color: #0f172a; font-weight: bold; color: ${ticketDetails.priority === 'HIGH' ? '#ef4444' : ticketDetails.priority === 'MEDIUM' ? '#f59e0b' : '#64748b'}">${ticketDetails.priority}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f1f5f9;">
+          <td style="padding: 10px 0; font-weight: 600; color: #64748b;">Affected Domain</td>
+          <td style="padding: 10px 0; color: #0f172a;">${ticketDetails.affectedDomain || "N/A"}</td>
+        </tr>
+      </table>
+      <div style="background-color: #f8fafc; border-radius: 8px; padding: 16px; margin-bottom: 24px; font-size: 14px; color: #334155;">
+        <h4 style="margin: 0 0 8px 0; font-weight: 600; color: #475569;">Description:</h4>
+        <p style="margin: 0; white-space: pre-wrap; line-height: 20px;">${ticketDetails.description}</p>
+      </div>
+      <div style="text-align: center;">
+        <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/admin/dashboard" style="display: inline-block; background-color: #0ea5e9; color: #ffffff; font-weight: 600; font-size: 15px; padding: 12px 32px; border-radius: 8px; text-decoration: none;">
+          Open Admin Portal
+        </a>
+      </div>
+    </div>
+  `;
+
+  await sendEmail({
+    to: email,
+    subject: `[New Ticket] ${ticketDetails.priority}: ${ticketDetails.title}`,
+    html,
+    text,
+  });
+}

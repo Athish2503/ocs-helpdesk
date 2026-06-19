@@ -6,7 +6,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 interface JwtPayload {
   sub: string;
   email: string;
-  role: "CUSTOMER" | "ADMIN";
+  role: "CUSTOMER" | "ADMIN" | "SUPPORT_L1" | "SUPPORT_L2" | "BILLING" | "AGENT";
   exp: number;
 }
 
@@ -85,6 +85,9 @@ export async function middleware(request: NextRequest) {
   const isCustomerRoute = pathname.startsWith("/customer");
   const isAuthRoute = pathname === "/login" || pathname === "/register";
 
+  const isStaffRole = (role: string | null) =>
+    role === "ADMIN" || role === "SUPPORT_L1" || role === "SUPPORT_L2" || role === "BILLING" || role === "AGENT";
+
   // 4. Implement redirection guards
   if (isAdminRoute || isCustomerRoute) {
     if (!isAuthenticated) {
@@ -99,7 +102,7 @@ export async function middleware(request: NextRequest) {
       return response;
     }
 
-    if (isAdminRoute && userRole !== "ADMIN") {
+    if (isAdminRoute && !isStaffRole(userRole)) {
       // Customer trying to access Admin page: redirect to customer dashboard
       return NextResponse.redirect(new URL("/customer/dashboard", request.url));
     }
@@ -112,7 +115,7 @@ export async function middleware(request: NextRequest) {
 
   if ((isAuthRoute || isAdminAuthRoute) && isAuthenticated) {
     // Authenticated user trying to access login/register: redirect to their dashboard
-    const dashboardPath = userRole === "ADMIN" ? "/admin/dashboard" : "/customer/dashboard";
+    const dashboardPath = isStaffRole(userRole) ? "/admin/dashboard" : "/customer/dashboard";
     return NextResponse.redirect(new URL(dashboardPath, request.url));
   }
 

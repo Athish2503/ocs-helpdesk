@@ -172,6 +172,14 @@ export default function CustomerDashboard() {
   const [newMessage, setNewMessage] = useState("");
   const [submittingMessage, setSubmittingMessage] = useState(false);
 
+  const [credits, setCredits] = useState<{
+    allocatedHours: number;
+    usedHours: number;
+    remainingHours: number;
+    billableHours: number;
+    transactions: any[];
+  } | null>(null);
+
   // Modal / Creation state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createForm, setCreateForm] = useState({
@@ -179,7 +187,12 @@ export default function CustomerDashboard() {
     description: "",
     categoryId: "",
     priority: "MEDIUM" as "LOW" | "MEDIUM" | "HIGH" | "URGENT",
+    affectedDomain: "",
   });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [wizardStep, setWizardStep] = useState<"form" | "suggestions">("form");
+  const [suggestedArticles, setSuggestedArticles] = useState<any[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState<boolean>(false);
   const [submittingCreate, setSubmittingCreate] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -236,13 +249,26 @@ export default function CustomerDashboard() {
     }
   }, []);
 
+  const loadCredits = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth("/users/me/credits");
+      if (res.ok) {
+        const body = await res.json();
+        setCredits(body.data.credits);
+      }
+    } catch (err) {
+      console.error("Failed to load customer credits:", err);
+    }
+  }, []);
+
   // Sync initial load
   useEffect(() => {
     if (user) {
       loadTickets();
       loadCategories();
+      loadCredits();
     }
-  }, [user, loadTickets, loadCategories]);
+  }, [user, loadTickets, loadCategories, loadCredits]);
 
   // Sync details when selection changes
   useEffect(() => {
@@ -254,7 +280,74 @@ export default function CustomerDashboard() {
     }
   }, [selectedTicketId, loadTicketDetails]);
 
-  // Submit Ticket Creation
+  // Perform the actual ticket save & file attachment upload
+  const executeTicketCreation = async () => {
+    try {
+      setSubmittingCreate(true);
+      setCreateError(null);
+
+      // 1. Create the Ticket
+      const res = await fetchWithAuth("/tickets", {
+        method: "POST",
+        body: JSON.stringify({
+          title: createForm.title.trim(),
+          description: createForm.description.trim(),
+          categoryId: createForm.categoryId || null,
+          priority: createForm.priority,
+          affectedDomain: createForm.affectedDomain.trim() || null,
+        }),
+      });
+
+      const resBody = await res.json();
+      if (!res.ok) {
+        setCreateError(resBody.error?.message || "Failed to create support ticket.");
+        toast.error(resBody.error?.message || "Failed to create ticket.");
+        setSubmittingCreate(false);
+        return;
+      }
+
+      const createdTicket = resBody.data.ticket;
+
+      // 2. If a file is selected, upload it as an attachment
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+
+        const uploadRes = await fetchWithAuth(`/tickets/${createdTicket.id}/attachments`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!uploadRes.ok) {
+          toast.warning("Ticket created, but attachment upload failed.");
+        }
+      }
+
+      // Success
+      await loadTickets(false);
+      await loadCredits();
+      setCreateForm({
+        title: "",
+        description: "",
+        categoryId: categories.length > 0 ? categories[0].id : "",
+        priority: "MEDIUM",
+        affectedDomain: "",
+      });
+      setSelectedFile(null);
+      setWizardStep("form");
+      setSuggestedArticles([]);
+      setShowCreateModal(false);
+      toast.success("Support ticket created successfully!");
+    } catch (err) {
+      console.error("Ticket creation error:", err);
+      setCreateError("Unable to connect to the server.");
+      toast.error("Unable to connect to the server.");
+    } finally {
+      setSubmittingCreate(false);
+    }
+  };
+
+  // Trigger intermediate KB suggestions step before creating the ticket
   const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createForm.title || !createForm.description) {
@@ -263,39 +356,33 @@ export default function CustomerDashboard() {
     }
 
     try {
-      setSubmittingCreate(true);
+      setLoadingSuggestions(true);
       setCreateError(null);
-      const res = await fetchWithAuth("/tickets", {
-        method: "POST",
-        body: JSON.stringify({
-          title: createForm.title.trim(),
-          description: createForm.description.trim(),
-        }),
-      });
 
-      const resBody = await res.json();
+      const params = new URLSearchParams();
+      params.append("text", createForm.description.trim());
+      if (createForm.categoryId) {
+        params.append("categoryId", createForm.categoryId);
+      }
+
+      const res = await fetchWithAuth(`/kb/suggest?${params.toString()}`);
       if (res.ok) {
-        // Ticket created successfully! Reload list and close modal
-        await loadTickets(false);
-        setCreateForm({
-          title: "",
-          description: "",
-          categoryId: "",
-          priority: "MEDIUM",
-        });
-        setShowCreateModal(false);
-        toast.success("Support ticket created successfully!");
-      } else {
-        setCreateError(resBody.error?.message || "Failed to create support ticket.");
-        toast.error(resBody.error?.message || "Failed to create ticket.");
+        const body = await res.json();
+        const found = body.data.articles || [];
+        if (found.length > 0) {
+          setSuggestedArticles(found);
+          setWizardStep("suggestions");
+          setLoadingSuggestions(false);
+          return;
+        }
       }
     } catch (err) {
-      console.error("Ticket creation error:", err);
-      setCreateError("Unable to connect to the server.");
-      toast.error("Unable to connect to the server.");
-    } finally {
-      setSubmittingCreate(false);
+      console.error("Failed to load suggested articles:", err);
     }
+
+    // If no suggestions found, or request failed, proceed to direct creation
+    setLoadingSuggestions(false);
+    await executeTicketCreation();
   };
 
   // Submit Reply Message
@@ -828,7 +915,7 @@ export default function CustomerDashboard() {
                 </section>
 
                 {/* Cards metrics system */}
-                <section className="grid md:grid-cols-3 gap-6">
+                <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   {/* Customer profile details */}
                   <div className={`p-6 flex flex-col justify-between min-h-[160px] border transition-colors duration-300 rounded-2xl ${
                     isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
@@ -901,6 +988,42 @@ export default function CustomerDashboard() {
                     }`}>
                       Resolution check matches {resolvedTicketsCount} resolved out of {tickets.length} total tickets.
                     </p>
+                  </div>
+
+                  {/* Service Credit Hours Summary Card */}
+                  <div className={`p-6 flex flex-col justify-between min-h-[160px] border transition-colors duration-300 rounded-2xl ${
+                    isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
+                  }`}>
+                    <div>
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>Support Credit Hours</h3>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                          credits && credits.remainingHours > 0
+                            ? isDark ? "bg-emerald-950/40 text-[#12B76A] border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : isDark ? "bg-red-950/40 text-red-400 border-red-500/20" : "bg-red-50 text-red-700 border-red-200"
+                        }`}>
+                          {credits ? `${credits.remainingHours} hrs left` : "0 hrs left"}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px]">
+                        <div className="flex flex-col">
+                          <span className={isDark ? 'text-[#94A3B8]' : 'text-slate-400'}>Allocated</span>
+                          <span className={`font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{credits?.allocatedHours ?? 0} hrs</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className={isDark ? 'text-[#94A3B8]' : 'text-slate-400'}>Used</span>
+                          <span className={`font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{credits?.usedHours ?? 0} hrs</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className={isDark ? 'text-[#94A3B8]' : 'text-slate-400'}>Remaining</span>
+                          <span className="font-bold text-emerald-500">{credits?.remainingHours ?? 0} hrs</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className={isDark ? 'text-[#94A3B8]' : 'text-slate-400'}>Billable</span>
+                          <span className="font-bold text-amber-500">{credits?.billableHours ?? 0} hrs</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </section>
 
@@ -1559,8 +1682,8 @@ export default function CustomerDashboard() {
 
       {/* 4. Ticket Creation Modal Overlay Dialog */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className={`w-full max-w-lg overflow-hidden animate-error-shake shadow-2xl border transition-all duration-300 rounded-2xl ${
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className={`w-full max-w-lg overflow-hidden animate-error-shake shadow-2xl border transition-all duration-300 rounded-2xl my-8 ${
             isDark ? 'glass-card border-white/[0.08]' : 'bg-white border-slate-200 shadow-2xl'
           }`}>
             <div className={`p-6 border-b flex items-center justify-between transition-colors ${
@@ -1571,7 +1694,12 @@ export default function CustomerDashboard() {
                 <p className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Describe the issue and categorize it for routing</p>
               </div>
               <button
-                onClick={() => setShowCreateModal(false)}
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setWizardStep("form");
+                  setSelectedFile(null);
+                  setSuggestedArticles([]);
+                }}
                 className={`p-1.5 rounded transition-colors border ${
                   isDark 
                     ? 'bg-slate-800 hover:bg-slate-700 border-slate-700/50 text-slate-400 hover:text-white' 
@@ -1582,84 +1710,257 @@ export default function CustomerDashboard() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateTicket} className="p-6 space-y-4">
-              {createError && (
-                <div className={`p-3 rounded-lg text-xs font-mono border ${
-                  isDark 
-                    ? 'bg-red-950/40 border-red-500/20 text-red-400' 
-                    : 'bg-red-50 border-red-200 text-red-700'
+            {wizardStep === "suggestions" ? (
+              <div className="p-6 space-y-4">
+                <div className={`p-3.5 rounded-xl border text-xs leading-relaxed ${
+                  isDark ? "bg-[#38b1f7]/8 border-[#38b1f7]/15 text-[#cbd5e1]" : "bg-blue-50/60 border-blue-100 text-slate-700"
                 }`}>
-                  {createError}
+                  <p className="font-semibold mb-1">💡 We found matching Knowledge Base articles!</p>
+                  Please review these suggested self-service articles before submitting your ticket. They might resolve your issue immediately.
                 </div>
-              )}
-
-              {/* Title input */}
-              <div className="space-y-1.5">
-                <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Ticket Title</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Incapable of logging into mobile account"
-                  className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full ${
-                    isDark
-                      ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
-                      : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
-                  }`}
-                  value={createForm.title}
-                  onChange={(e) => setCreateForm(prev => ({ ...prev, title: e.target.value }))}
-                  disabled={submittingCreate}
-                />
+                <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                  {suggestedArticles.map((art) => (
+                    <div 
+                      key={art.id} 
+                      className={`p-4 border rounded-xl transition-all ${
+                        isDark ? 'bg-slate-900/60 border-white/5 hover:border-[#38b1f7]/25' : 'bg-slate-50 border-slate-200 hover:border-[#38b1f7]/30'
+                      }`}
+                    >
+                      <h4 className={`font-bold text-sm ${isDark ? 'text-[#38b1f7]' : 'text-[#0d7fc0]'}`}>{art.title}</h4>
+                      <p className={`text-xs line-clamp-2 mt-1 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                        {art.content.replace(/<[^>]*>/g, '')}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleReadArticle(art);
+                          setShowCreateModal(false);
+                        }}
+                        className="text-[10px] font-bold text-[#38b1f7] hover:underline mt-2 inline-block"
+                      >
+                        Read Full Article →
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Cancel ticket creation
+                      setShowCreateModal(false);
+                      setCreateForm({
+                        title: "",
+                        description: "",
+                        categoryId: categories.length > 0 ? categories[0].id : "",
+                        priority: "MEDIUM",
+                        affectedDomain: "",
+                      });
+                      setSelectedFile(null);
+                      setWizardStep("form");
+                      setSuggestedArticles([]);
+                      toast.success("Glad we could help! Ticket creation cancelled.");
+                    }}
+                    className={`px-4 py-2.5 text-xs font-semibold rounded-xl border transition-colors text-center ${
+                      isDark 
+                        ? 'border-emerald-500/20 text-[#12B76A] bg-emerald-950/20 hover:bg-emerald-950/45' 
+                        : 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100'
+                    }`}
+                  >
+                    Yes, this resolved my issue (Cancel Ticket)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      executeTicketCreation();
+                    }}
+                    disabled={submittingCreate}
+                    className="btn-cyber flex items-center justify-center space-x-2 py-2.5 px-4"
+                  >
+                    <span>No, submit ticket</span>
+                  </button>
+                </div>
               </div>
-
-
-              {/* Description textarea */}
-              <div className="space-y-1.5">
-                <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Problem Description</label>
-                <textarea
-                  required
-                  placeholder="Provide details about the issue you are experiencing..."
-                  rows={4}
-                  className={`w-full p-4 text-xs rounded-xl outline-none focus:ring-1 transition-all duration-200 resize-none ${
-                    isDark
-                      ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
-                      : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
-                  }`}
-                  value={createForm.description}
-                  onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
-                  disabled={submittingCreate}
-                />
-              </div>
-
-              {/* Submit CTA */}
-              <div className="pt-2 flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors ${
+            ) : (
+              <form onSubmit={handleCreateTicket} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                {createError && (
+                  <div className={`p-3 rounded-lg text-xs font-mono border ${
                     isDark 
-                      ? 'text-slate-300 hover:bg-slate-800' 
-                      : 'text-slate-600 hover:bg-slate-100'
-                  }`}
-                  disabled={submittingCreate}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn-cyber flex items-center space-x-2"
-                  disabled={submittingCreate}
-                >
-                  {submittingCreate ? (
-                    <span>Creating Ticket...</span>
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4" />
-                      <span>Submit Request</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
+                      ? 'bg-red-950/40 border-red-500/20 text-red-400' 
+                      : 'bg-red-50 border-red-200 text-red-700'
+                  }`}>
+                    {createError}
+                  </div>
+                )}
+
+                {/* Title input */}
+                <div className="space-y-1.5">
+                  <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Ticket Title</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. DNS configuration propagation delay"
+                    className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full ${
+                      isDark
+                        ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
+                        : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
+                    }`}
+                    value={createForm.title}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, title: e.target.value }))}
+                    disabled={submittingCreate}
+                  />
+                </div>
+
+                {/* Affected Domain input */}
+                <div className="space-y-1.5">
+                  <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Affected Domain</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. mycompany.com"
+                    className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full ${
+                      isDark
+                        ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
+                        : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
+                    }`}
+                    value={createForm.affectedDomain}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, affectedDomain: e.target.value }))}
+                    disabled={submittingCreate}
+                  />
+                </div>
+
+                {/* Service Category / Impact input */}
+                <div className="space-y-1.5">
+                  <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Service Category</label>
+                  <select
+                    value={createForm.categoryId}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, categoryId: e.target.value }))}
+                    className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full ${
+                      isDark
+                        ? "bg-[#090d16] border border-white/5 focus:border-[#38b1f7] text-[#F8FAFC]"
+                        : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] text-slate-900"
+                    }`}
+                    disabled={submittingCreate}
+                  >
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Priority Selection based on business impact */}
+                <div className="space-y-1.5">
+                  <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Priority Selection</label>
+                  <select
+                    value={createForm.priority}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, priority: e.target.value as any }))}
+                    className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full ${
+                      isDark
+                        ? "bg-[#090d16] border border-white/5 focus:border-[#38b1f7] text-[#F8FAFC]"
+                        : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] text-slate-900"
+                    }`}
+                    disabled={submittingCreate}
+                  >
+                    <option value="LOW">Low (Service is usable; no business impact)</option>
+                    <option value="MEDIUM">Medium (Business impact exists; workaround is available)</option>
+                    <option value="HIGH">High (Service is unavailable; business operations impacted; no workaround)</option>
+                  </select>
+                  <p className={`text-[10px] italic leading-normal ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                    {createForm.priority === "LOW" && "Low Priority: Service is usable. No business impact."}
+                    {createForm.priority === "MEDIUM" && "Medium Priority: Business impact exists. Workaround is available."}
+                    {createForm.priority === "HIGH" && "High Priority: Service is unavailable. Business operations are impacted. No workaround exists."}
+                  </p>
+                </div>
+
+                {/* Description textarea */}
+                <div className="space-y-1.5">
+                  <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Problem Description</label>
+                  <textarea
+                    required
+                    placeholder="Provide details about the issue you are experiencing..."
+                    rows={4}
+                    className={`w-full p-4 text-xs rounded-xl outline-none focus:ring-1 transition-all duration-200 resize-none ${
+                      isDark
+                        ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
+                        : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
+                    }`}
+                    value={createForm.description}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
+                    disabled={submittingCreate}
+                  />
+                </div>
+
+                {/* File Upload Attachment input */}
+                <div className="space-y-1.5">
+                  <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Attachment / Screenshot (Optional)</label>
+                  <div className="flex items-center space-x-3">
+                    <label className={`cursor-pointer px-4 py-2 border rounded-xl text-xs font-semibold hover:opacity-90 active:scale-98 transition-all shrink-0 ${
+                      isDark 
+                        ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-750' 
+                        : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                    }`}>
+                      <span>Choose File</span>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          setSelectedFile(file);
+                        }} 
+                      />
+                    </label>
+                    <span className={`text-xs truncate max-w-[200px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {selectedFile ? selectedFile.name : "No file selected"}
+                    </span>
+                    {selectedFile && (
+                      <button 
+                        type="button" 
+                        onClick={() => setSelectedFile(null)}
+                        className="text-red-500 hover:text-red-650 text-xs font-bold shrink-0"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Submit CTA */}
+                <div className="pt-2 flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateModal(false);
+                      setWizardStep("form");
+                      setSelectedFile(null);
+                      setSuggestedArticles([]);
+                    }}
+                    className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors ${
+                      isDark 
+                        ? 'text-slate-300 hover:bg-slate-800' 
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                    disabled={submittingCreate}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-cyber flex items-center space-x-2"
+                    disabled={submittingCreate}
+                  >
+                    {submittingCreate ? (
+                      <span>Creating Ticket...</span>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" />
+                        <span>Submit Request</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

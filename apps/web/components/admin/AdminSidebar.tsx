@@ -13,6 +13,9 @@ import {
   ChevronRight,
   LogOut,
   UserCog,
+  Clock,
+  BarChart2,
+  Settings,
 } from "lucide-react";
 
 type ActiveTab =
@@ -22,6 +25,9 @@ type ActiveTab =
   | "clients"
   | "admins"
   | "kb"
+  | "routing"
+  | "credits"
+  | "sla"
   | string;
 
 interface AdminSidebarProps {
@@ -41,6 +47,10 @@ const NAV_ITEMS = [
 const ADMIN_NAV_ITEMS = [
   { id: "clients", label: "Client Accounts", icon: Users, href: "/admin/dashboard?tab=clients" },
   { id: "admins", label: "Staff Directory", icon: UserCog, href: "/admin/dashboard?tab=admins" },
+  { id: "routing", label: "Categories & Routing", icon: Settings, href: "/admin/dashboard?tab=routing" },
+  { id: "permissions", label: "Role Permissions", icon: ShieldCheck, href: "/admin/dashboard?tab=permissions" },
+  { id: "credits", label: "Client Credits", icon: Clock, href: "/admin/dashboard?tab=credits" },
+  { id: "sla", label: "SLA Metrics", icon: BarChart2, href: "/admin/dashboard?tab=sla" },
 ];
 
 const KB_ITEM = { id: "kb", label: "Knowledge Base", icon: BookOpen, href: "/admin/dashboard/kb" };
@@ -132,7 +142,7 @@ export default function AdminSidebar({
       </div>
 
       {/* ── Navigation ───────────────────────────────────────────── */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-0.5">
+      <nav className={`flex-1 ${isCollapsed ? "overflow-y-visible" : "overflow-y-auto overflow-x-hidden"} px-3 py-3 space-y-0.5`}>
         {/* Main nav */}
         {!isCollapsed && (
           <p className="admin-section-label">Main</p>
@@ -262,27 +272,59 @@ interface NavItemProps {
 
 function NavItem({ item, active, collapsed, isDark, onClick }: NavItemProps) {
   const Icon = item.icon;
+  const [showTooltip, setShowTooltip] = useState(false);
+
   return (
-    <button
-      onClick={onClick}
-      title={collapsed ? item.label : undefined}
-      aria-label={item.label}
-      aria-current={active ? "page" : undefined}
-      className={`
-        admin-nav-item
-        ${active ? "admin-nav-item-active" : ""}
-        ${isDark ? "admin-dark" : ""}
-        ${collapsed ? "justify-center px-0" : ""}
-      `}
+    <div 
+      className="relative flex items-center w-full"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
     >
-      <Icon
-        className={`w-[18px] h-[18px] shrink-0 ${collapsed ? "" : "mr-2.5"} ${active ? "text-[#38b1f7]" : ""}`}
-        strokeWidth={active ? 2.5 : 2}
-        aria-hidden="true"
-      />
-      {!collapsed && (
-        <span className="truncate">{item.label}</span>
+      <button
+        onClick={onClick}
+        aria-label={item.label}
+        aria-current={active ? "page" : undefined}
+        className={`
+          admin-nav-item w-full
+          ${active ? "admin-nav-item-active" : ""}
+          ${isDark ? "admin-dark" : ""}
+          ${collapsed ? "justify-center px-0" : ""}
+        `}
+      >
+        <Icon
+          className={`w-[18px] h-[18px] shrink-0 ${collapsed ? "" : "mr-2.5"} ${active ? "text-[#38b1f7]" : ""}`}
+          strokeWidth={active ? 2.5 : 2}
+          aria-hidden="true"
+        />
+        {!collapsed && (
+          <span className="truncate">{item.label}</span>
+        )}
+      </button>
+
+      {collapsed && showTooltip && (
+        <div 
+          className={`absolute left-[54px] z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold shadow-xl whitespace-nowrap pointer-events-none tooltip-premium-animate ${
+            isDark 
+              ? "bg-[#0c1525]/95 border-white/[0.08] text-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.6)]" 
+              : "bg-white/95 border-slate-200/80 text-slate-800 shadow-[0_4px_16px_rgba(148,163,184,0.15)]"
+          }`}
+          style={{
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+          }}
+        >
+          {/* Arrow Pointer */}
+          <div 
+            className={`absolute right-full top-1/2 -translate-y-1/2 border-y-[5px] border-y-transparent border-r-[5px] ${
+              isDark ? "border-r-[#0c1525]/95" : "border-r-white/95"
+            }`}
+            style={{ marginRight: "-1px" }}
+          />
+          {/* Accent Color Bar */}
+          <div className="w-1 h-3 rounded-full bg-[#38b1f7] shrink-0" />
+          <span>{item.label}</span>
+        </div>
       )}
-    </button>
+    </div>
   );
 }

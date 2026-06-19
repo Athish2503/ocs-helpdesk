@@ -69,7 +69,7 @@ export default function LoginPage() {
       const decoded = token ? decodeJwt(token) : null;
       const role = decoded?.role || "CUSTOMER";
 
-      if (role === "ADMIN") {
+      if (role === "ADMIN" || role === "SUPPORT_L1" || role === "SUPPORT_L2" || role === "BILLING" || role === "AGENT") {
         router.push("/admin/dashboard");
       } else {
         router.push("/customer/dashboard");

@@ -12,7 +12,7 @@ export interface FetchOptions extends RequestInit {
  */
 export async function fetchWithAuth(path: string, options: FetchOptions = {}): Promise<Response> {
   const headers = new Headers(options.headers);
-  if (!headers.has("Content-Type")) {
+  if (!(options.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 

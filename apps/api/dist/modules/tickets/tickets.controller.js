@@ -38,6 +38,7 @@ exports.listTicketsHandler = listTicketsHandler;
 exports.getTicketByIdHandler = getTicketByIdHandler;
 exports.addTicketMessageHandler = addTicketMessageHandler;
 exports.updateTicketHandler = updateTicketHandler;
+exports.uploadTicketAttachmentHandler = uploadTicketAttachmentHandler;
 const tickets_schemas_js_1 = require("./tickets.schemas.js");
 const TicketsService = __importStar(require("./tickets.service.js"));
 function ok(res, data, statusCode = 200) {
@@ -90,6 +91,35 @@ async function updateTicketHandler(req, res, next) {
         const input = tickets_schemas_js_1.updateTicketSchema.parse(req.body);
         const ticket = await TicketsService.updateTicket(id, input, req.user);
         ok(res, { ticket });
+    }
+    catch (err) {
+        next(err);
+    }
+}
+const prisma_js_1 = require("../../config/prisma.js");
+async function uploadTicketAttachmentHandler(req, res, next) {
+    try {
+        const id = req.params.id;
+        if (!req.file) {
+            res.status(400).json({ success: false, error: { message: "No file uploaded" } });
+            return;
+        }
+        const ticket = await prisma_js_1.prisma.ticket.findUnique({
+            where: { id },
+        });
+        if (!ticket) {
+            res.status(404).json({ success: false, error: { message: "Ticket not found" } });
+            return;
+        }
+        const attachment = await prisma_js_1.prisma.ticketAttachment.create({
+            data: {
+                ticketId: id,
+                filename: req.file.filename,
+                filePath: `/uploads/kb/images/${req.file.filename}`, // Reuse standard static uploads directory path
+                mimeType: req.file.mimetype,
+            },
+        });
+        res.status(201).json({ success: true, data: { attachment } });
     }
     catch (err) {
         next(err);

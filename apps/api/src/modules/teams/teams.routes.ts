@@ -7,7 +7,7 @@ import {
   deleteTeamHandler,
 } from "./teams.controller.js";
 import { requireAuth } from "../../middleware/auth.middleware.js";
-import { requireRole } from "../../middleware/role.middleware.js";
+import { requireRole, requirePermission } from "../../middleware/role.middleware.js";
 
 const router = Router();
 
@@ -19,8 +19,9 @@ router.get("/", requireRole("ADMIN", "AGENT"), listTeamsHandler);
 router.get("/:id", requireRole("ADMIN", "AGENT"), getTeamByIdHandler);
 
 // Administrative mutations
-router.post("/", requireRole("ADMIN"), createTeamHandler);
-router.patch("/:id", requireRole("ADMIN"), updateTeamHandler);
-router.delete("/:id", requireRole("ADMIN"), deleteTeamHandler);
+router.post("/", requirePermission("manage_teams"), createTeamHandler);
+router.patch("/:id", requirePermission("manage_teams"), updateTeamHandler);
+router.delete("/:id", requirePermission("manage_teams"), deleteTeamHandler);
 
 export default router;
+

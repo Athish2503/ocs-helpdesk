@@ -85,7 +85,7 @@ function AdminLoginForm() {
       const token = getCookie("accessToken");
       const decoded = token ? decodeJwt(token) : null;
       const role = decoded?.role || "CUSTOMER";
-      if (role === "ADMIN" || role === "AGENT") {
+      if (role === "ADMIN" || role === "SUPPORT_L1" || role === "SUPPORT_L2" || role === "BILLING" || role === "AGENT") {
         router.push(redirectPath);
       } else {
         await logout("/admin/login");

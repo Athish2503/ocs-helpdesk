@@ -8,6 +8,8 @@ export const createTicketSchema = z.object({
   description: z.string().min(10, "Description must be at least 10 characters"),
   categoryId: z.string().uuid("Invalid category ID").optional().nullable(),
   priority: TicketPriorityEnum.optional().default("MEDIUM"),
+  affectedDomain: z.string().optional().nullable(),
+  issueCategory: z.string().optional().nullable(),
 });
 
 export const addMessageSchema = z.object({
@@ -19,6 +21,7 @@ export const updateTicketSchema = z.object({
   priority: TicketPriorityEnum.optional(),
   teamId: z.string().uuid().nullable().optional(),
   agentId: z.string().uuid().nullable().optional(),
+  hoursConsumed: z.number().optional().nullable(),
 });
 
 export type CreateTicketInput = z.infer<typeof createTicketSchema>;

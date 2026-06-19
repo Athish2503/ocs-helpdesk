@@ -213,3 +213,75 @@ export async function deleteCategory(id: string, reassignToId?: string) {
   });
 }
 
+/**
+ * Bulk delete categories, optionally reassigned to a replacement category to merge usage.
+ */
+export async function bulkDeleteCategories(ids: string[], reassignToId?: string) {
+  if (!ids || ids.length === 0) return;
+
+  // Find all ticket and article counts for the categories to be deleted
+  const categoriesData = await prisma.category.findMany({
+    where: { id: { in: ids } },
+    select: {
+      id: true,
+      _count: {
+        select: { tickets: true, kbArticles: true },
+      },
+    },
+  });
+
+  const totalTickets = categoriesData.reduce((acc, cat) => acc + cat._count.tickets, 0);
+  const totalArticles = categoriesData.reduce((acc, cat) => acc + cat._count.kbArticles, 0);
+  const hasAssociations = totalTickets > 0 || totalArticles > 0;
+
+  if (hasAssociations) {
+    if (!reassignToId) {
+      const error = new Error(
+        "Cannot delete categories: one or more are associated with tickets or articles. Please select a replacement category to reassign them."
+      ) as Error & { statusCode: number };
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (ids.includes(reassignToId)) {
+      const error = new Error("Cannot reassign associated items to a category that is being deleted") as Error & { statusCode: number };
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const replacement = await prisma.category.findUnique({
+      where: { id: reassignToId },
+    });
+
+    if (!replacement || !replacement.isActive) {
+      const error = new Error("Replacement category not found or is inactive") as Error & { statusCode: number };
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Reassign all associated tickets and articles in transaction
+    await prisma.$transaction([
+      prisma.ticket.updateMany({
+        where: { categoryId: { in: ids } },
+        data: { categoryId: reassignToId },
+      }),
+      prisma.knowledgeBaseArticle.updateMany({
+        where: { categoryId: { in: ids } },
+        data: { categoryId: reassignToId },
+      }),
+    ]);
+  }
+
+  // Adjust child categories to shift parent association
+  await prisma.category.updateMany({
+    where: { parentId: { in: ids } },
+    data: { parentId: reassignToId || null },
+  });
+
+  // Delete categories
+  return prisma.category.deleteMany({
+    where: { id: { in: ids } },
+  });
+}
+
+

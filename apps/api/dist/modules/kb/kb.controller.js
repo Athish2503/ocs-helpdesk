@@ -57,6 +57,7 @@ exports.reorderAttachmentsHandler = reorderAttachmentsHandler;
 exports.promoteTicketToKbHandler = promoteTicketToKbHandler;
 exports.getPublicSitemapHandler = getPublicSitemapHandler;
 exports.getPublicArticleBySlugHandler = getPublicArticleBySlugHandler;
+exports.getArticleSuggestionsHandler = getArticleSuggestionsHandler;
 const kb_schemas_js_1 = require("./kb.schemas.js");
 const KbService = __importStar(require("./kb.service.js"));
 const abac_middleware_js_1 = require("../../middleware/abac.middleware.js");
@@ -418,6 +419,43 @@ async function getPublicArticleBySlugHandler(req, res, next) {
         }
         const sanitized = (0, publicSecurity_js_1.sanitizeResponse)(article);
         ok(res, { article: sanitized });
+    }
+    catch (err) {
+        next(err);
+    }
+}
+async function getArticleSuggestionsHandler(req, res, next) {
+    try {
+        const text = req.query["text"] || "";
+        const categoryId = req.query["categoryId"] || undefined;
+        if (!text.trim()) {
+            res.status(200).json({ success: true, data: { articles: [] } });
+            return;
+        }
+        const keywords = (0, seoHelper_js_1.extractKeywords)(text, 5);
+        if (keywords.length === 0) {
+            res.status(200).json({ success: true, data: { articles: [] } });
+            return;
+        }
+        const where = {
+            isPublished: true,
+            isInternal: false,
+        };
+        if (categoryId) {
+            where.categoryId = categoryId;
+        }
+        where.OR = keywords.flatMap((keyword) => [
+            { title: { contains: keyword, mode: "insensitive" } },
+            { content: { contains: keyword, mode: "insensitive" } },
+        ]);
+        const articles = await prisma_js_1.prisma.knowledgeBaseArticle.findMany({
+            where,
+            include: {
+                category: { select: { id: true, name: true } },
+            },
+            take: 5,
+        });
+        res.status(200).json({ success: true, data: { articles } });
     }
     catch (err) {
         next(err);

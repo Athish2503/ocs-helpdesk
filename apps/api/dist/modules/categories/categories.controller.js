@@ -37,6 +37,7 @@ exports.getCategoriesHandler = getCategoriesHandler;
 exports.createCategoryHandler = createCategoryHandler;
 exports.updateCategoryHandler = updateCategoryHandler;
 exports.deleteCategoryHandler = deleteCategoryHandler;
+exports.bulkDeleteCategoriesHandler = bulkDeleteCategoriesHandler;
 const categories_schemas_js_1 = require("./categories.schemas.js");
 const CategoriesService = __importStar(require("./categories.service.js"));
 function ok(res, data, statusCode = 200) {
@@ -86,6 +87,20 @@ async function deleteCategoryHandler(req, res, next) {
         const { reassignToId } = req.body;
         await CategoriesService.deleteCategory(id, reassignToId);
         ok(res, { message: "Category deleted successfully" });
+    }
+    catch (err) {
+        next(err);
+    }
+}
+async function bulkDeleteCategoriesHandler(req, res, next) {
+    try {
+        const { ids, reassignToId } = req.body;
+        if (!Array.isArray(ids) || ids.length === 0) {
+            res.status(400).json({ success: false, error: { message: "ids array is required and cannot be empty" } });
+            return;
+        }
+        await CategoriesService.bulkDeleteCategories(ids, reassignToId);
+        ok(res, { message: "Categories deleted successfully" });
     }
     catch (err) {
         next(err);

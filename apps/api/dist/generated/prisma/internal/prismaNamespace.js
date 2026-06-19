@@ -48,7 +48,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.defineExtension = exports.NullsOrder = exports.QueryMode = exports.SortOrder = exports.KnowledgeBaseArticleAttachmentScalarFieldEnum = exports.KnowledgeBaseSecurityEventScalarFieldEnum = exports.KnowledgeBaseIPBlacklistScalarFieldEnum = exports.KnowledgeBaseRateLimitScalarFieldEnum = exports.KnowledgeBaseArticleAccessLogScalarFieldEnum = exports.KnowledgeBaseArticleReadScalarFieldEnum = exports.KnowledgeBaseSourceScalarFieldEnum = exports.KnowledgeBaseArticleVersionScalarFieldEnum = exports.TagScalarFieldEnum = exports.KnowledgeBaseArticleScalarFieldEnum = exports.TeamScalarFieldEnum = exports.TicketMessageScalarFieldEnum = exports.TicketScalarFieldEnum = exports.CategoryScalarFieldEnum = exports.PasswordResetTokenScalarFieldEnum = exports.MagicTokenScalarFieldEnum = exports.RefreshTokenScalarFieldEnum = exports.UserScalarFieldEnum = exports.TransactionIsolationLevel = exports.ModelName = exports.AnyNull = exports.JsonNull = exports.DbNull = exports.NullTypes = exports.prismaVersion = exports.getExtensionContext = exports.Decimal = exports.Sql = exports.raw = exports.join = exports.empty = exports.sql = exports.PrismaClientValidationError = exports.PrismaClientInitializationError = exports.PrismaClientRustPanicError = exports.PrismaClientUnknownRequestError = exports.PrismaClientKnownRequestError = void 0;
+exports.defineExtension = exports.NullsOrder = exports.QueryMode = exports.SortOrder = exports.RolePermissionScalarFieldEnum = exports.CreditTransactionScalarFieldEnum = exports.CustomerCreditsScalarFieldEnum = exports.RoutingRuleScalarFieldEnum = exports.TicketStatusHistoryScalarFieldEnum = exports.TicketAttachmentScalarFieldEnum = exports.KnowledgeBaseArticleAttachmentScalarFieldEnum = exports.KnowledgeBaseSecurityEventScalarFieldEnum = exports.KnowledgeBaseIPBlacklistScalarFieldEnum = exports.KnowledgeBaseRateLimitScalarFieldEnum = exports.KnowledgeBaseArticleAccessLogScalarFieldEnum = exports.KnowledgeBaseArticleReadScalarFieldEnum = exports.KnowledgeBaseSourceScalarFieldEnum = exports.KnowledgeBaseArticleVersionScalarFieldEnum = exports.TagScalarFieldEnum = exports.KnowledgeBaseArticleScalarFieldEnum = exports.TeamScalarFieldEnum = exports.TicketMessageScalarFieldEnum = exports.TicketScalarFieldEnum = exports.CategoryScalarFieldEnum = exports.PasswordResetTokenScalarFieldEnum = exports.MagicTokenScalarFieldEnum = exports.RefreshTokenScalarFieldEnum = exports.UserScalarFieldEnum = exports.TransactionIsolationLevel = exports.ModelName = exports.AnyNull = exports.JsonNull = exports.DbNull = exports.NullTypes = exports.prismaVersion = exports.getExtensionContext = exports.Decimal = exports.Sql = exports.raw = exports.join = exports.empty = exports.sql = exports.PrismaClientValidationError = exports.PrismaClientInitializationError = exports.PrismaClientRustPanicError = exports.PrismaClientUnknownRequestError = exports.PrismaClientKnownRequestError = void 0;
 const runtime = __importStar(require("@prisma/client/runtime/client"));
 /**
  * Prisma Errors
@@ -120,7 +120,13 @@ exports.ModelName = {
     KnowledgeBaseRateLimit: 'KnowledgeBaseRateLimit',
     KnowledgeBaseIPBlacklist: 'KnowledgeBaseIPBlacklist',
     KnowledgeBaseSecurityEvent: 'KnowledgeBaseSecurityEvent',
-    KnowledgeBaseArticleAttachment: 'KnowledgeBaseArticleAttachment'
+    KnowledgeBaseArticleAttachment: 'KnowledgeBaseArticleAttachment',
+    TicketAttachment: 'TicketAttachment',
+    TicketStatusHistory: 'TicketStatusHistory',
+    RoutingRule: 'RoutingRule',
+    CustomerCredits: 'CustomerCredits',
+    CreditTransaction: 'CreditTransaction',
+    RolePermission: 'RolePermission'
 };
 /**
  * Enums
@@ -185,7 +191,12 @@ exports.TicketScalarFieldEnum = {
     agentId: 'agentId',
     teamId: 'teamId',
     createdAt: 'createdAt',
-    updatedAt: 'updatedAt'
+    updatedAt: 'updatedAt',
+    affectedDomain: 'affectedDomain',
+    issueCategory: 'issueCategory',
+    firstResponseAt: 'firstResponseAt',
+    resolvedAt: 'resolvedAt',
+    ttrHours: 'ttrHours'
 };
 exports.TicketMessageScalarFieldEnum = {
     id: 'id',
@@ -325,6 +336,57 @@ exports.KnowledgeBaseArticleAttachmentScalarFieldEnum = {
     isFeatured: 'isFeatured',
     displayOrder: 'displayOrder',
     createdAt: 'createdAt'
+};
+exports.TicketAttachmentScalarFieldEnum = {
+    id: 'id',
+    ticketId: 'ticketId',
+    filename: 'filename',
+    filePath: 'filePath',
+    mimeType: 'mimeType',
+    createdAt: 'createdAt'
+};
+exports.TicketStatusHistoryScalarFieldEnum = {
+    id: 'id',
+    ticketId: 'ticketId',
+    fromStatus: 'fromStatus',
+    toStatus: 'toStatus',
+    changedById: 'changedById',
+    createdAt: 'createdAt'
+};
+exports.RoutingRuleScalarFieldEnum = {
+    id: 'id',
+    issueCategory: 'issueCategory',
+    assigneeId: 'assigneeId',
+    teamId: 'teamId',
+    secondaryAssigneeId: 'secondaryAssigneeId',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+};
+exports.CustomerCreditsScalarFieldEnum = {
+    id: 'id',
+    customerId: 'customerId',
+    allocatedHours: 'allocatedHours',
+    usedHours: 'usedHours',
+    remainingHours: 'remainingHours',
+    billableHours: 'billableHours',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+};
+exports.CreditTransactionScalarFieldEnum = {
+    id: 'id',
+    customerCreditsId: 'customerCreditsId',
+    ticketId: 'ticketId',
+    hours: 'hours',
+    type: 'type',
+    description: 'description',
+    createdAt: 'createdAt'
+};
+exports.RolePermissionScalarFieldEnum = {
+    id: 'id',
+    role: 'role',
+    permissions: 'permissions',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
 };
 exports.SortOrder = {
     asc: 'asc',

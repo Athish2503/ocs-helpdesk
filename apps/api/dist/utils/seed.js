@@ -1,7 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.seedDefaultCategories = seedDefaultCategories;
+exports.seedRedesignData = seedRedesignData;
 const prisma_js_1 = require("../config/prisma.js");
+const password_js_1 = require("./password.js");
 function slugify(text) {
     return text
         .toString()
@@ -22,6 +24,12 @@ async function seedDefaultCategories() {
         { name: "Web Hosting", description: "Linux and Windows web hosting services.", parentName: null },
         { name: "SSL Certificates", description: "Security SSL certificates from Commodo, PositiveSSL, etc.", parentName: null },
         { name: "General Services", description: "General queries, domain forwarding, privacy protection, and DNS services.", parentName: null },
+        { name: "Hosting", description: "Linux, Windows, and Cloud web hosting services.", parentName: null },
+        { name: "Google Services", description: "Google Workspace setup and mail configurations.", parentName: null },
+        { name: "SSL", description: "Secure sockets layer security certificate issues.", parentName: null },
+        { name: "Email", description: "Outlook, corporate mail, and routing issues.", parentName: null },
+        { name: "DNS", description: "DNS record configurations and propagation issues.", parentName: null },
+        { name: "Other Services", description: "Miscellaneous queries and other systems support.", parentName: null },
         // Children: Domain Registration
         { name: ".ac.in domain", description: "Academic institution domain in India.", parentName: "Domain Registration" },
         { name: ".ai domain", description: "Anguilla TLD, popular for AI companies.", parentName: "Domain Registration" },
@@ -131,4 +139,149 @@ async function seedDefaultCategories() {
         });
     }
     console.log(`✅  Seeded ${categoriesToSeed.length} default categories successfully!`);
+    // Seed redesign data
+    await seedRedesignData();
+}
+async function seedRedesignData() {
+    console.log("🌱  Seeding Redesign Users, Teams, Credits, and Routing Rules...");
+    const defaultPasswordHash = await (0, password_js_1.hashPassword)("Password123!");
+    // Create Users
+    const adminUser = await prisma_js_1.prisma.user.upsert({
+        where: { email: "admin@ocs.company.com" },
+        update: { role: "ADMIN" },
+        create: {
+            name: "System Administrator",
+            email: "admin@ocs.company.com",
+            passwordHash: defaultPasswordHash,
+            role: "ADMIN",
+            emailVerified: true,
+            isActive: true,
+        },
+    });
+    const billingUser = await prisma_js_1.prisma.user.upsert({
+        where: { email: "manjula@ocs.company.com" },
+        update: { role: "BILLING" },
+        create: {
+            name: "Manjula",
+            email: "manjula@ocs.company.com",
+            passwordHash: defaultPasswordHash,
+            role: "BILLING",
+            emailVerified: true,
+            isActive: true,
+        },
+    });
+    const l1User = await prisma_js_1.prisma.user.upsert({
+        where: { email: "support-l1@ocs.company.com" },
+        update: { role: "SUPPORT_L1" },
+        create: {
+            name: "Support Level 1",
+            email: "support-l1@ocs.company.com",
+            passwordHash: defaultPasswordHash,
+            role: "SUPPORT_L1",
+            emailVerified: true,
+            isActive: true,
+        },
+    });
+    const l2User = await prisma_js_1.prisma.user.upsert({
+        where: { email: "manager-l2@ocs.company.com" },
+        update: { role: "SUPPORT_L2" },
+        create: {
+            name: "Manager L2",
+            email: "manager-l2@ocs.company.com",
+            passwordHash: defaultPasswordHash,
+            role: "SUPPORT_L2",
+            emailVerified: true,
+            isActive: true,
+        },
+    });
+    const customerUser = await prisma_js_1.prisma.user.upsert({
+        where: { email: "customer@company.com" },
+        update: { role: "CUSTOMER" },
+        create: {
+            name: "General Customer",
+            email: "customer@company.com",
+            passwordHash: defaultPasswordHash,
+            role: "CUSTOMER",
+            emailVerified: true,
+            isActive: true,
+        },
+    });
+    // Create Support Team
+    const supportTeam = await prisma_js_1.prisma.team.upsert({
+        where: { name: "Support Team" },
+        update: {},
+        create: {
+            name: "Support Team",
+            description: "Default technical support team",
+            members: {
+                connect: [{ id: l1User.id }],
+            },
+        },
+    });
+    // Make sure L1 user is in the team
+    const existingTeam = await prisma_js_1.prisma.team.findUnique({
+        where: { name: "Support Team" },
+        include: { members: true },
+    });
+    if (existingTeam && !existingTeam.members.some(m => m.id === l1User.id)) {
+        await prisma_js_1.prisma.team.update({
+            where: { name: "Support Team" },
+            data: {
+                members: {
+                    connect: [{ id: l1User.id }],
+                },
+            },
+        });
+    }
+    // Create/Update Customer Credits for Customer User
+    await prisma_js_1.prisma.customerCredits.upsert({
+        where: { customerId: customerUser.id },
+        update: {},
+        create: {
+            customerId: customerUser.id,
+            allocatedHours: 20.0,
+            usedHours: 0.0,
+            remainingHours: 20.0,
+            billableHours: 0.0,
+        },
+    });
+    // Create Routing Rules
+    await prisma_js_1.prisma.routingRule.upsert({
+        where: { issueCategory: "Billing / Renewals" },
+        update: {
+            assigneeId: billingUser.id,
+            teamId: null,
+            secondaryAssigneeId: null,
+        },
+        create: {
+            issueCategory: "Billing / Renewals",
+            assigneeId: billingUser.id,
+        },
+    });
+    await prisma_js_1.prisma.routingRule.upsert({
+        where: { issueCategory: "Technical Support" },
+        update: {
+            assigneeId: null,
+            teamId: supportTeam.id,
+            secondaryAssigneeId: null,
+        },
+        create: {
+            issueCategory: "Technical Support",
+            teamId: supportTeam.id,
+        },
+    });
+    await prisma_js_1.prisma.routingRule.upsert({
+        where: { issueCategory: "Critical Issues" },
+        update: {
+            assigneeId: l1User.id,
+            teamId: null,
+            secondaryAssigneeId: l2User.id,
+        },
+        create: {
+            issueCategory: "Critical Issues",
+            assigneeId: l1User.id,
+            secondaryAssigneeId: l2User.id,
+        },
+    });
+    console.log("✅  Redesign Users, Teams, Credits, and Routing Rules seeded successfully!");
 }
