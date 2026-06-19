@@ -21,6 +21,17 @@ import {
   Sun,
   Moon,
   Search,
+  CreditCard,
+  ShieldAlert,
+  HelpCircle,
+  Receipt,
+  Cpu,
+  ArrowRight,
+  Paperclip,
+  AlertTriangle,
+  CheckCircle2,
+  Globe,
+  FileText,
 } from "lucide-react";
 
 interface Category {
@@ -188,13 +199,15 @@ export default function CustomerDashboard() {
     categoryId: "",
     priority: "MEDIUM" as "LOW" | "MEDIUM" | "HIGH" | "URGENT",
     affectedDomain: "",
+    issueType: "" as "" | "billing" | "technical" | "critical" | "other",
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [wizardStep, setWizardStep] = useState<"form" | "suggestions">("form");
+  const [wizardStep, setWizardStep] = useState<"intake" | "self-help" | "routing">("intake");
   const [suggestedArticles, setSuggestedArticles] = useState<any[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState<boolean>(false);
   const [submittingCreate, setSubmittingCreate] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Fetch helper for categories
   const loadCategories = useCallback(async () => {
@@ -300,8 +313,23 @@ export default function CustomerDashboard() {
 
       const resBody = await res.json();
       if (!res.ok) {
-        setCreateError(resBody.error?.message || "Failed to create support ticket.");
-        toast.error(resBody.error?.message || "Failed to create ticket.");
+        // Handle field-level validation errors (422 Zod)
+        if (res.status === 422 && resBody.error?.details?.length > 0) {
+          const fields: Record<string, string> = {};
+          resBody.error.details.forEach((d: { field: string; message: string }) => {
+            fields[d.field] = d.message;
+          });
+          setFieldErrors(fields);
+          // Build a readable summary for the banner
+          const summary = resBody.error.details.map((d: { field: string; message: string }) => d.message).join(" · ");
+          setCreateError(summary);
+          // Navigate back to Step 1 so user can fix the fields
+          setWizardStep("intake");
+          toast.error("Please fix the highlighted fields.");
+        } else {
+          setCreateError(resBody.error?.message || "Failed to create support ticket.");
+          toast.error(resBody.error?.message || "Failed to create ticket.");
+        }
         setSubmittingCreate(false);
         return;
       }
@@ -332,11 +360,13 @@ export default function CustomerDashboard() {
         categoryId: categories.length > 0 ? categories[0].id : "",
         priority: "MEDIUM",
         affectedDomain: "",
+        issueType: "",
       });
       setSelectedFile(null);
-      setWizardStep("form");
+      setWizardStep("intake");
       setSuggestedArticles([]);
       setShowCreateModal(false);
+      setFieldErrors({});
       toast.success("Support ticket created successfully!");
     } catch (err) {
       console.error("Ticket creation error:", err);
@@ -347,13 +377,36 @@ export default function CustomerDashboard() {
     }
   };
 
-  // Trigger intermediate KB suggestions step before creating the ticket
-  const handleCreateTicket = async (e: React.FormEvent) => {
+  // Step 1 → Step 2/3: fetch KB suggestions, then route to self-help or routing preview
+  const handleIntakeNext = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!createForm.title || !createForm.description) {
-      setCreateError("Please fill out all fields.");
+
+    // ── Client-side validation (mirrors API Zod schema) ───────────────────────
+    const newFieldErrors: Record<string, string> = {};
+    if (!createForm.issueType) {
+      setCreateError("Please select an issue type.");
       return;
     }
+    if (!createForm.title.trim()) {
+      newFieldErrors["title"] = "Title is required.";
+    } else if (createForm.title.trim().length < 3) {
+      newFieldErrors["title"] = "Title must be at least 3 characters.";
+    } else if (createForm.title.trim().length > 100) {
+      newFieldErrors["title"] = "Title must be at most 100 characters.";
+    }
+    if (!createForm.description.trim()) {
+      newFieldErrors["description"] = "Description is required.";
+    } else if (createForm.description.trim().length < 10) {
+      newFieldErrors["description"] = `Description must be at least 10 characters (${createForm.description.trim().length}/10).`;
+    }
+    if (Object.keys(newFieldErrors).length > 0) {
+      setFieldErrors(newFieldErrors);
+      setCreateError("Please fix the highlighted fields before continuing.");
+      return;
+    }
+
+    setFieldErrors({});
+    setCreateError(null);
 
     try {
       setLoadingSuggestions(true);
@@ -371,7 +424,7 @@ export default function CustomerDashboard() {
         const found = body.data.articles || [];
         if (found.length > 0) {
           setSuggestedArticles(found);
-          setWizardStep("suggestions");
+          setWizardStep("self-help");
           setLoadingSuggestions(false);
           return;
         }
@@ -380,9 +433,9 @@ export default function CustomerDashboard() {
       console.error("Failed to load suggested articles:", err);
     }
 
-    // If no suggestions found, or request failed, proceed to direct creation
+    // No suggestions — go straight to routing preview
     setLoadingSuggestions(false);
-    await executeTicketCreation();
+    setWizardStep("routing");
   };
 
   // Submit Reply Message
@@ -990,13 +1043,13 @@ export default function CustomerDashboard() {
                     </p>
                   </div>
 
-                  {/* Service Credit Hours Summary Card */}
+                  {/* Service Credit Hours Summary Card — enhanced with progress bar */}
                   <div className={`p-6 flex flex-col justify-between min-h-[160px] border transition-colors duration-300 rounded-2xl ${
                     isDark ? 'bg-[#0F172A]/45 border-white/[0.03]' : 'bg-white border-slate-200/80 shadow-sm'
                   }`}>
                     <div>
                       <div className="flex justify-between items-center mb-3">
-                        <h3 className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>Support Credit Hours</h3>
+                        <h3 className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>Support Credits</h3>
                         <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
                           credits && credits.remainingHours > 0
                             ? isDark ? "bg-emerald-950/40 text-[#12B76A] border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -1005,6 +1058,23 @@ export default function CustomerDashboard() {
                           {credits ? `${credits.remainingHours} hrs left` : "0 hrs left"}
                         </span>
                       </div>
+                      {/* Visual credit bar */}
+                      {credits && credits.allocatedHours > 0 && (
+                        <div className="mb-3">
+                          <div className={`w-full h-1.5 rounded-full overflow-hidden ${
+                            isDark ? 'bg-slate-800' : 'bg-slate-100'
+                          }`}>
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-[#38b1f7] to-emerald-400 transition-all duration-700"
+                              style={{ width: `${Math.min(100, (credits.usedHours / credits.allocatedHours) * 100)}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between mt-1">
+                            <span className={`text-[9px] font-mono ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>0 hrs</span>
+                            <span className={`text-[9px] font-mono ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{credits.allocatedHours} hrs total</span>
+                          </div>
+                        </div>
+                      )}
                       <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px]">
                         <div className="flex flex-col">
                           <span className={isDark ? 'text-[#94A3B8]' : 'text-slate-400'}>Allocated</span>
@@ -1680,287 +1750,752 @@ export default function CustomerDashboard() {
         </div>
       </div>
 
-      {/* 4. Ticket Creation Modal Overlay Dialog */}
+      {/* 4. Ticket Creation Modal — 3-Step Wizard */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-          <div className={`w-full max-w-lg overflow-hidden animate-error-shake shadow-2xl border transition-all duration-300 rounded-2xl my-8 ${
+          <div className={`w-full max-w-xl overflow-hidden shadow-2xl border transition-all duration-300 rounded-2xl my-8 ${
             isDark ? 'glass-card border-white/[0.08]' : 'bg-white border-slate-200 shadow-2xl'
           }`}>
-            <div className={`p-6 border-b flex items-center justify-between transition-colors ${
-              isDark ? 'border-[#1E293B] bg-slate-900/20' : 'border-slate-100 bg-slate-50/50'
+            {/* ── Modal Header with Step Progress ───────────────────────────── */}
+            <div className={`px-6 pt-5 pb-0 border-b transition-colors ${
+              isDark ? 'border-[#1E293B]' : 'border-slate-100'
             }`}>
-              <div>
-                <h3 className={`font-bold text-md tracking-tight ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>Create Support Ticket</h3>
-                <p className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Describe the issue and categorize it for routing</p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowCreateModal(false);
-                  setWizardStep("form");
-                  setSelectedFile(null);
-                  setSuggestedArticles([]);
-                }}
-                className={`p-1.5 rounded transition-colors border ${
-                  isDark 
-                    ? 'bg-slate-800 hover:bg-slate-700 border-slate-700/50 text-slate-400 hover:text-white' 
-                    : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-500'
-                }`}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {wizardStep === "suggestions" ? (
-              <div className="p-6 space-y-4">
-                <div className={`p-3.5 rounded-xl border text-xs leading-relaxed ${
-                  isDark ? "bg-[#38b1f7]/8 border-[#38b1f7]/15 text-[#cbd5e1]" : "bg-blue-50/60 border-blue-100 text-slate-700"
-                }`}>
-                  <p className="font-semibold mb-1">💡 We found matching Knowledge Base articles!</p>
-                  Please review these suggested self-service articles before submitting your ticket. They might resolve your issue immediately.
-                </div>
-                <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-                  {suggestedArticles.map((art) => (
-                    <div 
-                      key={art.id} 
-                      className={`p-4 border rounded-xl transition-all ${
-                        isDark ? 'bg-slate-900/60 border-white/5 hover:border-[#38b1f7]/25' : 'bg-slate-50 border-slate-200 hover:border-[#38b1f7]/30'
-                      }`}
-                    >
-                      <h4 className={`font-bold text-sm ${isDark ? 'text-[#38b1f7]' : 'text-[#0d7fc0]'}`}>{art.title}</h4>
-                      <p className={`text-xs line-clamp-2 mt-1 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                        {art.content.replace(/<[^>]*>/g, '')}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleReadArticle(art);
-                          setShowCreateModal(false);
-                        }}
-                        className="text-[10px] font-bold text-[#38b1f7] hover:underline mt-2 inline-block"
-                      >
-                        Read Full Article →
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-end">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // Cancel ticket creation
-                      setShowCreateModal(false);
-                      setCreateForm({
-                        title: "",
-                        description: "",
-                        categoryId: categories.length > 0 ? categories[0].id : "",
-                        priority: "MEDIUM",
-                        affectedDomain: "",
-                      });
-                      setSelectedFile(null);
-                      setWizardStep("form");
-                      setSuggestedArticles([]);
-                      toast.success("Glad we could help! Ticket creation cancelled.");
-                    }}
-                    className={`px-4 py-2.5 text-xs font-semibold rounded-xl border transition-colors text-center ${
-                      isDark 
-                        ? 'border-emerald-500/20 text-[#12B76A] bg-emerald-950/20 hover:bg-emerald-950/45' 
-                        : 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100'
-                    }`}
-                  >
-                    Yes, this resolved my issue (Cancel Ticket)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      executeTicketCreation();
-                    }}
-                    disabled={submittingCreate}
-                    className="btn-cyber flex items-center justify-center space-x-2 py-2.5 px-4"
-                  >
-                    <span>No, submit ticket</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleCreateTicket} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-                {createError && (
-                  <div className={`p-3 rounded-lg text-xs font-mono border ${
-                    isDark 
-                      ? 'bg-red-950/40 border-red-500/20 text-red-400' 
-                      : 'bg-red-50 border-red-200 text-red-700'
+              {/* Title row */}
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className={`font-bold text-base tracking-tight ${
+                    isDark ? 'text-[#F8FAFC]' : 'text-slate-900'
                   }`}>
-                    {createError}
-                  </div>
-                )}
-
-                {/* Title input */}
-                <div className="space-y-1.5">
-                  <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Ticket Title</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. DNS configuration propagation delay"
-                    className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full ${
-                      isDark
-                        ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
-                        : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
-                    }`}
-                    value={createForm.title}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, title: e.target.value }))}
-                    disabled={submittingCreate}
-                  />
-                </div>
-
-                {/* Affected Domain input */}
-                <div className="space-y-1.5">
-                  <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Affected Domain</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. mycompany.com"
-                    className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full ${
-                      isDark
-                        ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
-                        : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
-                    }`}
-                    value={createForm.affectedDomain}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, affectedDomain: e.target.value }))}
-                    disabled={submittingCreate}
-                  />
-                </div>
-
-                {/* Service Category / Impact input */}
-                <div className="space-y-1.5">
-                  <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Service Category</label>
-                  <select
-                    value={createForm.categoryId}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, categoryId: e.target.value }))}
-                    className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full ${
-                      isDark
-                        ? "bg-[#090d16] border border-white/5 focus:border-[#38b1f7] text-[#F8FAFC]"
-                        : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] text-slate-900"
-                    }`}
-                    disabled={submittingCreate}
-                  >
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Priority Selection based on business impact */}
-                <div className="space-y-1.5">
-                  <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Priority Selection</label>
-                  <select
-                    value={createForm.priority}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, priority: e.target.value as any }))}
-                    className={`text-sm h-[44px] rounded-xl outline-none focus:ring-1 transition-all duration-200 px-4 w-full ${
-                      isDark
-                        ? "bg-[#090d16] border border-white/5 focus:border-[#38b1f7] text-[#F8FAFC]"
-                        : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] text-slate-900"
-                    }`}
-                    disabled={submittingCreate}
-                  >
-                    <option value="LOW">Low (Service is usable; no business impact)</option>
-                    <option value="MEDIUM">Medium (Business impact exists; workaround is available)</option>
-                    <option value="HIGH">High (Service is unavailable; business operations impacted; no workaround)</option>
-                  </select>
-                  <p className={`text-[10px] italic leading-normal ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                    {createForm.priority === "LOW" && "Low Priority: Service is usable. No business impact."}
-                    {createForm.priority === "MEDIUM" && "Medium Priority: Business impact exists. Workaround is available."}
-                    {createForm.priority === "HIGH" && "High Priority: Service is unavailable. Business operations are impacted. No workaround exists."}
+                    {wizardStep === "intake" && "New Support Request"}
+                    {wizardStep === "self-help" && "💡 We Found Some Articles"}
+                    {wizardStep === "routing" && "Review & Submit"}
+                  </h3>
+                  <p className={`text-[11px] mt-0.5 ${
+                    isDark ? 'text-slate-400' : 'text-slate-500'
+                  }`}>
+                    {wizardStep === "intake" && "Tell us what's happening and we'll route it to the right team"}
+                    {wizardStep === "self-help" && "These articles might resolve your issue instantly"}
+                    {wizardStep === "routing" && "Confirm your ticket details before sending"}
                   </p>
                 </div>
+                <button
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setWizardStep("intake");
+                    setSelectedFile(null);
+                    setSuggestedArticles([]);
+                    setCreateError(null);
+                    setFieldErrors({});
+                  }}
+                  className={`p-1.5 rounded-lg transition-colors border shrink-0 ml-4 ${
+                    isDark 
+                      ? 'bg-slate-800/60 hover:bg-slate-700 border-slate-700/50 text-slate-400 hover:text-white' 
+                      : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-500'
+                  }`}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
 
-                {/* Description textarea */}
-                <div className="space-y-1.5">
-                  <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Problem Description</label>
-                  <textarea
-                    required
-                    placeholder="Provide details about the issue you are experiencing..."
-                    rows={4}
-                    className={`w-full p-4 text-xs rounded-xl outline-none focus:ring-1 transition-all duration-200 resize-none ${
+              {/* Step progress bar */}
+              <div className="flex items-center gap-1 pb-4">
+                {(["intake", "self-help", "routing"] as const).map((step, idx) => {
+                  const stepIndex = ["intake", "self-help", "routing"].indexOf(wizardStep);
+                  const isActive = step === wizardStep;
+                  const isDone = idx < stepIndex;
+                  return (
+                    <div key={step} className="flex items-center gap-1 flex-1">
+                      <div className={`h-1 flex-1 rounded-full transition-all duration-500 ${
+                        isDone
+                          ? 'bg-[#38b1f7]'
+                          : isActive
+                            ? 'bg-[#38b1f7]/50'
+                            : isDark ? 'bg-slate-800' : 'bg-slate-200'
+                      }`} />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── STEP 1: INTAKE FORM ─────────────────────────────────────────── */}
+            {wizardStep === "intake" && (
+              <form onSubmit={handleIntakeNext} className="overflow-y-auto max-h-[75vh]">
+                <div className="p-6 space-y-5">
+
+                  {/* Credit Balance Banner */}
+                  {credits && (
+                    <div className={`p-4 rounded-xl border flex items-center gap-4 ${
                       isDark
-                        ? "bg-slate-950/60 border border-white/5 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-[#F8FAFC]"
-                        : "bg-white border border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:ring-[#38b1f7] text-slate-900"
-                    }`}
-                    value={createForm.description}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
-                    disabled={submittingCreate}
-                  />
-                </div>
-
-                {/* File Upload Attachment input */}
-                <div className="space-y-1.5">
-                  <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Attachment / Screenshot (Optional)</label>
-                  <div className="flex items-center space-x-3">
-                    <label className={`cursor-pointer px-4 py-2 border rounded-xl text-xs font-semibold hover:opacity-90 active:scale-98 transition-all shrink-0 ${
-                      isDark 
-                        ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-750' 
-                        : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                        ? 'bg-gradient-to-r from-[#38b1f7]/8 to-emerald-500/5 border-[#38b1f7]/15'
+                        : 'bg-gradient-to-r from-sky-50 to-emerald-50/60 border-sky-200/70'
                     }`}>
-                      <span>Choose File</span>
-                      <input 
-                        type="file" 
-                        className="hidden" 
-                        onChange={(e) => {
-                          const file = e.target.files?.[0] || null;
-                          setSelectedFile(file);
-                        }} 
-                      />
-                    </label>
-                    <span className={`text-xs truncate max-w-[200px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                      {selectedFile ? selectedFile.name : "No file selected"}
-                    </span>
-                    {selectedFile && (
-                      <button 
-                        type="button" 
-                        onClick={() => setSelectedFile(null)}
-                        className="text-red-500 hover:text-red-650 text-xs font-bold shrink-0"
-                      >
-                        Remove
-                      </button>
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                        isDark ? 'bg-[#38b1f7]/15' : 'bg-[#38b1f7]/10'
+                      }`}>
+                        <CreditCard className="w-4 h-4 text-[#38b1f7]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                            isDark ? 'text-slate-400' : 'text-slate-500'
+                          }`}>Support Credit Balance</span>
+                          <span className={`text-[11px] font-mono font-bold ${
+                            credits.remainingHours > 0 ? 'text-emerald-500' : 'text-red-400'
+                          }`}>{credits.remainingHours} hrs remaining</span>
+                        </div>
+                        <div className={`w-full h-1.5 rounded-full overflow-hidden ${
+                          isDark ? 'bg-slate-800' : 'bg-slate-200'
+                        }`}>
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${
+                              credits.remainingHours > credits.allocatedHours * 0.3
+                                ? 'bg-gradient-to-r from-[#38b1f7] to-emerald-400'
+                                : credits.remainingHours > 0
+                                  ? 'bg-gradient-to-r from-amber-400 to-orange-400'
+                                  : 'bg-red-500'
+                            }`}
+                            style={{ width: `${credits.allocatedHours > 0 ? Math.min(100, (credits.remainingHours / credits.allocatedHours) * 100) : 0}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between mt-1">
+                          <span className={`text-[9px] ${
+                            isDark ? 'text-slate-500' : 'text-slate-400'
+                          }`}>{credits.usedHours} hrs used</span>
+                          <span className={`text-[9px] ${
+                            isDark ? 'text-slate-500' : 'text-slate-400'
+                          }`}>{credits.allocatedHours} hrs allocated</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error message */}
+                  {createError && (
+                    <div className={`p-3 rounded-lg text-xs font-medium border flex items-center gap-2 ${
+                      isDark 
+                        ? 'bg-red-950/40 border-red-500/20 text-red-400' 
+                        : 'bg-red-50 border-red-200 text-red-700'
+                    }`}>
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      {createError}
+                    </div>
+                  )}
+
+                  {/* Issue Type Selector */}
+                  <div className="space-y-2">
+                    <label className={`text-[10px] font-bold uppercase tracking-wider ${
+                      isDark ? 'text-slate-400' : 'text-slate-500'
+                    }`}>Issue Type <span className="text-red-400">*</span></label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        {
+                          key: "billing" as const,
+                          icon: Receipt,
+                          label: "Billing / Renewals",
+                          desc: "Invoices, subscriptions, renewals",
+                          color: "text-violet-400",
+                          bg: isDark ? "bg-violet-950/30 border-violet-500/20 hover:border-violet-500/40" : "bg-violet-50 border-violet-200 hover:border-violet-400",
+                          activeBg: isDark ? "bg-violet-950/50 border-violet-400/60 shadow-[0_0_12px_rgba(167,139,250,0.12)]" : "bg-violet-100 border-violet-500",
+                        },
+                        {
+                          key: "technical" as const,
+                          icon: Cpu,
+                          label: "Technical Support",
+                          desc: "Config, connectivity, software issues",
+                          color: "text-[#38b1f7]",
+                          bg: isDark ? "bg-sky-950/30 border-sky-500/20 hover:border-sky-500/40" : "bg-sky-50 border-sky-200 hover:border-sky-400",
+                          activeBg: isDark ? "bg-sky-950/50 border-[#38b1f7]/60 shadow-[0_0_12px_rgba(56,177,247,0.12)]" : "bg-sky-100 border-sky-500",
+                        },
+                        {
+                          key: "critical" as const,
+                          icon: ShieldAlert,
+                          label: "Critical / Outage",
+                          desc: "Service down, business blocked",
+                          color: "text-red-400",
+                          bg: isDark ? "bg-red-950/30 border-red-500/20 hover:border-red-500/40" : "bg-red-50 border-red-200 hover:border-red-400",
+                          activeBg: isDark ? "bg-red-950/50 border-red-400/60 shadow-[0_0_12px_rgba(248,113,113,0.15)]" : "bg-red-100 border-red-500",
+                        },
+                        {
+                          key: "other" as const,
+                          icon: HelpCircle,
+                          label: "General / Other",
+                          desc: "Account queries, other requests",
+                          color: isDark ? "text-slate-400" : "text-slate-500",
+                          bg: isDark ? "bg-slate-800/40 border-slate-700/30 hover:border-slate-600" : "bg-slate-50 border-slate-200 hover:border-slate-400",
+                          activeBg: isDark ? "bg-slate-800 border-slate-500 shadow-sm" : "bg-slate-200 border-slate-600",
+                        },
+                      ].map(({ key, icon: Icon, label, desc, color, bg, activeBg }) => {
+                        const isSelected = createForm.issueType === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => {
+                              // Auto-set priority for critical
+                              const newPriority = key === "critical" ? "HIGH" : createForm.priority;
+                              // Auto-set category for billing
+                              let catId = createForm.categoryId;
+                              if (key === "billing") {
+                                const billingCat = categories.find(
+                                  c => c.name.toLowerCase().includes("billing") || c.name.toLowerCase().includes("renew")
+                                );
+                                if (billingCat) catId = billingCat.id;
+                              }
+                              setCreateForm(prev => ({
+                                ...prev,
+                                issueType: key,
+                                priority: newPriority,
+                                categoryId: catId,
+                              }));
+                              setCreateError(null);
+                            }}
+                            className={`p-3 rounded-xl border text-left transition-all duration-200 ${
+                              isSelected ? activeBg : bg
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <Icon className={`w-3.5 h-3.5 shrink-0 ${color}`} />
+                              <span className={`text-xs font-bold ${
+                                isSelected
+                                  ? isDark ? 'text-white' : 'text-slate-900'
+                                  : isDark ? 'text-slate-200' : 'text-slate-700'
+                              }`}>{label}</span>
+                            </div>
+                            <p className={`text-[10px] leading-snug pl-5 ${
+                              isDark ? 'text-slate-500' : 'text-slate-400'
+                            }`}>{desc}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Title */}
+                  <div className="space-y-1.5">
+                    <label className={`text-[10px] font-bold uppercase tracking-wider ${
+                      isDark ? 'text-slate-400' : 'text-slate-500'
+                    }`}>Ticket Title <span className="text-red-400">*</span></label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Brief summary of the issue"
+                      className={`text-sm h-[42px] rounded-xl outline-none transition-all duration-200 px-4 w-full border ${
+                        fieldErrors['title']
+                          ? isDark
+                            ? 'bg-slate-950/60 border-red-500/60 focus:border-red-400 focus:shadow-[0_0_0_3px_rgba(239,68,68,0.15)] text-[#F8FAFC] placeholder:text-slate-600'
+                            : 'bg-white border-red-400 focus:border-red-500 focus:shadow-[0_0_0_3px_rgba(239,68,68,0.12)] text-slate-900 placeholder:text-slate-400'
+                          : isDark
+                            ? 'bg-slate-950/60 border-white/[0.06] focus:border-[#38b1f7] focus:shadow-[0_0_0_3px_rgba(56,177,247,0.12)] text-[#F8FAFC] placeholder:text-slate-600'
+                            : 'bg-white border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:shadow-[0_0_0_3px_rgba(56,177,247,0.12)] text-slate-900 placeholder:text-slate-400'
+                      }`}
+                      value={createForm.title}
+                      onChange={(e) => {
+                        setCreateForm(prev => ({ ...prev, title: e.target.value }));
+                        if (fieldErrors['title']) setFieldErrors(prev => { const n = {...prev}; delete n['title']; return n; });
+                      }}
+                      disabled={submittingCreate || loadingSuggestions}
+                    />
+                    {fieldErrors['title'] && (
+                      <p className="text-[11px] text-red-400 flex items-center gap-1 mt-0.5">
+                        <AlertTriangle className="w-3 h-3 shrink-0" />
+                        {fieldErrors['title']}
+                      </p>
                     )}
+                  </div>
+
+                  {/* Affected Domain + Category — side by side */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className={`text-[10px] font-bold uppercase tracking-wider ${
+                        isDark ? 'text-slate-400' : 'text-slate-500'
+                      }`}>
+                        <Globe className="w-3 h-3 inline-block mr-1 opacity-60" />
+                        Affected Domain
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. mycompany.com"
+                        className={`text-sm h-[42px] rounded-xl outline-none transition-all duration-200 px-4 w-full border ${
+                          isDark
+                            ? "bg-slate-950/60 border-white/[0.06] focus:border-[#38b1f7] focus:shadow-[0_0_0_3px_rgba(56,177,247,0.12)] text-[#F8FAFC] placeholder:text-slate-600"
+                            : "bg-white border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:shadow-[0_0_0_3px_rgba(56,177,247,0.12)] text-slate-900 placeholder:text-slate-400"
+                        }`}
+                        value={createForm.affectedDomain}
+                        onChange={(e) => setCreateForm(prev => ({ ...prev, affectedDomain: e.target.value }))}
+                        disabled={submittingCreate || loadingSuggestions}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className={`text-[10px] font-bold uppercase tracking-wider ${
+                        isDark ? 'text-slate-400' : 'text-slate-500'
+                      }`}>Service Category</label>
+                      <select
+                        value={createForm.categoryId}
+                        onChange={(e) => setCreateForm(prev => ({ ...prev, categoryId: e.target.value }))}
+                        className={`text-sm h-[42px] rounded-xl outline-none transition-all duration-200 px-3 w-full border appearance-none ${
+                          isDark
+                            ? "bg-[#0a0f1e] border-white/[0.06] focus:border-[#38b1f7] text-[#F8FAFC]"
+                            : "bg-white border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] text-slate-900"
+                        }`}
+                        disabled={submittingCreate || loadingSuggestions || loadingCategories}
+                      >
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>{cat.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Priority */}
+                  <div className="space-y-2">
+                    <label className={`text-[10px] font-bold uppercase tracking-wider ${
+                      isDark ? 'text-slate-400' : 'text-slate-500'
+                    }`}>Business Impact / Priority</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {([
+                        { val: "LOW", label: "Low", sub: "Usable, no impact", color: "text-slate-400", activeCls: isDark ? "border-slate-500 bg-slate-800" : "border-slate-500 bg-slate-100" },
+                        { val: "MEDIUM", label: "Medium", sub: "Impact, workaround exists", color: "text-amber-400", activeCls: isDark ? "border-amber-500/60 bg-amber-950/30" : "border-amber-400 bg-amber-50" },
+                        { val: "HIGH", label: "High / Urgent", sub: "Down, no workaround", color: "text-red-400", activeCls: isDark ? "border-red-500/60 bg-red-950/30" : "border-red-400 bg-red-50" },
+                      ] as const).map(({ val, label, sub, color, activeCls }) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setCreateForm(prev => ({ ...prev, priority: val }))}
+                          className={`p-2.5 rounded-xl border text-left transition-all duration-200 ${
+                            createForm.priority === val
+                              ? activeCls
+                              : isDark ? 'bg-slate-900/40 border-slate-800 hover:border-slate-700' : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <span className={`text-[11px] font-bold block ${
+                            createForm.priority === val ? color : isDark ? 'text-slate-300' : 'text-slate-700'
+                          }`}>{label}</span>
+                          <span className={`text-[9px] leading-snug ${
+                            isDark ? 'text-slate-500' : 'text-slate-400'
+                          }`}>{sub}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className={`text-[10px] font-bold uppercase tracking-wider ${
+                        isDark ? 'text-slate-400' : 'text-slate-500'
+                      }`}>Problem Description <span className="text-red-400">*</span></label>
+                      <span className={`text-[10px] font-mono ${
+                        createForm.description.trim().length < 10
+                          ? createForm.description.length > 0
+                            ? 'text-amber-400'
+                            : isDark ? 'text-slate-600' : 'text-slate-400'
+                          : 'text-emerald-500'
+                      }`}>
+                        {createForm.description.trim().length}/10 min
+                      </span>
+                    </div>
+                    <textarea
+                      required
+                      placeholder="Describe the issue in detail — what happened, when it started, steps to reproduce..."
+                      rows={4}
+                      className={`w-full p-3.5 text-sm rounded-xl outline-none transition-all duration-200 resize-none border ${
+                        fieldErrors['description']
+                          ? isDark
+                            ? 'bg-slate-950/60 border-red-500/60 focus:border-red-400 focus:shadow-[0_0_0_3px_rgba(239,68,68,0.15)] text-[#F8FAFC] placeholder:text-slate-600'
+                            : 'bg-white border-red-400 focus:border-red-500 focus:shadow-[0_0_0_3px_rgba(239,68,68,0.12)] text-slate-900 placeholder:text-slate-400'
+                          : isDark
+                            ? 'bg-slate-950/60 border-white/[0.06] focus:border-[#38b1f7] focus:shadow-[0_0_0_3px_rgba(56,177,247,0.12)] text-[#F8FAFC] placeholder:text-slate-600'
+                            : 'bg-white border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:shadow-[0_0_0_3px_rgba(56,177,247,0.12)] text-slate-900 placeholder:text-slate-400'
+                      }`}
+                      value={createForm.description}
+                      onChange={(e) => {
+                        setCreateForm(prev => ({ ...prev, description: e.target.value }));
+                        if (fieldErrors['description']) setFieldErrors(prev => { const n = {...prev}; delete n['description']; return n; });
+                      }}
+                      disabled={submittingCreate || loadingSuggestions}
+                    />
+                    {fieldErrors['description'] && (
+                      <p className="text-[11px] text-red-400 flex items-center gap-1 mt-0.5">
+                        <AlertTriangle className="w-3 h-3 shrink-0" />
+                        {fieldErrors['description']}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* File Attachment */}
+                  <div className="space-y-1.5">
+                    <label className={`text-[10px] font-bold uppercase tracking-wider ${
+                      isDark ? 'text-slate-400' : 'text-slate-500'
+                    }`}>Attachment / Screenshot <span className={isDark ? 'text-slate-600' : 'text-slate-400'}>(Optional)</span></label>
+                    <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      selectedFile
+                        ? isDark ? 'border-[#38b1f7]/30 bg-[#38b1f7]/5' : 'border-[#38b1f7]/30 bg-sky-50'
+                        : isDark ? 'border-white/[0.06] bg-slate-950/40 hover:border-white/10' : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+                    }`}>
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                        isDark ? 'bg-slate-800' : 'bg-slate-200'
+                      }`}>
+                        <Paperclip className={`w-3.5 h-3.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs font-semibold truncate ${
+                          isDark ? 'text-slate-300' : 'text-slate-700'
+                        }`}>
+                          {selectedFile ? selectedFile.name : "Click to attach a file"}
+                        </p>
+                        <p className={`text-[10px] ${
+                          isDark ? 'text-slate-500' : 'text-slate-400'
+                        }`}>
+                          {selectedFile ? `${(selectedFile.size / 1024).toFixed(1)} KB` : "PNG, JPG, PDF, ZIP — max 20 MB"}
+                        </p>
+                      </div>
+                      {selectedFile && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); setSelectedFile(null); }}
+                          className="text-red-400 hover:text-red-300 shrink-0"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                      <input type="file" className="hidden" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
+                    </label>
                   </div>
                 </div>
 
-                {/* Submit CTA */}
-                <div className="pt-2 flex justify-end space-x-3">
+                {/* Footer CTA */}
+                <div className={`px-6 py-4 border-t flex items-center justify-between ${
+                  isDark ? 'border-[#1E293B] bg-slate-900/20' : 'border-slate-100 bg-slate-50/50'
+                }`}>
                   <button
                     type="button"
                     onClick={() => {
                       setShowCreateModal(false);
-                      setWizardStep("form");
+                      setWizardStep("intake");
                       setSelectedFile(null);
                       setSuggestedArticles([]);
+                      setCreateError(null);
                     }}
-                    className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors ${
-                      isDark 
-                        ? 'text-slate-300 hover:bg-slate-800' 
-                        : 'text-slate-600 hover:bg-slate-100'
+                    className={`text-xs font-semibold px-4 py-2 rounded-lg transition-colors ${
+                      isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                     }`}
-                    disabled={submittingCreate}
+                    disabled={loadingSuggestions}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="btn-cyber flex items-center space-x-2"
-                    disabled={submittingCreate}
+                    className="btn-cyber h-10 px-5 text-sm flex items-center gap-2"
+                    disabled={loadingSuggestions}
                   >
-                    {submittingCreate ? (
-                      <span>Creating Ticket...</span>
+                    {loadingSuggestions ? (
+                      <><RefreshCw className="w-3.5 h-3.5 animate-spin" /><span>Checking KB...</span></>
                     ) : (
-                      <>
-                        <Plus className="w-4 h-4" />
-                        <span>Submit Request</span>
-                      </>
+                      <><span>Continue</span><ArrowRight className="w-3.5 h-3.5" /></>
                     )}
                   </button>
                 </div>
               </form>
             )}
+
+            {/* ── STEP 2: SELF-HELP KB ARTICLES ────────────────────────────── */}
+            {wizardStep === "self-help" && (
+              <div className="overflow-y-auto max-h-[75vh]">
+                <div className="p-6 space-y-4">
+                  <div className={`p-4 rounded-xl border ${
+                    isDark ? 'bg-[#38b1f7]/8 border-[#38b1f7]/15' : 'bg-sky-50 border-sky-200'
+                  }`}>
+                    <p className={`text-xs leading-relaxed ${
+                      isDark ? 'text-slate-300' : 'text-slate-700'
+                    }`}>
+                      Before we raise a ticket, we found <strong className={isDark ? 'text-[#38b1f7]' : 'text-sky-700'}>{suggestedArticles.length} article{suggestedArticles.length !== 1 ? 's' : ''}</strong> that might resolve your issue right away. Take a look — it could save you the wait.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {suggestedArticles.map((art, idx) => (
+                      <div
+                        key={art.id}
+                        className={`p-4 rounded-xl border transition-all group ${
+                          isDark
+                            ? 'bg-slate-900/50 border-white/[0.05] hover:border-[#38b1f7]/25 hover:bg-slate-900'
+                            : 'bg-white border-slate-200 hover:border-sky-300 hover:shadow-sm'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 ${
+                            isDark ? 'bg-[#38b1f7]/15 text-[#38b1f7]' : 'bg-sky-100 text-sky-700'
+                          }`}>{idx + 1}</div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className={`text-sm font-bold mb-1 transition-colors ${
+                              isDark ? 'text-slate-100 group-hover:text-[#38b1f7]' : 'text-slate-800 group-hover:text-sky-700'
+                            }`}>{art.title}</h4>
+                            <p className={`text-xs line-clamp-2 leading-relaxed ${
+                              isDark ? 'text-slate-500' : 'text-slate-500'
+                            }`}>{art.content.replace(/<[^>]*>/g, '').substring(0, 140)}...</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleReadArticle(art);
+                                setActiveTab("kb");
+                                setShowCreateModal(false);
+                                setWizardStep("intake");
+                              }}
+                              className={`text-[11px] font-bold mt-2 inline-flex items-center gap-1 ${
+                                isDark ? 'text-[#38b1f7] hover:text-white' : 'text-sky-600 hover:text-sky-800'
+                              }`}
+                            >
+                              Read full article <ArrowRight className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className={`px-6 py-4 border-t flex flex-col sm:flex-row gap-3 ${
+                  isDark ? 'border-[#1E293B] bg-slate-900/20' : 'border-slate-100 bg-slate-50/50'
+                }`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateModal(false);
+                      setWizardStep("intake");
+                      setCreateForm(prev => ({ ...prev, title: "", description: "", affectedDomain: "", issueType: "" }));
+                      setSelectedFile(null);
+                      setSuggestedArticles([]);
+                      toast.success("Great! Glad the articles helped. Ticket creation cancelled.");
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-xl border transition-all ${
+                      isDark
+                        ? 'border-emerald-500/25 text-emerald-400 bg-emerald-950/20 hover:bg-emerald-950/40'
+                        : 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Yes, this resolved my issue</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWizardStep("routing")}
+                    className="flex-1 btn-cyber h-10 text-xs flex items-center justify-center gap-2"
+                  >
+                    <span>Still need help — raise ticket</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── STEP 3: ROUTING PREVIEW + FINAL SUBMIT ───────────────────── */}
+            {wizardStep === "routing" && (() => {
+              // Determine routing destination for display
+              const isBilling = createForm.issueType === "billing" ||
+                categories.find(c => c.id === createForm.categoryId)?.name?.toLowerCase().includes("billing") ||
+                categories.find(c => c.id === createForm.categoryId)?.name?.toLowerCase().includes("renew");
+              const isCritical = createForm.issueType === "critical" || createForm.priority === "HIGH" || createForm.priority === "URGENT";
+
+              type RoutingDest = { dept: string; who: string; icon: React.ElementType; color: string; bg: string; escalated?: boolean };
+
+              const routing: RoutingDest = isCritical
+                ? {
+                    dept: "Critical Escalation",
+                    who: "Support Level 1 + Manager L2",
+                    icon: ShieldAlert,
+                    color: "text-red-400",
+                    bg: isDark ? "bg-red-950/30 border-red-500/25" : "bg-red-50 border-red-200",
+                    escalated: true,
+                  }
+                : isBilling
+                ? {
+                    dept: "Billing & Renewals",
+                    who: "Manjula",
+                    icon: Receipt,
+                    color: "text-violet-400",
+                    bg: isDark ? "bg-violet-950/30 border-violet-500/25" : "bg-violet-50 border-violet-200",
+                  }
+                : {
+                    dept: "Technical Support",
+                    who: "Support Team",
+                    icon: Cpu,
+                    color: "text-[#38b1f7]",
+                    bg: isDark ? "bg-sky-950/30 border-sky-500/25" : "bg-sky-50 border-sky-200",
+                  };
+
+              const RoutingIcon = routing.icon;
+
+              return (
+                <div className="overflow-y-auto max-h-[75vh]">
+                  <div className="p-6 space-y-4">
+
+                    {/* Ticket summary recap */}
+                    <div className={`p-4 rounded-xl border space-y-3 ${
+                      isDark ? 'bg-slate-900/40 border-white/[0.05]' : 'bg-slate-50 border-slate-200'
+                    }`}>
+                      <h4 className={`text-[10px] font-bold uppercase tracking-wider ${
+                        isDark ? 'text-slate-500' : 'text-slate-400'
+                      }`}>Ticket Summary</h4>
+                      <div className="space-y-2">
+                        <div className="flex items-start gap-2">
+                          <FileText className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
+                            isDark ? 'text-slate-500' : 'text-slate-400'
+                          }`} />
+                          <div>
+                            <p className={`text-[10px] ${
+                              isDark ? 'text-slate-500' : 'text-slate-400'
+                            }`}>Title</p>
+                            <p className={`text-sm font-semibold ${
+                              isDark ? 'text-white' : 'text-slate-900'
+                            }`}>{createForm.title}</p>
+                          </div>
+                        </div>
+                        {createForm.affectedDomain && (
+                          <div className="flex items-start gap-2">
+                            <Globe className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
+                              isDark ? 'text-slate-500' : 'text-slate-400'
+                            }`} />
+                            <div>
+                              <p className={`text-[10px] ${
+                                isDark ? 'text-slate-500' : 'text-slate-400'
+                              }`}>Affected Domain</p>
+                              <p className={`text-sm font-mono font-semibold ${
+                                isDark ? 'text-white' : 'text-slate-900'
+                              }`}>{createForm.affectedDomain}</p>
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-4 pt-1">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold ${
+                            createForm.priority === "HIGH" || createForm.priority === "URGENT"
+                              ? isDark ? 'text-red-400 border-red-500/25 bg-red-950/30' : 'text-red-700 border-red-200 bg-red-50'
+                              : createForm.priority === "MEDIUM"
+                                ? isDark ? 'text-amber-400 border-amber-500/25 bg-amber-950/30' : 'text-amber-700 border-amber-200 bg-amber-50'
+                                : isDark ? 'text-slate-400 border-slate-700 bg-slate-800/40' : 'text-slate-600 border-slate-200 bg-slate-100'
+                          }`}>
+                            {createForm.priority} Priority
+                          </span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold ${
+                            isDark ? 'text-slate-300 border-slate-700 bg-slate-800/40' : 'text-slate-700 border-slate-200 bg-slate-100'
+                          }`}>
+                            {categories.find(c => c.id === createForm.categoryId)?.name || "General"}
+                          </span>
+                          {selectedFile && (
+                            <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold ${
+                              isDark ? 'text-sky-400 border-sky-500/25 bg-sky-950/30' : 'text-sky-700 border-sky-200 bg-sky-50'
+                            }`}>
+                              1 attachment
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Routing Destination Card */}
+                    <div className={`p-4 rounded-xl border ${routing.bg}`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <RoutingIcon className={`w-4 h-4 ${routing.color}`} />
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                          isDark ? 'text-slate-400' : 'text-slate-500'
+                        }`}>Routing Destination</span>
+                        {routing.escalated && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/25">
+                            ESCALATED
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
+                          isDark ? 'bg-slate-900/60 border-white/[0.05]' : 'bg-white border-slate-200'
+                        }`}>
+                          <RoutingIcon className={`w-5 h-5 ${routing.color}`} />
+                        </div>
+                        <div>
+                          <p className={`text-sm font-bold ${
+                            isDark ? 'text-white' : 'text-slate-900'
+                          }`}>{routing.dept}</p>
+                          <p className={`text-xs ${
+                            isDark ? 'text-slate-400' : 'text-slate-500'
+                          }`}>
+                            {routing.escalated
+                              ? 'Routed to Support L1 with Manager L2 copied'
+                              : `Assigned to: ${routing.who}`
+                            }
+                          </p>
+                        </div>
+                      </div>
+                      {routing.escalated && (
+                        <div className={`mt-3 pt-3 border-t flex items-center gap-2 ${
+                          isDark ? 'border-red-500/15' : 'border-red-200'
+                        }`}>
+                          <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                          <p className={`text-[11px] ${
+                            isDark ? 'text-red-300/80' : 'text-red-600'
+                          }`}>
+                            High/critical priority tickets are escalated to both Support Level 1 and Manager L2 simultaneously.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Credit impact note */}
+                    {credits && (
+                      <div className={`p-3 rounded-xl border flex items-center gap-3 ${
+                        isDark ? 'bg-slate-900/40 border-white/[0.05]' : 'bg-slate-50 border-slate-200'
+                      }`}>
+                        <CreditCard className={`w-4 h-4 shrink-0 ${isDark ? 'text-slate-500' : 'text-slate-400'}`} />
+                        <p className={`text-[11px] leading-relaxed ${
+                          isDark ? 'text-slate-400' : 'text-slate-500'
+                        }`}>
+                          You have <strong className={credits.remainingHours > 0 ? 'text-emerald-500' : 'text-red-400'}>{credits.remainingHours} credit hours</strong> remaining. Support hours are deducted when the ticket is resolved.
+                          {credits.remainingHours === 0 && " Overage hours will be billed."}
+                        </p>
+                      </div>
+                    )}
+
+                    {createError && (
+                      <div className={`p-3 rounded-lg text-xs font-medium border flex items-center gap-2 ${
+                        isDark
+                          ? 'bg-red-950/40 border-red-500/20 text-red-400'
+                          : 'bg-red-50 border-red-200 text-red-700'
+                      }`}>
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        {createError}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className={`px-6 py-4 border-t flex items-center justify-between gap-3 ${
+                    isDark ? 'border-[#1E293B] bg-slate-900/20' : 'border-slate-100 bg-slate-50/50'
+                  }`}>
+                    <button
+                      type="button"
+                      onClick={() => setWizardStep(suggestedArticles.length > 0 ? "self-help" : "intake")}
+                      className={`flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-lg transition-colors ${
+                        isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                      }`}
+                      disabled={submittingCreate}
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => executeTicketCreation()}
+                      className="btn-cyber h-10 px-6 text-sm flex items-center gap-2"
+                      disabled={submittingCreate}
+                    >
+                      {submittingCreate ? (
+                        <><RefreshCw className="w-3.5 h-3.5 animate-spin" /><span>Submitting...</span></>
+                      ) : (
+                        <><Send className="w-3.5 h-3.5" /><span>Submit Ticket</span></>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
