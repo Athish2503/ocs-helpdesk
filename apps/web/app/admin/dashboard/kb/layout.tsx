@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "../../../../context/AuthContext";
 import { useToast } from "../../../../context/ToastContext";
 import AdminShell, { AdminShellSkeleton } from "../../../../components/admin/AdminShell";
+import Loader from "../../../../components/Loader";
 import { BookOpen, Plus, FolderOpen, ShieldAlert } from "lucide-react";
 
 export default function KbLayout({ children }: { children: React.ReactNode }) {
@@ -62,8 +63,13 @@ export default function KbLayout({ children }: { children: React.ReactNode }) {
   };
 
   if (authLoading || !user) {
-    const isDarkTheme = typeof window !== "undefined" && localStorage.getItem("theme") === "dark";
-    return <AdminShellSkeleton isDark={isDarkTheme} />;
+    return (
+      <div className={`flex items-center justify-center min-h-screen transition-colors duration-300 ${
+        isDark ? 'bg-[#020617]' : 'bg-[#f8fafc]'
+      }`}>
+        <Loader size="xl" theme={isDark ? "dark" : "light"} label="Loading Knowledge Base..." />
+      </div>
+    );
   }
 
   // Header actions for the KB section

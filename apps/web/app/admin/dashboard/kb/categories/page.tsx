@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { fetchWithAuth } from "../../../../../lib/api";
 import { useDialog } from "../../../../../context/DialogContext";
+import Loader from "../../../../../components/Loader";
 
 interface Category {
   id: string;
@@ -415,8 +416,7 @@ export default function CategoryManagementPage() {
 
           {loading ? (
             <div className={`admin-card py-16 flex flex-col items-center justify-center gap-3 ${isDark ? "admin-dark" : ""}`}>
-              <div className="w-7 h-7 border-[3px] border-[#38b1f7] border-t-transparent rounded-full animate-spin" />
-              <span className={`text-sm ${isDark ? "text-slate-500" : "text-slate-400"}`}>Loading categories…</span>
+              <Loader size="md" variant="inline" theme={isDark ? "dark" : "light"} label="Loading categories…" />
             </div>
           ) : categories.length === 0 ? (
             <div className={`admin-card py-12 ${isDark ? "admin-dark" : ""}`}>

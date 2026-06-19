@@ -16,6 +16,7 @@ import {
 import useReadTracking from "../../../../components/kb/ReadTracking";
 import SEOMetaTags from "../../../../components/kb/SEOMetaTags";
 import { fetchWithAuth } from "../../../../lib/api";
+import Loader from "../../../../components/Loader";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -83,9 +84,8 @@ export default function PublicArticlePage({ params }: PageProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center gap-3">
-        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        <span className="text-sm font-semibold text-slate-500">Loading documentation...</span>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center">
+        <Loader size="xl" theme="auto" label="Loading documentation..." />
       </div>
     );
   }

@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { fetchWithAuth } from "../../../../../lib/api";
 import { useDialog } from "../../../../../context/DialogContext";
+import Loader from "../../../../../components/Loader";
 
 interface PageProps {
   params: Promise<{ idOrSlug: string }>;
@@ -117,9 +118,8 @@ export default function ArticleDetailsPage({ params }: PageProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F8F9FC] dark:bg-slate-950 flex flex-col items-center justify-center gap-3">
-        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        <span className="text-sm font-semibold text-slate-500">Loading details...</span>
+      <div className="min-h-screen bg-[#F8F9FC] dark:bg-slate-950 flex flex-col items-center justify-center">
+        <Loader size="xl" theme="auto" label="Loading article details..." />
       </div>
     );
   }

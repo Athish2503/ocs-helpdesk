@@ -34,8 +34,8 @@ import { fetchWithAuth } from "../../../../../../lib/api";
 import { useDialog } from "../../../../../../context/DialogContext";
 import ImageUploader from "../../../../../../components/kb/ImageUploader";
 import ImageGallery from "../../../../../../components/kb/ImageGallery";
-
 import RichTextEditor from "../../../../../../components/kb/RichTextEditor";
+import Loader from "../../../../../../components/Loader";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -255,9 +255,8 @@ export default function EditArticlePage({ params }: PageProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F8F9FC] dark:bg-slate-950 flex flex-col items-center justify-center gap-3">
-        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        <span className="text-sm font-semibold text-slate-500">Loading workspace...</span>
+      <div className="min-h-screen bg-[#F8F9FC] dark:bg-slate-950 flex flex-col items-center justify-center">
+        <Loader size="xl" theme="auto" label="Loading editor workspace..." />
       </div>
     );
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Loader from "../components/Loader";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../context/AuthContext";
@@ -178,22 +179,7 @@ export default function Home() {
       <div className={`flex items-center justify-center min-h-screen transition-colors duration-300 ${
         isDark ? 'bg-[#020617] text-[#F8FAFC]' : 'bg-[#F8FAFC] text-[#0F172A]'
       }`}>
-        <div className="w-80 p-8 text-center space-y-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-[#38B1F7] to-[#129FF0] flex items-center justify-center mx-auto shadow-[0_4px_20px_rgba(95,192,249,0.15)] animate-pulse">
-            <span className="font-extrabold text-[#020617] text-lg">Ω</span>
-          </div>
-          <p className={`text-xs font-medium animate-pulse ${isDark ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-            Checking session data...
-          </p>
-          <div className="space-y-2 pt-2">
-            <div className={`h-2 w-3/4 rounded-full mx-auto skeleton ${
-              isDark ? 'bg-[#0F172A] border border-[#1E293B]' : 'bg-[#E2E8F0] border border-[#CBD5E1]'
-            }`}></div>
-            <div className={`h-2 w-1/2 rounded-full mx-auto skeleton ${
-              isDark ? 'bg-[#0F172A] border border-[#1E293B]' : 'bg-[#E2E8F0] border border-[#CBD5E1]'
-            }`}></div>
-          </div>
-        </div>
+        <Loader size="lg" theme={isDark ? "dark" : "light"} label="Checking session data..." />
       </div>
     );
   }

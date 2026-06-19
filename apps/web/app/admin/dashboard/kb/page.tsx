@@ -25,6 +25,7 @@ import { useDialog } from "../../../../context/DialogContext";
 import CategorySidebar from "../../../../components/kb/CategorySidebar";
 import AdvancedFilters from "../../../../components/kb/AdvancedFilters";
 import TagFilter from "../../../../components/kb/TagFilter";
+import Loader from "../../../../components/Loader";
 
 interface Article {
   id: string;
@@ -201,8 +202,7 @@ export default function KbManagementPage() {
           {/* Article content */}
           {loading ? (
             <div className={`admin-card py-16 flex flex-col items-center justify-center gap-3 ${isDark ? "admin-dark" : ""}`}>
-              <div className="w-7 h-7 border-[3px] border-[#38b1f7] border-t-transparent rounded-full animate-spin" />
-              <span className={`text-sm ${isDark ? "text-slate-500" : "text-slate-400"}`}>Loading articles…</span>
+              <Loader size="md" variant="inline" theme={isDark ? "dark" : "light"} label="Loading articles…" />
             </div>
           ) : articles.length === 0 ? (
             <div className={`admin-card py-12 ${isDark ? "admin-dark" : ""}`}>

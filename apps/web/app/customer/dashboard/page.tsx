@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "../../../context/AuthContext";
+import Loader from "../../../components/Loader";
 import { useToast } from "../../../context/ToastContext";
 import { useState, useEffect, useCallback } from "react";
 import { fetchWithAuth } from "../../../lib/api";
@@ -752,50 +753,11 @@ export default function CustomerDashboard() {
   // ── SKELETON LOADING STATE (Mandated: No full-page blocking spinners) ─────
   if (loading || !user) {
     const isDarkTheme = typeof window !== "undefined" && localStorage.getItem("theme") === "dark";
-    const sk = isDarkTheme ? "skeleton" : "skeleton-light";
-    
     return (
-      <div className={`min-h-screen flex font-body select-none transition-colors duration-300 ${
+      <div className={`flex items-center justify-center min-h-screen transition-colors duration-300 ${
         isDarkTheme ? 'bg-[#020617] text-[#F8FAFC]' : 'bg-[#F8FAFC] text-[#0F172A]'
       }`}>
-        {/* Sidebar Skeleton */}
-        <aside className={`w-[280px] border-r p-6 flex flex-col justify-between hidden md:flex ${
-          isDarkTheme ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-white border-slate-200/80'
-        }`}>
-          <div className="space-y-8">
-            <div className="flex items-center space-x-3">
-              <div className={`w-8 h-8 rounded-lg ${sk}`}></div>
-              <div className={`h-5 w-24 ${sk}`}></div>
-            </div>
-            <div className="space-y-4">
-              <div className={`h-10 w-full ${sk}`}></div>
-              <div className={`h-10 w-full ${sk}`}></div>
-              <div className={`h-10 w-full ${sk}`}></div>
-            </div>
-          </div>
-          <div className={`h-12 w-full ${sk}`}></div>
-        </aside>
-
-        {/* Content Shell Skeleton */}
-        <div className="flex-1 flex flex-col">
-          {/* Top Bar Skeleton */}
-          <header className={`h-[72px] border-b px-8 flex items-center justify-between ${
-            isDarkTheme ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-white border-slate-200/80'
-          }`}>
-            <div className={`h-6 w-48 ${sk}`}></div>
-            <div className={`h-8 w-24 ${sk}`}></div>
-          </header>
-
-          {/* Main Dashboard Space Skeleton */}
-          <main className="flex-grow p-8 max-w-[1440px] w-full mx-auto space-y-6">
-            <div className={`h-32 w-full ${sk}`}></div>
-            <div className="grid md:grid-cols-3 gap-6">
-              <div className={`h-44 w-full ${sk}`}></div>
-              <div className={`h-44 w-full ${sk}`}></div>
-              <div className={`h-44 w-full ${sk}`}></div>
-            </div>
-          </main>
-        </div>
+        <Loader size="xl" theme={isDarkTheme ? "dark" : "light"} label="Loading secure customer console..." />
       </div>
     );
   }
@@ -1237,10 +1199,8 @@ export default function CustomerDashboard() {
                       : 'bg-white border-slate-200/80 shadow-sm rounded-2xl'
                   }`}>
                     {loadingTickets ? (
-                      <div className="p-8 space-y-4">
-                        <div className={`h-6 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
-                        <div className={`h-6 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
-                        <div className={`h-6 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
+                      <div className="p-8 flex items-center justify-center">
+                        <Loader size="md" theme={theme} label="Retrieving support tickets..." />
                       </div>
                     ) : tickets.length === 0 ? (
                       <div className={`p-8 text-center text-sm ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
@@ -1341,10 +1301,8 @@ export default function CustomerDashboard() {
 
                   <div className="space-y-3">
                     {loadingTickets ? (
-                      <div className="space-y-3">
-                        <div className={`h-24 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
-                        <div className={`h-24 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
-                        <div className={`h-24 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
+                      <div className="p-8 flex items-center justify-center">
+                        <Loader size="md" theme={theme} label="Loading ticket queue..." />
                       </div>
                     ) : tickets.length === 0 ? (
                       <div className={`p-8 text-center text-sm border rounded-2xl ${
@@ -1418,10 +1376,8 @@ export default function CustomerDashboard() {
                       : 'bg-white border-slate-200/80 shadow-md'
                   }`}>
                     {loadingDetails && !detailedTicket ? (
-                      <div className="p-8 flex-grow space-y-4">
-                        <div className={`h-8 w-1/3 ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
-                        <div className={`h-4 w-1/2 ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
-                        <div className={`h-32 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
+                      <div className="p-8 flex-grow flex items-center justify-center">
+                        <Loader size="md" theme={theme} label="Retrieving ticket conversation..." />
                       </div>
                     ) : detailedTicket ? (
                       <>
@@ -1677,9 +1633,8 @@ export default function CustomerDashboard() {
 
                       {/* Articles Grid */}
                       {loadingKb ? (
-                        <div className="grid md:grid-cols-2 gap-4">
-                          <div className={`h-40 rounded-2xl ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
-                          <div className={`h-40 rounded-2xl ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
+                        <div className="p-8 flex items-center justify-center">
+                          <Loader size="md" theme={theme} label="Loading knowledge base articles..." />
                         </div>
                       ) : kbArticles.length === 0 ? (
                         <div className={`p-8 text-center text-sm border rounded-2xl ${
@@ -2586,9 +2541,8 @@ export default function CustomerDashboard() {
                     {/* Results list */}
                     <div className="space-y-2.5 max-h-[40vh] overflow-y-auto pr-1">
                       {loadingModalKb ? (
-                        <div className="space-y-3">
-                          <div className={`h-16 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
-                          <div className={`h-16 w-full ${isDark ? 'skeleton' : 'skeleton-light'}`}></div>
+                        <div className="p-8 flex items-center justify-center">
+                          <Loader size="sm" theme={theme} label="Searching knowledge base..." />
                         </div>
                       ) : modalKbArticles.length === 0 ? (
                         <div className={`p-8 text-center text-xs ${isDark ? 'text-slate-550' : 'text-slate-450'} border border-dashed rounded-xl dark:border-white/[0.03] border-slate-100`}>

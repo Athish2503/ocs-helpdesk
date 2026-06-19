@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Shield, AlertTriangle, CheckCircle, RefreshCw } from "lucide-react";
 import { fetchWithAuth } from "../../../../../lib/api";
+import Loader from "../../../../../components/Loader";
 
 interface SecurityEvent {
   id: string;
@@ -72,8 +73,7 @@ export default function SecurityEventsPage() {
       <div className="max-w-5xl mx-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
         {loading ? (
           <div className="flex flex-col items-center justify-center p-12 min-h-[300px]">
-            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-slate-400 font-semibold mt-2">Loading security incidents...</span>
+            <Loader size="md" variant="inline" theme="auto" label="Loading security incidents..." />
           </div>
         ) : events.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 min-h-[300px] text-center">

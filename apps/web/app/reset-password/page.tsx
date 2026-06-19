@@ -15,6 +15,7 @@ import {
   Check,
   X
 } from "lucide-react";
+import Loader from "../../components/Loader";
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -320,9 +321,8 @@ export default function ResetPasswordPage() {
           </div>
 
           <Suspense fallback={
-            <div className="flex flex-col items-center justify-center py-12 space-y-4">
-              <Loader2 className="w-8 h-8 text-[#38b1f7] animate-spin" />
-              <p className="text-xs text-slate-500 font-semibold font-body">Loading secure session...</p>
+            <div className="flex flex-col items-center justify-center py-12">
+              <Loader size="lg" theme="light" label="Loading secure session..." />
             </div>
           }>
             <ResetPasswordForm />
