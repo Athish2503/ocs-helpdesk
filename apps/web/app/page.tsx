@@ -30,7 +30,17 @@ import {
   Database,
   ThumbsUp,
   Star,
-  CheckCircle2
+  CheckCircle2,
+  BookOpen,
+  Receipt,
+  Cpu,
+  ShieldAlert,
+  Paperclip,
+  Globe,
+  FileText,
+  AlertTriangle,
+  RefreshCw, 
+  MessageSquare
 } from "lucide-react";
 
 export default function Home() {
@@ -400,9 +410,9 @@ export default function Home() {
                 <div className={`px-4 py-0.5 rounded-md text-[10px] font-mono max-w-xs truncate transition-all duration-300 ${
                   isDark ? 'bg-[#030712]/60 text-[#38B1F7]' : 'bg-slate-100 text-[#129FF0]'
                 }`}>
-                  {currentStep === 1 && "helpdesk.ocs365.in/customer/new-ticket"}
-                  {currentStep === 2 && "helpdesk.ocs365.in/system/routing-engine"}
-                  {currentStep === 3 && "helpdesk.ocs365.in/agent/console/T-104"}
+                  {currentStep === 1 && "helpdesk.ocs365.in/customer/new-ticket?step=choice"}
+                  {currentStep === 2 && "helpdesk.ocs365.in/customer/new-ticket?step=intake"}
+                  {currentStep === 3 && "helpdesk.ocs365.in/customer/new-ticket?step=routing"}
                   {currentStep === 4 && "helpdesk.ocs365.in/customer/ticket/T-104"}
                 </div>
                 
@@ -440,132 +450,85 @@ export default function Home() {
                     ))}
                   </div>
                 </div>
-                
-                {/* ── STEP 1: CLIENT SUBMISSION ── */}
+                                {/* ── STEP 1: CHOICE STEP ── */}
                 {currentStep === 1 && (
-                  <div className="space-y-3 animate-slide-in h-full flex flex-col justify-between mt-1">
+                  <div className="space-y-2 animate-slide-in h-full flex flex-col justify-between mt-1 text-left">
                     <div>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-1.5">
                           <Sparkles className="w-3.5 h-3.5 text-[#38B1F7] animate-pulse" />
                           <h4 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0F172A]'}`}>
-                            Step 1: Submit Support Ticket
+                            Step 1: Select Raising Option
                           </h4>
                         </div>
                         <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full ${
                           isDark ? 'bg-blue-950/60 text-[#38B1F7]' : 'bg-blue-50 text-[#129FF0]'
                         }`}>
-                          Customer View
+                          Wizard Choice
                         </span>
                       </div>
                     </div>
 
-                    <div className="space-y-2 flex-grow justify-center flex flex-col">
-                      {/* Ticket Title Input Mock */}
-                      <div className="space-y-1">
-                        <label className={`text-[9px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                          Issue Subject
-                        </label>
-                        <div className={`h-8 rounded-lg border text-[10.5px] px-2.5 flex items-center transition-all ${
-                          isDark ? 'bg-[#0F172A] border-[#1E293B] text-white' : 'bg-white border-[#E2E8F0] text-slate-800'
-                        } ${stepProgress < 30 ? 'ring-1 ring-[#38B1F7]/30 border-[#38B1F7]/40' : ''}`}>
-                          <span>
-                            {scenario.subject.substring(0, Math.floor(Math.min(stepProgress / 30, 1) * scenario.subject.length))}
-                          </span>
-                          {stepProgress < 30 && (
-                            <span className="w-1.5 h-3.5 ml-0.5 bg-[#38B1F7] animate-pulse shrink-0 inline-block" />
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Ticket Priority Select Mock */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <label className={`text-[9px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                            Priority
-                          </label>
-                          <div className={`h-8 rounded-lg border text-[10px] px-2.5 flex items-center justify-between font-semibold ${
-                            isDark ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-white border-[#E2E8F0]'
-                          }`}>
-                            {stepProgress < 30 ? (
-                              <span className="text-slate-500">Select...</span>
-                            ) : (
-                              <span className={`${scenario.priorityColor} font-bold flex items-center`}>
-                                <span className={`h-1.5 w-1.5 rounded-full mr-1.5 animate-pulse ${
-                                  scenario.priority === 'High' ? 'bg-red-500' : 'bg-amber-500'
-                                }`} />
-                                {scenario.priority} Priority
-                              </span>
-                            )}
-                            <ChevronDown className="w-3 h-3 text-slate-500" />
-                          </div>
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className={`text-[9px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                            Category
-                          </label>
-                          <div className={`h-8 rounded-lg border text-[9.5px] px-2.5 flex items-center ${
-                            isDark ? 'bg-[#0F172A] border-[#1E293B] text-slate-300' : 'bg-white border-[#E2E8F0] text-slate-700'
-                          }`}>
-                            {stepProgress < 30 ? "Select..." : scenario.category}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Ticket Description Input Mock */}
-                      <div className="space-y-1">
-                        <label className={`text-[9px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                          Elaborate Details
-                        </label>
-                        <div className={`h-12 rounded-lg border text-[9.5px] p-2 overflow-hidden leading-normal ${
-                          isDark ? 'bg-[#0F172A] border-[#1E293B] text-slate-300' : 'bg-white border-[#E2E8F0] text-slate-600'
-                        } ${stepProgress >= 30 && stepProgress < 75 ? 'ring-1 ring-[#38B1F7]/30 border-[#38B1F7]/40' : ''}`}>
-                          {stepProgress >= 30 ? (
-                            <span>
-                              {scenario.description.substring(
-                                0, Math.floor(Math.min((stepProgress - 30) / 45, 1) * scenario.description.length)
-                              )}
-                              {stepProgress < 75 && (
-                                <span className="w-1.5 h-3 ml-0.5 bg-[#38B1F7] animate-pulse inline-block" />
-                              )}
-                            </span>
-                          ) : (
-                            <span className="text-slate-500">Provide logs or issue context...</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Submit Button & Virtual Click Animation */}
-                    <div className="pt-0.5 relative">
-                      <button className={`w-full h-8 rounded-lg font-bold text-xs flex items-center justify-center space-x-1.5 transition-all ${
-                        stepProgress >= 90 
-                          ? 'bg-[#38B1F7] text-white scale-98 shadow-sm' 
-                          : stepProgress >= 80 
-                            ? 'bg-[#129FF0] text-white scale-[1.01] shadow-md shadow-[#129FF0]/20'
-                            : 'bg-[#129FF0] text-white'
+                    <div className="grid grid-cols-2 gap-3 flex-grow items-stretch my-2 relative">
+                      {/* Option 1: Self-Help */}
+                      <div className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all opacity-80 ${
+                        isDark ? 'bg-[#0F172A]/50 border-white/[0.04]' : 'bg-white border-slate-200'
                       }`}>
-                        {stepProgress >= 93 ? (
-                          <>
-                            <Clock className="w-3.5 h-3.5 animate-spin" />
-                            <span>Creating Support Ticket...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Send className="w-3 h-3" />
-                            <span>Submit Support Request</span>
-                          </>
-                        )}
-                      </button>
+                        <div>
+                          <div className="flex items-center space-x-1.5 mb-1.5">
+                            <div className="p-1 rounded bg-[#38B1F7]/10 text-[#38B1F7]">
+                              <BookOpen className="w-3 h-3" />
+                            </div>
+                            <span className={`text-[10px] font-bold ${isDark ? 'text-white' : 'text-slate-800'}`}>Option 1: Self-Help</span>
+                          </div>
+                          <p className="text-[8.5px] leading-relaxed text-slate-500">
+                            Search guides (like password reset or config) to bypass the queue instantly.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          <span className="text-[7.5px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">🔑 Passwords</span>
+                          <span className="text-[7.5px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">📧 Outlook</span>
+                        </div>
+                      </div>
 
-                      {/* Virtual Cursor Icon moving to submit */}
-                      {stepProgress >= 75 && stepProgress < 92 && (
+                      {/* Option 2: Raise Ticket */}
+                      <div className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all duration-200 ${
+                        stepProgress >= 70
+                          ? isDark 
+                            ? 'border-[#38B1F7] bg-[#38B1F7]/8 ring-1 ring-[#38B1F7]/30 shadow-md shadow-[#38B1F7]/5' 
+                            : 'border-[#129FF0] bg-sky-50 ring-1 ring-[#129FF0]/30 shadow-sm shadow-[#129FF0]/5'
+                          : isDark ? 'bg-[#0F172A]/50 border-white/[0.04]' : 'bg-white border-slate-200'
+                      }`}>
+                        <div>
+                          <div className="flex items-center space-x-1.5 mb-1.5">
+                            <div className="p-1 rounded bg-[#38B1F7]/10 text-[#38B1F7]">
+                              <MessageSquare className="w-3 h-3" />
+                            </div>
+                            <span className={`text-[10px] font-bold ${isDark ? 'text-white' : 'text-slate-800'}`}>Option 2: Raise Ticket</span>
+                          </div>
+                          <p className="text-[8.5px] leading-relaxed text-slate-500">
+                            Submit a support ticket. Routes to Manjula, Support, or Escalated L1+L2 queue.
+                          </p>
+                        </div>
+                        <div className="space-y-1 text-[7.5px] font-mono mt-1.5 border-t border-slate-800/40 pt-1.5 text-slate-450">
+                          <div className="flex justify-between">
+                            <span>Billing:</span>
+                            <span className="text-violet-400">→ Manjula</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Tech Support:</span>
+                            <span className="text-[#38B1F7]">→ Tech Team</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Virtual Cursor Icon moving to select Option 2 */}
+                      {stepProgress >= 15 && stepProgress < 75 && (
                         <div 
                           className="absolute pointer-events-none transition-all duration-300 ease-out z-30"
                           style={{
-                            top: `${35 - (stepProgress - 75) * 1.3}px`,
-                            left: `${45 + (stepProgress - 75) * 3}%`
+                            left: `${25 + (stepProgress - 15) * 0.8}%`,
+                            top: `${180 - (stepProgress - 15) * 0.6}px`
                           }}
                         >
                           <svg className="w-4 h-4 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] fill-black stroke-white" viewBox="0 0 24 24">
@@ -575,20 +538,20 @@ export default function Home() {
                       )}
                     </div>
 
-                    {/* Step 1 Success Toast Overlay */}
-                    {stepProgress >= 95 && (
+                    {/* Step 1 Success/Transition Toast Overlay */}
+                    {stepProgress >= 75 && (
                       <div className="absolute inset-0 bg-[#030712]/60 backdrop-blur-xs flex items-center justify-center z-40 p-4 animate-slide-in">
                         <div className={`p-4 rounded-xl border max-w-xs text-center space-y-2 shadow-xl ${
                           isDark ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-white border-[#E2E8F0]'
                         }`}>
-                          <div className="w-8 h-8 rounded-full bg-green-500/10 text-green-500 flex items-center justify-center mx-auto animate-bounce">
-                            <CheckCircle2 className="w-5 h-5" />
+                          <div className="w-8 h-8 rounded-full bg-blue-500/10 text-[#38B1F7] flex items-center justify-center mx-auto animate-spin">
+                            <Clock className="w-5 h-5" />
                           </div>
                           <h5 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0F172A]'}`}>
-                            Ticket T-104 Generated
+                            Loading Ticket Wizard...
                           </h5>
                           <p className="text-[9px] text-[#64748B]">
-                            System registering ticket details & notifying queue...
+                            Initializing Intake Form details for Option 2 Support Request...
                           </p>
                         </div>
                       </div>
@@ -596,225 +559,304 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* ── STEP 2: PIPELINE ROUTING & SMTP ALERT ── */}
-                {currentStep === 2 && (
-                  <div className="space-y-3 animate-slide-in h-full flex flex-col justify-between mt-1">
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-1.5">
-                          <Database className="w-3.5 h-3.5 text-[#38B1F7] animate-pulse" />
-                          <h4 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0F172A]'}`}>
-                            Step 2: Automated Dispatch & Notifications
-                          </h4>
+                {/* ── STEP 2: INTAKE FORM ── */}
+                {currentStep === 2 && (() => {
+                  const isCritical = scenario.priority === 'High';
+                  const issueTypeLabel = isCritical ? "Critical / Outage" : "Technical Support";
+                  return (
+                    <div className="space-y-3 animate-slide-in h-full flex flex-col justify-between mt-1">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-1.5">
+                            <Database className="w-3.5 h-3.5 text-[#38B1F7] animate-pulse" />
+                            <h4 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0F172A]'}`}>
+                              Step 2: Provide Issue Details
+                            </h4>
+                          </div>
+                          <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full ${
+                            isDark ? 'bg-blue-950/60 text-[#38B1F7]' : 'bg-blue-50 text-[#129FF0]'
+                          }`}>
+                            Intake Form
+                          </span>
                         </div>
-                        <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full bg-purple-950/40 text-purple-400`}>
-                          Routing Engine
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Routing pipeline graphics */}
-                    <div className="flex-grow flex items-center justify-between px-2 py-1 relative">
-                      
-                      {/* Ticket Block */}
-                      <div className={`w-24 p-2 rounded-lg border text-center z-10 transition-all ${
-                        isDark ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-white border-[#E2E8F0] shadow-xs'
-                      } ${stepProgress < 30 ? 'ring-1 ring-[#38B1F7]/30 border-[#38B1F7]' : ''}`}>
-                        <span className="text-[8px] font-mono text-[#38B1F7] font-bold">T-104</span>
-                        <div className={`text-[8.5px] font-bold truncate mt-0.5 ${scenario.priorityColor}`}>{scenario.priority} Priority</div>
-                        <div className="text-[7.5px] text-slate-500 truncate mt-0.5">{scenario.category}</div>
                       </div>
 
-                      {/* Center Dispatch Node */}
-                      <div className="flex-grow relative h-12 flex items-center justify-center">
-                        <svg className="absolute inset-0 w-full h-full" overflow="visible">
-                          {/* Connection paths */}
-                          <path 
-                            d="M 5 24 L 140 24" 
-                            fill="none" 
-                            stroke={isDark ? "#1E293B" : "#E2E8F0"} 
-                            strokeWidth="1.5" 
-                            strokeDasharray="4 4" 
-                          />
-                          <path 
-                            d="M 70 24 L 70 -5" 
-                            fill="none" 
-                            stroke={isDark ? "#1E293B" : "#E2E8F0"} 
-                            strokeWidth="1.5" 
-                            strokeDasharray="4 4" 
-                          />
-                          
-                          {/* Animated pulsing routing signal */}
-                          {stepProgress > 10 && stepProgress < 85 && (
-                            <circle r="4" fill="#38B1F7" className="animate-pulse">
-                              <animateMotion 
-                                path="M 10 24 L 135 24" 
-                                dur={`${2.5 / playSpeed}s`} 
-                                repeatCount="indefinite" 
-                              />
-                            </circle>
-                          )}
-                        </svg>
+                      <div className="space-y-1.5 flex-grow justify-center flex flex-col text-left">
+                        {/* Issue Type Button Selector Mock */}
+                        <div className="space-y-0.5">
+                          <label className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">Issue Type</label>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {(["Billing", "Technical Support", "Critical / Outage"] as const).map((t) => {
+                              const isSelected = t === issueTypeLabel;
+                              return (
+                                <div
+                                  key={t}
+                                  className={`text-[8px] py-1 rounded text-center border font-bold ${
+                                    isSelected
+                                      ? isDark
+                                        ? "bg-sky-950/40 border-[#38B1F7] text-[#38B1F7]"
+                                        : "bg-sky-50 border-[#129FF0] text-[#129FF0]"
+                                      : "bg-slate-900/10 border-slate-800 text-slate-500"
+                                  }`}
+                                >
+                                  {t === "Billing" ? "💳 " : t === "Critical / Outage" ? "🚨 " : "🛠️ "}
+                                  {t.split(" ")[0]}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
 
-                        {/* Middle Dispatch Center */}
-                        <div className={`h-9 w-9 rounded-full flex items-center justify-center border z-10 ${
-                          isDark ? 'bg-[#1e293b]/90 border-[#38B1F7]/35' : 'bg-slate-100 border-[#129FF0]/35'
+                        {/* Subject */}
+                        <div className="space-y-0.5">
+                          <label className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">Subject</label>
+                          <div className={`h-7 rounded-lg border text-[9.5px] px-2 flex items-center transition-all ${
+                            isDark ? 'bg-[#0F172A] border-[#1E293B] text-white' : 'bg-white border-[#E2E8F0] text-slate-800'
+                          } ${stepProgress < 25 ? 'ring-1 ring-[#38B1F7]/30 border-[#38B1F7]/40' : ''}`}>
+                            <span>
+                              {scenario.subject.substring(0, Math.floor(Math.min(stepProgress / 25, 1) * scenario.subject.length))}
+                            </span>
+                            {stepProgress < 25 && (
+                              <span className="w-1.5 h-3 ml-0.5 bg-[#38B1F7] animate-pulse shrink-0 inline-block" />
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Category & Domain */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-0.5">
+                            <label className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">Affected Domain</label>
+                            <div className={`h-7 rounded-lg border text-[9px] px-2 flex items-center ${
+                              isDark ? 'bg-[#0F172A] border-[#1E293B] text-slate-350' : 'bg-white border-[#E2E8F0] text-slate-700'
+                            }`}>
+                              {stepProgress < 25 ? "Select..." : "mycompany.com"}
+                            </div>
+                          </div>
+                          <div className="space-y-0.5">
+                            <label className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">Service Category</label>
+                            <div className={`h-7 rounded-lg border text-[8.5px] px-2 flex items-center truncate ${
+                              isDark ? 'bg-[#0F172A] border-[#1E293B] text-slate-350' : 'bg-white border-[#E2E8F0] text-slate-700'
+                            }`}>
+                              {stepProgress < 25 ? "Select..." : scenario.category}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Description */}
+                        <div className="space-y-0.5">
+                          <label className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">Description</label>
+                          <div className={`h-11 rounded-lg border text-[9px] p-1.5 overflow-hidden leading-normal ${
+                            isDark ? 'bg-[#0F172A] border-[#1E293B] text-slate-300' : 'bg-white border-[#E2E8F0] text-slate-655'
+                          } ${stepProgress >= 25 && stepProgress < 65 ? 'ring-1 ring-[#38B1F7]/30 border-[#38B1F7]/40' : ''}`}>
+                            {stepProgress >= 25 ? (
+                              <span>
+                                {scenario.description.substring(
+                                  0, Math.floor(Math.min((stepProgress - 25) / 40, 1) * scenario.description.length)
+                                )}
+                                {stepProgress < 65 && (
+                                  <span className="w-1.5 h-3 ml-0.5 bg-[#38B1F7] animate-pulse inline-block" />
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-slate-500">Provide details...</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Submit Button & Virtual Click Animation */}
+                      <div className="pt-0.5 relative">
+                        <button className={`w-full h-8 rounded-lg font-bold text-xs flex items-center justify-center space-x-1.5 transition-all ${
+                          stepProgress >= 85 
+                            ? 'bg-[#38B1F7] text-white scale-98 shadow-sm' 
+                            : stepProgress >= 78 
+                              ? 'bg-[#129FF0] text-white scale-[1.01] shadow-md shadow-[#129FF0]/20'
+                              : 'bg-[#129FF0] text-white'
                         }`}>
-                          <Activity className="w-4 h-4 text-[#38B1F7] animate-spin" style={{ animationDuration: '3s' }} />
-                        </div>
-                      </div>
-
-                      {/* Targets (Client and Agent alerts) */}
-                      <div className="space-y-3 z-10">
-                        {/* SMTP Server Alert */}
-                        <div className={`w-24 p-1.5 rounded-lg border text-center transition-all ${
-                          isDark ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-white border-[#E2E8F0]'
-                        } ${stepProgress >= 30 && stepProgress < 70 ? 'border-amber-500/40 bg-amber-950/5' : ''}`}>
-                          <div className="flex items-center justify-center space-x-1">
-                            <Mail className="w-2.5 h-2.5 text-amber-500" />
-                            <span className="text-[7.5px] font-bold text-slate-400">SMTP Engine</span>
-                          </div>
-                          <span className={`text-[7px] font-mono block mt-0.5 ${stepProgress >= 50 ? 'text-green-500' : 'text-slate-500'}`}>
-                            {stepProgress >= 50 ? "📧 Alert Dispatched" : "Queueing dispatch"}
-                          </span>
-                        </div>
-
-                        {/* Support Agent Queue */}
-                        <div className={`w-24 p-1.5 rounded-lg border text-center transition-all ${
-                          isDark ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-white border-[#E2E8F0]'
-                        } ${stepProgress >= 70 ? 'border-green-500/40 bg-green-950/5' : ''}`}>
-                          <div className="flex items-center justify-center space-x-1">
-                            <Shield className="w-2.5 h-2.5 text-purple-400" />
-                            <span className="text-[7.5px] font-bold text-slate-400">SLA Router</span>
-                          </div>
-                          <span className={`text-[7px] font-mono block mt-0.5 ${stepProgress >= 80 ? 'text-green-500 font-semibold' : 'text-slate-500'}`}>
-                            {stepProgress >= 80 ? "SLA SLA Assigned" : "Routing Agent..."}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Step 2 Execution Logs */}
-                    <div className={`p-2.5 rounded-lg border text-[8.5px] font-mono space-y-1 ${
-                      isDark ? 'bg-[#030712] border-[#1E293B]' : 'bg-slate-50 border-[#E2E8F0]'
-                    }`}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[#38B1F7] font-semibold">[00:04] SLA Profile Checked:</span>
-                        <span className={`${scenario.priorityColor} font-bold`}>{scenario.slaLimit} SLA Limit</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400">[00:09] Active roster match:</span>
-                        <span>
-                          {stepProgress >= 70 ? (
-                            <span className="text-[#12B76A] font-bold">Alex Rivera matched</span>
+                          {stepProgress >= 85 ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Checking KB articles...</span>
+                            </>
                           ) : (
-                            <span className="text-amber-500 animate-pulse">Scanning available SREs...</span>
+                            <>
+                              <span>Continue to Routing</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </>
                           )}
-                        </span>
+                        </button>
+
+                        {/* Virtual Cursor Icon moving to submit */}
+                        {stepProgress >= 65 && stepProgress < 85 && (
+                          <div 
+                            className="absolute pointer-events-none transition-all duration-300 ease-out z-30"
+                            style={{
+                              left: `${50 + (stepProgress - 65) * 1.25}%`,
+                              top: `${220 + (stepProgress - 65) * 4}px`
+                            }}
+                          >
+                            <svg className="w-4 h-4 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] fill-black stroke-white" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
+                            </svg>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
-                {/* ── STEP 3: AGENT WORKSPACE & DIALOGUE ── */}
-                {currentStep === 3 && (
-                  <div className="space-y-3 animate-slide-in h-full flex flex-col justify-between mt-1">
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-1.5">
-                          <Shield className="w-3.5 h-3.5 text-[#38B1F7] animate-pulse" />
-                          <h4 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0F172A]'}`}>
-                            Step 3: SRE Intake & Resolution Update
-                          </h4>
+                {/* ── STEP 3: ROUTING PREVIEW & SUBMIT ── */}
+                {currentStep === 3 && (() => {
+                  const isCritical = scenario.priority === 'High';
+                  
+                  type RoutingInfo = { dept: string; who: string; color: string; bg: string; escalated?: boolean };
+                  const routing: RoutingInfo = isCritical
+                    ? {
+                        dept: "Critical Escalation",
+                        who: "Support Level 1 + Manager L2",
+                        color: "text-red-500",
+                        bg: isDark ? "bg-red-950/20 border-red-500/25" : "bg-red-50 border-red-200",
+                        escalated: true,
+                      }
+                    : {
+                        dept: "Technical Support",
+                        who: "Support Team",
+                        color: "text-[#38B1F7]",
+                        bg: isDark ? "bg-sky-950/20 border-sky-500/25" : "bg-sky-50 border-sky-200",
+                      };
+
+                  return (
+                    <div className="space-y-2 animate-slide-in h-full flex flex-col justify-between mt-1 relative text-left">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-1.5">
+                            <Shield className="w-3.5 h-3.5 text-[#38B1F7] animate-pulse" />
+                            <h4 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0F172A]'}`}>
+                              Step 3: Automated SLA Routing
+                            </h4>
+                          </div>
+                          <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full bg-purple-950/40 text-purple-400`}>
+                            Routing Preview
+                          </span>
                         </div>
-                        <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full bg-purple-950/40 text-purple-400`}>
-                          Agent Desk
-                        </span>
                       </div>
-                    </div>
 
-                    <div className="space-y-2 flex-grow justify-center flex flex-col">
-                      {/* Ticket header block */}
-                      <div className={`p-2 rounded-lg border flex items-center justify-between ${
-                        isDark ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-white border-[#E2E8F0]'
-                      }`}>
-                        <div className="space-y-0.5 text-left">
-                          <div className="text-[8px] font-mono text-slate-500 flex items-center space-x-1">
-                            <span className="text-[#38B1F7] font-bold">T-104</span>
+                      <div className="space-y-1.5 flex-grow justify-center flex flex-col">
+                        {/* Summary Recap card */}
+                        <div className={`p-2 rounded-lg border space-y-1 ${
+                          isDark ? 'bg-[#0F172A]/70 border-white/[0.04]' : 'bg-white border-slate-200'
+                        }`}>
+                          <div className="text-[7.5px] font-mono text-slate-500 flex items-center space-x-1">
+                            <span className="text-[#38B1F7] font-bold">RECAP</span>
                             <span>•</span>
                             <span className={`${scenario.priorityColor} font-semibold`}>{scenario.priority} Priority</span>
                           </div>
-                          <div className={`text-[9.5px] font-semibold truncate max-w-[200px] ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                          <div className={`text-[9px] font-semibold truncate ${isDark ? 'text-white' : 'text-slate-800'}`}>
                             {scenario.subject}
                           </div>
                         </div>
 
-                        {/* Dynamic Status Badge */}
-                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold tracking-wider uppercase font-mono animate-pulse ${
-                          stepProgress >= 25 
-                            ? 'bg-amber-950/50 text-amber-500 border border-amber-500/30' 
-                            : 'bg-blue-950/50 text-[#38B1F7] border border-[#38B1F7]/30'
+                        {/* Destination Routing Card */}
+                        <div className={`p-2 rounded-lg border ${routing.bg} flex flex-col justify-between relative overflow-hidden`}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-1.5">
+                              {isCritical ? (
+                                <ShieldAlert className={`w-3.5 h-3.5 ${routing.color}`} />
+                              ) : (
+                                <Cpu className={`w-3.5 h-3.5 ${routing.color}`} />
+                              )}
+                              <span className={`text-[9px] font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                {routing.dept}
+                              </span>
+                            </div>
+                            {routing.escalated && (
+                              <span className="text-[7.5px] font-bold px-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/25">
+                                ESCALATED
+                              </span>
+                            )}
+                          </div>
+                          <p className={`text-[8.5px] mt-1 ${isDark ? 'text-slate-355' : 'text-slate-600'}`}>
+                            {routing.escalated
+                              ? 'Escalating to L1 and Manager L2 simultaneously.'
+                              : `Assigned to: ${routing.who}`
+                            }
+                          </p>
+                          
+                          {/* SLA Limit info */}
+                          <div className="flex items-center justify-between text-[7.5px] font-mono text-slate-500 border-t border-slate-800/40 pt-1 mt-1">
+                            <span>SLA Limit:</span>
+                            <span className={`${scenario.priorityColor} font-bold`}>{scenario.slaLimit} Response</span>
+                          </div>
+                        </div>
+
+                        {/* Credits Balance Impact */}
+                        <div className={`p-1.5 rounded-lg border text-[8px] font-mono flex items-center justify-between ${
+                          isDark ? 'bg-[#030712] border-white/[0.04]' : 'bg-slate-50 border-slate-200'
                         }`}>
-                          {stepProgress >= 25 ? "In Progress" : "Open"}
-                        </span>
+                          <span className="text-slate-500">Remaining Hours:</span>
+                          <span className="text-emerald-500 font-bold">14.5 Support Credits</span>
+                        </div>
                       </div>
 
-                      {/* Agent Response Thread */}
-                      <div className={`p-2 rounded-lg border space-y-1.5 ${
-                        isDark ? 'bg-[#030712] border-[#1E293B]' : 'bg-slate-50 border-[#E2E8F0]'
-                      }`}>
-                        <div className="flex items-center space-x-1.5 border-b pb-1 border-slate-800/40">
-                          <div className="w-4 h-4 rounded-full bg-[#129FF0] text-[8px] font-extrabold text-[#020617] flex items-center justify-center animate-pulse">
-                            AR
-                          </div>
-                          <div>
-                            <span className={`text-[8.5px] font-bold block ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>Alex Rivera</span>
-                            <span className="text-[7px] text-slate-500 block -mt-0.5">Senior Consultant SRE</span>
-                          </div>
-                        </div>
-
-                        <div className={`text-[9px] min-h-[38px] leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                          {stepProgress >= 25 ? (
-                            <span>
-                              {scenario.agentReply.substring(
-                                0, Math.floor(Math.min((stepProgress - 25) / 50, 1) * scenario.agentReply.length)
-                              )}
-                              {stepProgress < 75 && (
-                                <span className="w-1.5 h-3 ml-0.5 bg-[#38B1F7] animate-pulse inline-block" />
-                              )}
-                            </span>
+                      {/* Submit Button & Virtual Click Animation */}
+                      <div className="pt-0.5 relative">
+                        <button className={`w-full h-8 rounded-lg font-bold text-xs flex items-center justify-center space-x-1.5 transition-all ${
+                          stepProgress >= 90 
+                            ? 'bg-[#38B1F7] text-white scale-98 shadow-sm' 
+                            : stepProgress >= 80 
+                              ? 'bg-[#129FF0] text-white scale-[1.01] shadow-md shadow-[#129FF0]/20'
+                              : 'bg-[#129FF0] text-white'
+                        }`}>
+                          {stepProgress >= 90 ? (
+                            <>
+                              <Clock className="w-3.5 h-3.5 animate-spin" />
+                              <span>Creating Support Ticket...</span>
+                            </>
                           ) : (
-                            <span className="text-slate-500 italic">Assigning SRE review agent...</span>
+                            <>
+                              <Send className="w-3 h-3" />
+                              <span>Submit Support Request</span>
+                            </>
                           )}
+                        </button>
+
+                        {/* Virtual Cursor Icon moving to submit */}
+                        {stepProgress >= 70 && stepProgress < 90 && (
+                          <div 
+                            className="absolute pointer-events-none transition-all duration-300 ease-out z-30"
+                            style={{
+                              left: `${30 + (stepProgress - 70) * 2.5}%`,
+                              top: `${190 + (stepProgress - 70) * 4}px`
+                            }}
+                          >
+                            <svg className="w-4 h-4 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] fill-black stroke-white" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Success Toast Overlay */}
+                      {stepProgress >= 94 && (
+                        <div className="absolute inset-0 bg-[#030712]/60 backdrop-blur-xs flex items-center justify-center z-40 p-4 animate-slide-in">
+                          <div className={`p-4 rounded-xl border max-w-xs text-center space-y-2 shadow-xl ${
+                            isDark ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-white border-[#E2E8F0]'
+                          }`}>
+                            <div className="w-8 h-8 rounded-full bg-green-500/10 text-green-500 flex items-center justify-center mx-auto animate-bounce">
+                              <CheckCircle2 className="w-5 h-5" />
+                            </div>
+                            <h5 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0F172A]'}`}>
+                              Ticket Generated & Dispatched
+                            </h5>
+                            <p className="text-[9px] text-[#64748B]">
+                              Notifying {isCritical ? "Support L1 & L2" : "Support Team"} and setting up SLA metrics.
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-
-                    {/* Submit Note Button Animation */}
-                    <button className={`w-full h-8 rounded-lg font-bold text-[10px] flex items-center justify-center space-x-1 transition-all ${
-                      stepProgress >= 78 
-                        ? 'bg-green-600 text-white shadow-sm' 
-                        : 'bg-[#129FF0]/15 text-[#38B1F7] border border-[#38B1F7]/30'
-                    }`}>
-                      {stepProgress >= 80 ? (
-                        <>
-                          <CheckCircle className="w-3 h-3 text-white" />
-                          <span>Consultant Fix Dispatched</span>
-                        </>
-                      ) : (
-                        <span>Simulating SRE Resolution Action...</span>
                       )}
-                    </button>
-
-                    {/* Step 3 SRE Dispatch alert */}
-                    {stepProgress >= 82 && (
-                      <div className="absolute top-12 left-1/2 -translate-x-1/2 bg-[#0F172A] border border-[#38B1F7]/30 shadow-lg px-3 py-1 rounded-full text-[8.5px] text-[#38B1F7] font-mono font-bold animate-bounce flex items-center space-x-1 z-30">
-                        <Mail className="w-3 h-3 text-[#38B1F7]" />
-                        <span>📧 Workspace Sync Status Dispatched</span>
-                      </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  );
+                })()}
 
                 {/* ── STEP 4: SLA & FEEDBACK RESOLUTION ── */}
                 {currentStep === 4 && (
@@ -833,7 +875,7 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className="space-y-2 flex-grow justify-center flex flex-col">
+                    <div className="space-y-2 flex-grow justify-center flex flex-col text-left">
                       {/* SLA stats box */}
                       <div className={`p-2.5 rounded-lg border grid grid-cols-3 gap-2 text-center relative ${
                         isDark ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-white border-[#E2E8F0] shadow-xs'
@@ -866,7 +908,7 @@ export default function Home() {
 
                       {/* Satisfaction Rating Visualizer */}
                       <div className="text-center space-y-1">
-                        <span className={`text-[8.5px] font-semibold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                        <span className={`text-[8.5px] font-semibold ${isDark ? 'text-slate-400' : 'text-slate-650'}`}>
                           Consultancy Feedback Score
                         </span>
                         <div className="flex justify-center space-x-1.5">
@@ -947,9 +989,9 @@ export default function Home() {
                             ? isDark ? 'text-white font-bold scale-[1.02]' : 'text-slate-900 font-bold scale-[1.02]'
                             : 'text-slate-500 group-hover:text-slate-400'
                         }`}>
-                          {step === 1 && "1. Submission"}
-                          {step === 2 && "2. Routing"}
-                          {step === 3 && "3. Intake"}
+                          {step === 1 && "1. Choice"}
+                          {step === 2 && "2. Details Form"}
+                          {step === 3 && "3. SLA Routing"}
                           {step === 4 && "4. Resolution"}
                         </span>
                       </button>
@@ -1224,7 +1266,7 @@ export default function Home() {
               </div>
               <Link
                 href="/register"
-                className="inline-flex items-center justify-center h-10 px-4 bg-[#129FF0] hover:bg-[#38B1F7] text-[#020617] font-bold text-xs rounded-xl transition-all active:scale-98"
+                className="inline-flex items-center justify-center h-10 px-4 bg-[#129FF0] hover:bg-[#38B1F7] text-white font-bold text-xs rounded-xl transition-all active:scale-98"
               >
                 Access Customer Hub
               </Link>
