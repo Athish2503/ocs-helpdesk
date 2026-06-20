@@ -388,6 +388,78 @@ export default function Home() {
                 Explore Features
               </a>
             </div>
+
+            {/* Storytelling Narrative Card */}
+            <div className={`mt-8 p-5 rounded-2xl border transition-all duration-300 ${
+              isDark 
+                ? 'bg-[#0F172A]/40 border-[#1E293B] shadow-[0_4px_20px_rgba(0,0,0,0.3)]' 
+                : 'bg-white border-[#E2E8F0] shadow-md shadow-slate-100'
+            }`}>
+              <div className="flex items-center justify-between border-b pb-2.5 mb-3 border-inherit">
+                <div className="flex items-center space-x-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#38B1F7] opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#38B1F7]"></span>
+                  </span>
+                  <span className="text-[10px] font-mono font-bold tracking-widest text-[#38B1F7] uppercase">Interactive Storyboard</span>
+                </div>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                  isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  Scenario: {scenario.serviceName}
+                </span>
+              </div>
+              
+              <div className="space-y-3">
+                <div className="flex items-start space-x-3">
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                    isDark ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-800'
+                  }`}>
+                    0{currentStep}
+                  </div>
+                  <div className="space-y-1 text-left">
+                    <h4 className={`text-xs font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                      {currentStep === 1 && "The Initial Choice"}
+                      {currentStep === 2 && "Detailing the Issue"}
+                      {currentStep === 3 && "Automated Queue Routing"}
+                      {currentStep === 4 && "Resolution & Verification"}
+                    </h4>
+                    <p className={`text-xs leading-relaxed transition-all duration-300 ${
+                      isDark ? 'text-slate-400' : 'text-slate-605'
+                    }`}>
+                      {currentStep === 1 && (
+                        <>
+                          {scenario.id === "workspace" && "Meet Sarah. She needs to migrate 45 user mailboxes to Google Workspace. Instead of getting lost in documentation, she logs into the OCS Desk portal and initiates a new request, bypassing self-help to submit directly to support."}
+                          {scenario.id === "ssl" && "Meet John. His company's primary website is showing SSL revocation errors, blocking sales. He opens OCS Desk and proceeds directly to raise an urgent ticket to notify system administrators."}
+                          {scenario.id === "hosting" && "Meet Alex. An automated server alert reports replica database connection latency on port 5432. SRE Alex begins the Raise Ticket wizard to restore network connectivity."}
+                        </>
+                      )}
+                      {currentStep === 2 && (
+                        <>
+                          {scenario.id === "workspace" && "Sarah enters her company's email domain, specifies the 'Google Workspace' category, sets a Medium priority, and uploads the list of mailboxes. The form ensures the technical team gets exactly the SPF/DKIM context they need."}
+                          {scenario.id === "ssl" && "John inputs 'SSL handshake failed' as the subject, flags the category, and sets priority to High/Urgent. The smart Intake form detects the critical nature of the domain outage."}
+                          {scenario.id === "hosting" && "Alex logs replica subnet timeouts on port 5432, sets priority to High/Urgent, and describes the firewall routes affected, allowing the dispatch engine to classify the outage."}
+                        </>
+                      )}
+                      {currentStep === 3 && (
+                        <>
+                          {scenario.id === "workspace" && "The routing engine checks available consultants. Since this is a migration request, it routes the ticket to the general support team with a 24h SLA target and automatically logs SMTP updates."}
+                          {scenario.id === "ssl" && "Because the ticket is tagged as a critical domain outage, the OCS routing engine automatically escalates it to both Support Level 1 and Manager L2 simultaneously for maximum visibility."}
+                          {scenario.id === "hosting" && "The routing engine escalates this database outage to L1 and L2 engineers, allocating support credits and establishing an 8-minute response target."}
+                        </>
+                      )}
+                      {currentStep === 4 && (
+                        <>
+                          {scenario.id === "workspace" && "Support engineer Alex Rivera completes the MX sync batches. Sarah verifies DNS routing is live, closes the ticket, and submits a 5-star rating for compliance with the 4-hour resolution SLA!"}
+                          {scenario.id === "ssl" && "Let's Encrypt Wildcard SSL is renewed and Nginx proxies are reloaded. Secure connection handshake is restored in just 18 minutes, meeting the strict SLA deadline."}
+                          {scenario.id === "hosting" && "AWS subnet rules updated and replicate connectivity verified. SLA response target met in 8 minutes."}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           {/* Right Column: Premium CSS Dashboard Mockup (Now Interactive Explainer Player) */}
           <div className="lg:col-span-6">
