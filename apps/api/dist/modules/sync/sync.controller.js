@@ -1,0 +1,149 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.crmWebhookHandler = crmWebhookHandler;
+exports.bulkImportCustomersHandler = bulkImportCustomersHandler;
+const SyncService = __importStar(require("./sync.service.js"));
+const crmService = __importStar(require("../../services/crm.service.js"));
+async function crmWebhookHandler(req, res, next) {
+    try {
+        const { event, data } = req.body;
+        if (!event || !data) {
+            res.status(400).json({ success: false, error: "Missing event or data in payload" });
+            return;
+        }
+        let result;
+        switch (event) {
+            case "customer.created":
+                result = await SyncService.handleCustomerCreated(data);
+                break;
+            case "customer.updated":
+                result = await SyncService.handleCustomerUpdated(data);
+                break;
+            case "customer.deactivated":
+                result = await SyncService.handleCustomerDeactivated(data.crmCustomerId);
+                break;
+            default:
+                res.status(400).json({ success: false, error: `Unsupported event: ${event}` });
+                return;
+        }
+        res.status(200).json({ success: true, message: `Processed ${event}`, data: result });
+    }
+    catch (err) {
+        next(err);
+    }
+}
+/**
+ * Bulk import all customers from the CRM into the local helpdesk database.
+ * Fetches customers in pages of 100 until all are retrieved, then syncs each one.
+ */
+async function bulkImportCustomersHandler(req, res, next) {
+    try {
+        const PAGE_SIZE = 100;
+        let page = 1;
+        let hasMore = true;
+        let total = 0;
+        let imported = 0;
+        let failed = 0;
+        const errors = [];
+        console.log("[Bulk Import] Starting full CRM customer import...");
+        while (hasMore) {
+            let crmResponse;
+            try {
+                crmResponse = await crmService.getCustomers({ page, limit: PAGE_SIZE });
+            }
+            catch (err) {
+                console.error(`[Bulk Import] Failed to fetch page ${page} from CRM:`, err.message);
+                break;
+            }
+            // Support both paginated ({ customers, total, hasMore }) and flat ([]) responses
+            const customers = Array.isArray(crmResponse)
+                ? crmResponse
+                : Array.isArray(crmResponse?.customers)
+                    ? crmResponse.customers
+                    : Array.isArray(crmResponse?.data)
+                        ? crmResponse.data
+                        : [];
+            if (customers.length === 0) {
+                hasMore = false;
+                break;
+            }
+            // Detect total from response if available
+            if (page === 1 && crmResponse?.total) {
+                total = crmResponse.total;
+            }
+            for (const customer of customers) {
+                const customerId = customer.customerId || customer.crmCustomerId || customer.id;
+                if (!customerId) {
+                    failed++;
+                    errors.push({ customerId: "unknown", error: "Missing customerId in CRM record" });
+                    continue;
+                }
+                try {
+                    await crmService.syncCustomerData(customerId);
+                    imported++;
+                }
+                catch (err) {
+                    failed++;
+                    errors.push({ customerId, error: err.message || "Sync failed" });
+                    console.error(`[Bulk Import] Failed to sync customer ${customerId}:`, err.message);
+                }
+            }
+            // If response doesn't have pagination info, stop after first page if we got fewer than PAGE_SIZE
+            if (customers.length < PAGE_SIZE) {
+                hasMore = false;
+            }
+            else if (crmResponse?.hasMore === false) {
+                hasMore = false;
+            }
+            else {
+                page++;
+            }
+        }
+        // Use actual count if total wasn't in response
+        if (total === 0) {
+            total = imported + failed;
+        }
+        console.log(`[Bulk Import] Complete. Total: ${total}, Imported: ${imported}, Failed: ${failed}`);
+        res.status(200).json({
+            success: true,
+            message: `Bulk import complete. ${imported} customers synced${failed > 0 ? `, ${failed} failed` : ""}.`,
+            data: { total, imported, failed, errors: errors.slice(0, 20) }, // cap errors in response
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+}

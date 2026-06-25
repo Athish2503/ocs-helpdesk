@@ -11,6 +11,9 @@ exports.createTicketSchema = zod_1.z.object({
     priority: TicketPriorityEnum.optional().default("MEDIUM"),
     affectedDomain: zod_1.z.string().optional().nullable(),
     issueCategory: zod_1.z.string().optional().nullable(),
+    domainId: zod_1.z.string().optional().nullable(),
+    subscriptionId: zod_1.z.string().optional().nullable(),
+    serviceId: zod_1.z.string().optional().nullable(),
 });
 exports.addMessageSchema = zod_1.z.object({
     message: zod_1.z.string().min(1, "Message content cannot be empty"),

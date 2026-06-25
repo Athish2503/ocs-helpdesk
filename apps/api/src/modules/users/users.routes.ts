@@ -14,6 +14,10 @@ import {
   deleteRoutingRuleHandler,
   listRolePermissionsHandler,
   updateRolePermissionsHandler,
+  inviteUserHandler,
+  resendInviteUserHandler,
+  sendResetPasswordLinkHandler,
+  getCrmCustomersHandler,
 } from "./users.controller.js";
 import { requireAuth } from "../../middleware/auth.middleware.js";
 import { requireRole, requirePermission } from "../../middleware/role.middleware.js";
@@ -48,8 +52,13 @@ router.patch("/:id/credits", requirePermission("adjust_credits"), updateCustomer
 // User CRUD operations
 router.post("/", requirePermission("manage_permissions"), createUserHandler);
 router.get("/", requirePermission("manage_permissions"), listUsersHandler);
+router.get("/crm-customers", requirePermission("manage_permissions"), getCrmCustomersHandler);
 router.get("/:id", requirePermission("manage_permissions"), getUserByIdHandler);
 router.patch("/:id", requirePermission("manage_permissions"), updateUserHandler);
+
+router.post("/:id/invite", requirePermission("manage_permissions"), inviteUserHandler);
+router.post("/:id/resend-invite", requirePermission("manage_permissions"), resendInviteUserHandler);
+router.post("/:id/reset-password-link", requirePermission("manage_permissions"), sendResetPasswordLinkHandler);
 
 export default router;
 

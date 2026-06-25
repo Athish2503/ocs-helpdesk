@@ -51,6 +51,7 @@ exports.DEFAULT_PERMISSIONS = {
         "manage_categories_rules",
         "manage_permissions",
     ],
+    SUPERVISOR: ["view_tickets", "reply_tickets", "assign_tickets", "manage_kb", "manage_teams"],
     SUPPORT_L2: ["view_tickets", "reply_tickets", "assign_tickets", "manage_kb"],
     SUPPORT_L1: ["view_tickets", "reply_tickets", "assign_tickets"],
     AGENT: ["view_tickets", "reply_tickets"],

@@ -6,6 +6,8 @@ export const createUserSchema = z.object({
   email: z.string().email("Invalid email address"),
   role: z.nativeEnum(Role),
   password: z.string().min(6, "Password must be at least 6 characters"),
+  phoneNumber: z.string().optional().nullable(),
+  crmCustomerId: z.string().optional().nullable(),
   teamIds: z.array(z.string()).optional(),
 });
 
@@ -15,6 +17,8 @@ export const updateUserSchema = z.object({
   role: z.nativeEnum(Role).optional(),
   isActive: z.boolean().optional(),
   password: z.string().min(6).optional(),
+  phoneNumber: z.string().optional().nullable(),
+  crmCustomerId: z.string().optional().nullable(),
   teamIds: z.array(z.string()).optional(),
 });
 

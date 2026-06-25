@@ -26,9 +26,12 @@ export async function listUsers(query: { search?: string; role?: string; isActiv
       id: true,
       name: true,
       email: true,
+      phoneNumber: true,
+      crmCustomerId: true,
       role: true,
       isActive: true,
       emailVerified: true,
+      lastLoginAt: true,
       createdAt: true,
       updatedAt: true,
       teams: {
@@ -41,6 +44,14 @@ export async function listUsers(query: { search?: string; role?: string; isActiv
           usedHours: true,
           remainingHours: true,
           billableHours: true,
+        },
+      },
+      crmCustomer: {
+        include: {
+          invitations: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
         },
       },
     },
@@ -55,9 +66,12 @@ export async function getUserById(id: string) {
       id: true,
       name: true,
       email: true,
+      phoneNumber: true,
+      crmCustomerId: true,
       role: true,
       isActive: true,
       emailVerified: true,
+      lastLoginAt: true,
       createdAt: true,
       updatedAt: true,
       teams: {
@@ -72,6 +86,14 @@ export async function getUserById(id: string) {
           billableHours: true,
         },
       },
+      crmCustomer: {
+        include: {
+          domains: { orderBy: { createdAt: "desc" } },
+          services: { orderBy: { createdAt: "desc" } },
+          subscriptions: { orderBy: { createdAt: "desc" } },
+          invitations: { orderBy: { createdAt: "desc" } },
+        },
+      },
     },
   });
 
@@ -81,7 +103,18 @@ export async function getUserById(id: string) {
     throw error;
   }
 
-  return user;
+  // Fetch independent audit logs
+  const auditLogs = await prisma.auditLog.findMany({
+    where: {
+      OR: [
+        { entityId: id },
+        ...(user.crmCustomerId ? [{ entityId: user.crmCustomerId }] : []),
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return { ...user, auditLogs };
 }
 
 export async function createUser(input: CreateUserInput) {
@@ -102,6 +135,8 @@ export async function createUser(input: CreateUserInput) {
       role: input.role,
       emailVerified: true,
       isActive: true,
+      phoneNumber: input.phoneNumber,
+      crmCustomerId: input.crmCustomerId,
       teams: input.teamIds
         ? {
             connect: input.teamIds.map((id) => ({ id })),
@@ -112,6 +147,8 @@ export async function createUser(input: CreateUserInput) {
       id: true,
       name: true,
       email: true,
+      phoneNumber: true,
+      crmCustomerId: true,
       role: true,
       isActive: true,
       emailVerified: true,
@@ -148,6 +185,8 @@ export async function updateUser(id: string, input: UpdateUserInput) {
       id: true,
       name: true,
       email: true,
+      phoneNumber: true,
+      crmCustomerId: true,
       role: true,
       isActive: true,
       emailVerified: true,

@@ -11,8 +11,8 @@ const seed_js_1 = require("./utils/seed.js");
 const PORT = process.env["PORT"] ?? 4000;
 async function startServer() {
     try {
-        // Seed default categories
-        await (0, seed_js_1.seedDefaultCategories)();
+        // Seed initial admin data
+        await (0, seed_js_1.seedInitialData)();
     }
     catch (err) {
         console.error("❌ Database seeding failed:", err);
@@ -21,4 +21,4 @@ async function startServer() {
         console.log(`✅  API running on http://localhost:${PORT}`);
     });
 }
-startServer();
+startServer(); // Trigger watch reload for env changes

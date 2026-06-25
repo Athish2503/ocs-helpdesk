@@ -39,6 +39,13 @@ import {
   User,
   Coins,
   ArrowDownCircle,
+  Mail,
+  Phone,
+  Globe,
+  Server,
+  CreditCard,
+  FileText,
+  ShieldAlert,
 } from "lucide-react";
 import { useDialog } from "../../../context/DialogContext";
 import AdminShell, { AdminShellSkeleton } from "../../../components/admin/AdminShell";
@@ -70,6 +77,8 @@ interface UserProfile {
   id: string; name: string; email: string;
   role: "CUSTOMER" | "ADMIN" | "AGENT" | "SUPPORT_L1" | "SUPPORT_L2" | "BILLING";
   isActive: boolean; emailVerified: boolean; createdAt: string;
+  phoneNumber?: string | null;
+  crmCustomerId?: string | null;
   teams?: { id: string; name: string }[];
   customerCredits?: CustomerCreditsData | null;
 }
@@ -246,6 +255,8 @@ export default function AdminDashboard() {
   const [userFormRole, setUserFormRole] = useState<"CUSTOMER" | "AGENT" | "ADMIN" | "SUPPORT_L1" | "SUPPORT_L2" | "BILLING">("CUSTOMER");
   const [userFormIsActive, setUserFormIsActive] = useState(true);
   const [userFormTeams, setUserFormTeams] = useState<string[]>([]);
+  const [userFormPhone, setUserFormPhone] = useState("");
+  const [userFormCrmId, setUserFormCrmId] = useState("");
   const [userSearch, setUserSearch] = useState("");
 
   // KB state
@@ -282,6 +293,114 @@ export default function AdminDashboard() {
   // Client detail view state
   const [selectedClientView, setSelectedClientView] = useState<UserProfile | null>(null);
   const [clientDetailLoading, setClientDetailLoading] = useState(false);
+  const [clientActiveTab, setClientActiveTab] = useState<"profile" | "contact" | "domains" | "services" | "subscriptions" | "tickets" | "sla" | "audit">("profile");
+
+  // Client list filter state
+  const [clientFilter, setClientFilter] = useState<"ALL" | "ACTIVE" | "SUSPENDED" | "PENDING" | "CRM">("ALL");
+
+  // Bulk import state
+  const [importingCrm, setImportingCrm] = useState(false);
+  const [importResult, setImportResult] = useState<{ imported: number; failed: number; total: number } | null>(null);
+
+  const handleBulkImportCrm = async () => {
+    setImportingCrm(true);
+    setImportResult(null);
+    toast.info("Importing all customers from CRM — this may take a moment...");
+    try {
+      const res = await fetchWithAuth("/sync/import-all", { method: "POST" });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const { imported, failed, total } = data.data;
+        setImportResult({ imported, failed, total });
+        toast.success(`Import complete: ${imported} synced${failed > 0 ? `, ${failed} failed` : ""}.`);
+        refreshAllData();
+      } else {
+        toast.error(data.error?.message || data.message || "Import failed.");
+      }
+    } catch (err) {
+      toast.error("Failed to connect to CRM import endpoint.");
+    } finally {
+      setImportingCrm(false);
+    }
+  };
+
+  const handleSelectClient = async (user: UserProfile) => {
+    setSelectedClientView(user);
+    setClientActiveTab("profile");
+    setClientDetailLoading(true);
+    try {
+      const res = await fetchWithAuth(`/users/${user.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedClientView(data.data.user);
+      }
+    } catch (err) {
+      console.error("Failed to load client details:", err);
+      toast.error("Failed to load client details.");
+    } finally {
+      setClientDetailLoading(false);
+    }
+  };
+
+  const handleSendInvitation = async (userId: string, generateTempPassword = false) => {
+    try {
+      const res = await fetchWithAuth(`/users/${userId}/invite`, {
+        method: "POST",
+        body: JSON.stringify({ generateTempPassword })
+      });
+      if (res.ok) {
+        toast.success("Invitation email sent successfully.");
+        const userObj = selectedClientView;
+        if (userObj) {
+          handleSelectClient(userObj);
+        }
+      } else {
+        const data = await res.json();
+        toast.error(data.error?.message || "Failed to send invitation.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("An error occurred while sending the invitation.");
+    }
+  };
+
+  const handleResendInvitation = async (userId: string) => {
+    try {
+      const res = await fetchWithAuth(`/users/${userId}/resend-invite`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        toast.success("Invitation email resent successfully.");
+        const userObj = selectedClientView;
+        if (userObj) {
+          handleSelectClient(userObj);
+        }
+      } else {
+        const data = await res.json();
+        toast.error(data.error?.message || "Failed to resend invitation.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("An error occurred while resending the invitation.");
+    }
+  };
+
+  const handleSendResetPasswordLink = async (userId: string) => {
+    try {
+      const res = await fetchWithAuth(`/users/${userId}/reset-password-link`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        toast.success("Password reset email sent successfully.");
+      } else {
+        const data = await res.json();
+        toast.error(data.error?.message || "Failed to send password reset link.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("An error occurred while sending reset link.");
+    }
+  };
 
 
   // ── Data Fetching ────────────────────────────────────────────────
@@ -449,10 +568,11 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!userFormName.trim() || !userFormEmail.trim() || !userFormPassword.trim()) { toast.error("Name, email, and password are required."); return; }
     try {
-      const res = await fetchWithAuth("/users", { method: "POST", body: JSON.stringify({ name: userFormName, email: userFormEmail, password: userFormPassword, role: userFormRole, teamIds: (userFormRole === "AGENT" || userFormRole === "ADMIN") ? userFormTeams : [] }) });
+      const res = await fetchWithAuth("/users", { method: "POST", body: JSON.stringify({ name: userFormName, email: userFormEmail, password: userFormPassword, role: userFormRole, phoneNumber: userFormPhone || null, crmCustomerId: userFormCrmId || null, teamIds: (userFormRole === "AGENT" || userFormRole === "ADMIN") ? userFormTeams : [] }) });
       if (res.ok) {
         toast.success("User created."); setShowCreateUser(false);
         setUserFormName(""); setUserFormEmail(""); setUserFormPassword(""); setUserFormRole("CUSTOMER"); setUserFormTeams([]);
+        setUserFormPhone(""); setUserFormCrmId("");
         refreshAllData();
       } else toast.error((await res.json()).error?.message || "Error creating user");
     } catch { toast.error("Failed to create user."); }
@@ -461,19 +581,21 @@ export default function AdminDashboard() {
   const handleEditUserClick = (u: UserProfile) => {
     setSelectedUser(u); setUserFormName(u.name); setUserFormEmail(u.email); setUserFormPassword("");
     setUserFormRole(u.role); setUserFormIsActive(u.isActive); setUserFormTeams(u.teams ? u.teams.map(t => t.id) : []);
+    setUserFormPhone(u.phoneNumber || ""); setUserFormCrmId(u.crmCustomerId || "");
     setShowEditUser(true);
   };
 
   const handleSaveEditUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser || !userFormName.trim() || !userFormEmail.trim()) { toast.error("Name and email are required."); return; }
-    const payload: any = { name: userFormName, email: userFormEmail, role: userFormRole, isActive: userFormIsActive, teamIds: (userFormRole === "AGENT" || userFormRole === "ADMIN") ? userFormTeams : [] };
+    const payload: any = { name: userFormName, email: userFormEmail, role: userFormRole, isActive: userFormIsActive, phoneNumber: userFormPhone || null, crmCustomerId: userFormCrmId || null, teamIds: (userFormRole === "AGENT" || userFormRole === "ADMIN") ? userFormTeams : [] };
     if (userFormPassword.trim()) payload.password = userFormPassword;
     try {
       const res = await fetchWithAuth(`/users/${selectedUser.id}`, { method: "PATCH", body: JSON.stringify(payload) });
       if (res.ok) {
         toast.success("User updated."); setShowEditUser(false); setSelectedUser(null);
         setSelectedClientView(null);
+        setUserFormPhone(""); setUserFormCrmId("");
         refreshAllData();
       }
       else toast.error((await res.json()).error?.message || "Error updating user");
@@ -1379,61 +1501,105 @@ export default function AdminDashboard() {
                             ).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                           </select>
                         </div>
-
-                        {selectedTicket.affectedDomain && (
-                          <div className="flex items-center justify-between gap-3 text-xs">
-                            <span className={`font-semibold shrink-0 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Domain</span>
-                            <span className={`font-mono text-slate-700 dark:text-slate-350 truncate max-w-[150px]`} title={selectedTicket.affectedDomain}>
-                              {selectedTicket.affectedDomain}
-                            </span>
-                          </div>
-                        )}
-
-                        {selectedTicket.issueCategory && (
-                          <div className="flex items-center justify-between gap-3 text-xs">
-                            <span className={`font-semibold shrink-0 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Issue Class</span>
-                            <span className={`text-slate-700 dark:text-slate-350 truncate max-w-[150px]`} title={selectedTicket.issueCategory}>
-                              {selectedTicket.issueCategory}
-                            </span>
-                          </div>
-                        )}
                       </div>
                     </div>
 
-                    {/* Client Credits Tracker */}
+                    {/* CRM Context Details */}
                     <div className="px-5">
                       {(() => {
-                        const customerUser = users.find(u => u.id === selectedTicket.customer.id);
-                        const credits = customerUser?.customerCredits;
-                        if (!credits) return null;
-                        const remaining = credits.remainingHours;
-                        const allocated = credits.allocatedHours || 20;
-                        const used = credits.usedHours;
-                        const percent = Math.min(100, (remaining / allocated) * 100);
+                        const st = selectedTicket as any;
+                        const crmCust = st.customer?.crmCustomer;
+                        const credits = st.customer?.customerCredits;
+                        const activeSub = crmCust?.subscriptions?.find((s: any) => s.status === "ACTIVE");
+                        const supportPlan = activeSub ? activeSub.planName : "Standard Support";
 
                         return (
-                          <div className={`p-4 rounded-xl border space-y-2.5 bg-slate-50/50 dark:bg-white/[0.01] ${isDark ? "border-white/[0.04]" : "border-slate-100"}`}>
-                            <div className="flex items-center justify-between">
-                              <h4 className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-slate-550" : "text-slate-450"}`}>
-                                Client Service Credits
+                          <div className="space-y-4">
+                            {/* Customer Details */}
+                            <div className={`p-4 rounded-xl border space-y-2.5 bg-slate-50/50 dark:bg-white/[0.01] ${isDark ? "border-white/[0.04]" : "border-slate-100"}`}>
+                              <h4 className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-slate-500" : "text-slate-450"}`}>
+                                CRM Customer Info
                               </h4>
-                              <span className={`text-xs font-mono font-bold ${remaining <= 2 ? "text-red-500" : "text-green-500"}`}>
-                                {remaining} / {allocated} hrs left
-                              </span>
+                              <div className="space-y-1.5 text-xs">
+                                <div className="flex justify-between">
+                                  <span className="text-slate-400">Customer</span>
+                                  <span className={`font-semibold ${isDark ? "text-slate-200" : "text-slate-800"}`}>{crmCust?.displayName || st.customer?.name}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-400">Company</span>
+                                  <span className={`font-semibold ${isDark ? "text-slate-200" : "text-slate-800"}`}>{crmCust?.companyName || "Local Customer"}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-400">Email</span>
+                                  <span className={`font-semibold ${isDark ? "text-slate-200" : "text-slate-800"}`}>{crmCust?.primaryEmail || st.customer?.email}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-400">Phone</span>
+                                  <span className={`font-semibold ${isDark ? "text-slate-200" : "text-slate-800"}`}>{crmCust?.primaryPhone || st.customer?.phoneNumber || "None"}</span>
+                                </div>
+                              </div>
                             </div>
-                            <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full rounded-full transition-all duration-500 ${
-                                  remaining <= 2 ? "bg-red-500 animate-pulse" : remaining <= 5 ? "bg-amber-500" : "bg-green-500"
-                                }`}
-                                style={{ width: `${percent}%` }}
-                              />
-                            </div>
-                            <div className="flex justify-between text-[10px] text-slate-450 font-medium">
-                              <span>Allocated: {allocated}h</span>
-                              <span>Used: {used}h</span>
-                              {credits.billableHours > 0 && <span className="text-red-500 font-bold">Overage: {credits.billableHours}h</span>}
-                            </div>
+
+                            {/* Ticket Relations */}
+                            {(st.domain || st.service || st.subscription || st.affectedDomain || st.issueCategory) && (
+                              <div className={`p-4 rounded-xl border space-y-2.5 bg-slate-50/50 dark:bg-white/[0.01] ${isDark ? "border-white/[0.04]" : "border-slate-100"}`}>
+                                <h4 className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-slate-500" : "text-slate-450"}`}>
+                                  Ticket CRM Mapping
+                                </h4>
+                                <div className="space-y-1.5 text-xs">
+                                  {(st.domain?.domainName || st.affectedDomain) && (
+                                    <div className="flex justify-between">
+                                      <span className="text-slate-400">Domain</span>
+                                      <span className={`font-semibold font-mono ${isDark ? "text-slate-200" : "text-slate-800"}`}>{st.domain?.domainName || st.affectedDomain}</span>
+                                    </div>
+                                  )}
+                                  {(st.service?.name || st.issueCategory) && (
+                                    <div className="flex justify-between">
+                                      <span className="text-slate-400">Service</span>
+                                      <span className={`font-semibold ${isDark ? "text-slate-200" : "text-slate-800"}`}>{st.service?.name || st.issueCategory}</span>
+                                    </div>
+                                  )}
+                                  {st.subscription?.planName && (
+                                    <div className="flex justify-between">
+                                      <span className="text-slate-400">Subscription</span>
+                                      <span className={`font-semibold ${isDark ? "text-slate-200" : "text-slate-800"}`}>{st.subscription?.planName}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Support Plan & Credits */}
+                            {credits && (
+                              <div className={`p-4 rounded-xl border space-y-2.5 bg-slate-50/50 dark:bg-white/[0.01] ${isDark ? "border-white/[0.04]" : "border-slate-100"}`}>
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <h4 className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-slate-550" : "text-slate-455"}`}>
+                                      Support Credits
+                                    </h4>
+                                    <p className={`text-[9px] font-medium mt-0.5 ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                                      Plan: {supportPlan}
+                                    </p>
+                                  </div>
+                                  <span className={`text-xs font-mono font-bold ${credits.remainingHours <= 2 ? "text-red-500 animate-pulse" : "text-green-500"}`}>
+                                    {credits.remainingHours} / {credits.allocatedHours || 20} hrs left
+                                  </span>
+                                </div>
+                                <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full transition-all duration-500 ${
+                                      credits.remainingHours <= 2 ? "bg-red-500 animate-pulse" : credits.remainingHours <= 5 ? "bg-amber-500" : "bg-green-500"
+                                    }`}
+                                    style={{ width: `${Math.min(100, (credits.remainingHours / (credits.allocatedHours || 20)) * 100)}%` }}
+                                  />
+                                </div>
+                                <div className="flex justify-between text-[10px] text-slate-450 font-medium">
+                                  <span>Allocated: {credits.allocatedHours}h</span>
+                                  <span>Used: {credits.usedHours}h</span>
+                                  {credits.billableHours > 0 && <span className="text-red-500 font-bold">Overage: {credits.billableHours}h</span>}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
@@ -1727,91 +1893,225 @@ export default function AdminDashboard() {
         {/* ══════════════════════════════════════════════════════════
             TAB: CLIENTS
         ══════════════════════════════════════════════════════════ */}
-        {activeTab === "clients" && user.role === "ADMIN" && (
+        {activeTab === "clients" && (user.role === "ADMIN" || user.role === "SUPPORT_L1" || user.role === "SUPPORT_L2" || user.role === "BILLING") && (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
 
             {/* ── Client List (left column) ── */}
-            <div className={`lg:col-span-2 admin-card ${isDark ? "admin-dark" : ""} overflow-hidden`}>
-              {/* Toolbar */}
-              <div className={`px-5 py-4 border-b flex flex-col gap-3 ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
-                <div className="flex items-center justify-between gap-3">
+            <div className={`lg:col-span-2 admin-card ${isDark ? "admin-dark" : ""} overflow-hidden flex flex-col`}>
+              {/* ── Stats Row ── */}
+              {(() => {
+                const allClients = users.filter(u => u.role === "CUSTOMER");
+                const activeCount = allClients.filter(u => u.isActive).length;
+                const crmCount = allClients.filter(u => u.crmCustomerId).length;
+                const pendingCount = allClients.filter(u => !u.emailVerified && u.crmCustomerId).length;
+                return (
+                  <div className={`grid grid-cols-4 divide-x border-b text-center ${isDark ? "border-white/[0.05] divide-white/[0.05]" : "border-slate-100 divide-slate-100"}`}>
+                    {[
+                      { label: "Total", value: allClients.length, color: isDark ? "text-white" : "text-slate-900" },
+                      { label: "Active", value: activeCount, color: "text-emerald-500" },
+                      { label: "CRM Synced", value: crmCount, color: isDark ? "text-[#5fc0f9]" : "text-blue-600" },
+                      { label: "Pending", value: pendingCount, color: "text-amber-500" },
+                    ].map(stat => (
+                      <div key={stat.label} className={`py-3 px-2 ${isDark ? "hover:bg-white/[0.02]" : "hover:bg-slate-50/60"} transition-colors`}>
+                        <p className={`text-base font-bold tabular-nums ${stat.color}`}>{stat.value}</p>
+                        <p className={`text-[10px] font-medium mt-0.5 ${isDark ? "text-slate-600" : "text-slate-400"}`}>{stat.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* ── Toolbar ── */}
+              <div className={`px-4 py-3 border-b flex flex-col gap-2.5 ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
+                {/* Title row */}
+                <div className="flex items-center justify-between gap-2">
                   <h2 className={`text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>
                     Client Accounts
-                    <span className={`ml-2 text-xs font-normal ${isDark ? "text-slate-500" : "text-slate-400"}`}>
-                      ({users.filter(u => u.role === "CUSTOMER").length})
-                    </span>
                   </h2>
-                  <button
-                    onClick={() => { setUserFormName(""); setUserFormEmail(""); setUserFormPassword(""); setUserFormRole("CUSTOMER"); setUserFormTeams([]); setShowCreateUser(true); }}
-                    className="admin-btn admin-btn-primary admin-btn-sm"
-                    style={{ height: 30, fontSize: 11 }}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    New
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {/* Import All from CRM */}
+                    {user.role === "ADMIN" && (
+                      <button
+                        onClick={handleBulkImportCrm}
+                        disabled={importingCrm}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold border transition-all duration-200 ${
+                          importingCrm
+                            ? isDark ? "bg-[#38b1f7]/8 border-[#38b1f7]/20 text-[#5fc0f9] opacity-70 cursor-wait" : "bg-blue-50 border-blue-200 text-blue-600 opacity-70 cursor-wait"
+                            : isDark ? "bg-[#38b1f7]/10 border-[#38b1f7]/25 text-[#5fc0f9] hover:bg-[#38b1f7]/20" : "bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100"
+                        }`}
+                        title="Fetch and sync all customers from the CRM"
+                      >
+                        {importingCrm ? (
+                          <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                          </svg>
+                        ) : (
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/>
+                          </svg>
+                        )}
+                        {importingCrm ? "Importing..." : "Import All from CRM"}
+                      </button>
+                    )}
+                    {/* New Client Button */}
+                    {user.role === "ADMIN" && (
+                      <button
+                        onClick={() => { setUserFormName(""); setUserFormEmail(""); setUserFormPassword(""); setUserFormRole("CUSTOMER"); setUserFormTeams([]); setShowCreateUser(true); }}
+                        className="admin-btn admin-btn-primary admin-btn-sm"
+                        style={{ height: 30, fontSize: 11 }}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        New
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {/* Import result banner */}
+                {importResult && (
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs border ${
+                    importResult.failed > 0
+                      ? isDark ? "bg-amber-500/8 border-amber-500/20 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-700"
+                      : isDark ? "bg-emerald-500/8 border-emerald-500/20 text-emerald-400" : "bg-emerald-50 border-emerald-200 text-emerald-700"
+                  }`}>
+                    <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{importResult.imported} imported{importResult.failed > 0 ? `, ${importResult.failed} failed` : " successfully"}.</span>
+                    <button onClick={() => setImportResult(null)} className="ml-auto opacity-60 hover:opacity-100"><X className="w-3 h-3" /></button>
+                  </div>
+                )}
+
+                {/* Search */}
                 <div className="relative">
                   <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? "text-slate-500" : "text-slate-400"}`} />
                   <input
                     type="text"
                     value={userSearch}
                     onChange={e => setUserSearch(e.target.value)}
-                    placeholder="Search by name or email..."
+                    placeholder="Search by name, email, or company..."
                     className={`admin-input ${isDark ? "admin-dark" : ""} w-full text-xs`}
                     style={{ height: 34, paddingLeft: "2.25rem" }}
                   />
                 </div>
+
+                {/* Filter chips */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {(["ALL", "ACTIVE", "SUSPENDED", "PENDING", "CRM"] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setClientFilter(f)}
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border transition-all ${
+                        clientFilter === f
+                          ? isDark ? "bg-[#38b1f7]/20 border-[#38b1f7]/40 text-[#5fc0f9]" : "bg-blue-100 border-blue-300 text-blue-700"
+                          : isDark ? "bg-white/[0.03] border-white/[0.08] text-slate-500 hover:text-slate-300" : "bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      {f === "ALL" ? "All" : f === "ACTIVE" ? "Active" : f === "SUSPENDED" ? "Suspended" : f === "PENDING" ? "Pending Invite" : "CRM Synced"}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Client list */}
-              <div className={`divide-y overflow-y-auto max-h-[680px] ${isDark ? "divide-white/[0.04]" : "divide-slate-100"}`}>
-                {users
-                  .filter(u => u.role === "CUSTOMER")
-                  .filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase()))
-                  .length === 0 ? (
-                    <EmptyState icon={<Users className="w-8 h-8" />} title="No clients found" description="No client accounts match your search." isDark={isDark} />
-                  ) : users
-                    .filter(u => u.role === "CUSTOMER")
-                    .filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase()))
-                    .map(u => {
+              {/* ── Client list ── */}
+              {(() => {
+                const allClients = users.filter(u => u.role === "CUSTOMER");
+                const searchedClients = allClients.filter(u => {
+                  if (userSearch.trim()) {
+                    const q = userSearch.toLowerCase();
+                    return (
+                      u.name.toLowerCase().includes(q) ||
+                      u.email.toLowerCase().includes(q) ||
+                      ((u as any).crmCustomer?.companyName || "").toLowerCase().includes(q) ||
+                      ((u as any).crmCustomer?.displayName || "").toLowerCase().includes(q)
+                    );
+                  }
+                  return true;
+                }).filter(u => {
+                  if (clientFilter === "ACTIVE") return u.isActive;
+                  if (clientFilter === "SUSPENDED") return !u.isActive;
+                  if (clientFilter === "PENDING") return !u.emailVerified && !!u.crmCustomerId;
+                  if (clientFilter === "CRM") return !!u.crmCustomerId;
+                  return true;
+                });
+
+                if (searchedClients.length === 0) {
+                  return (
+                    <div className={`divide-y overflow-y-auto flex-1 ${isDark ? "divide-white/[0.04]" : "divide-slate-100"}`}>
+                      <EmptyState icon={<Users className="w-8 h-8" />} title="No clients found" description="No client accounts match your current search or filter." isDark={isDark} />
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className={`divide-y overflow-y-auto flex-1 max-h-[620px] ${isDark ? "divide-white/[0.04]" : "divide-slate-100"}`}>
+                    {searchedClients.map(u => {
                       const initials = u.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
                       const credits = u.customerCredits;
                       const utilPct = credits ? Math.min(100, Math.round((credits.usedHours / Math.max(credits.allocatedHours, 0.01)) * 100)) : 0;
                       const isSelected = selectedClientView?.id === u.id;
                       const clientTickets = tickets.filter(t => t.customer.id === u.id);
                       const openCount = clientTickets.filter(t => t.status === "OPEN" || t.status === "IN_PROGRESS").length;
+                      const isActivated = u.emailVerified;
+                      const hasCrm = !!u.crmCustomerId;
+                      const company = (u as any).crmCustomer?.companyName;
 
                       return (
                         <div
                           key={u.id}
-                          onClick={() => setSelectedClientView(u)}
-                          className={`flex items-start gap-3.5 px-5 py-4 cursor-pointer transition-all duration-200 border-l-2 ${
+                          onClick={() => handleSelectClient(u)}
+                          className={`flex items-start gap-3 px-4 py-3.5 cursor-pointer transition-all duration-200 border-l-2 ${
                             isSelected
                               ? isDark ? "bg-[#38b1f7]/8 border-[#38b1f7]" : "bg-blue-50/60 border-[#38b1f7]"
-                              : `border-transparent ${isDark ? "hover:bg-white/[0.025]" : "hover:bg-slate-50"} hover:translate-x-0.5`
+                              : `border-transparent ${isDark ? "hover:bg-white/[0.025]" : "hover:bg-slate-50/80"}`
                           }`}
                         >
                           {/* Avatar */}
                           <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${
                             isSelected
-                              ? isDark ? "bg-[#38b1f7]/20 text-[#5fc0f9]" : "bg-blue-100 text-blue-700"
+                              ? isDark ? "bg-[#38b1f7]/25 text-[#5fc0f9]" : "bg-blue-100 text-blue-700"
                               : isDark ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"
                           }`}>
                             {initials}
                           </div>
 
-                          <div className="flex-1 min-w-0 space-y-1.5">
+                          <div className="flex-1 min-w-0 space-y-1">
+                            {/* Name + Status */}
                             <div className="flex items-center justify-between gap-2">
                               <p className={`text-sm font-semibold truncate ${isDark ? "text-slate-100" : "text-slate-900"}`}>{u.name}</p>
-                              <span className={`admin-badge shrink-0 ${u.isActive ? "admin-badge-active" : "admin-badge-suspended"}`}>
-                                {u.isActive ? "Active" : "Suspended"}
-                              </span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                {hasCrm && (
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                                    isDark ? "bg-[#38b1f7]/8 border-[#38b1f7]/20 text-[#5fc0f9]" : "bg-blue-50 border-blue-200 text-blue-600"
+                                  }`}>CRM</span>
+                                )}
+                                <span className={`admin-badge ${u.isActive ? "admin-badge-active" : "admin-badge-suspended"}`}>
+                                  {u.isActive ? "Active" : "Off"}
+                                </span>
+                              </div>
                             </div>
+
+                            {/* Company or Email */}
+                            {company ? (
+                              <p className={`text-xs font-medium truncate ${isDark ? "text-slate-400" : "text-slate-600"}`}>{company}</p>
+                            ) : null}
                             <p className={`text-xs truncate ${isDark ? "text-slate-500" : "text-slate-400"}`}>{u.email}</p>
-                            <div className="flex items-center gap-3">
+
+                            {/* Bottom row: invite pill + credit bar + open tickets */}
+                            <div className="flex items-center gap-2 pt-0.5">
+                              {/* Invite status */}
+                              <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${
+                                isActivated
+                                  ? isDark ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-600 border-emerald-200"
+                                  : hasCrm
+                                  ? isDark ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-600 border-amber-200"
+                                  : isDark ? "bg-slate-800 text-slate-600 border-slate-700/50" : "bg-slate-100 text-slate-400 border-slate-200"
+                              }`}>
+                                {isActivated ? "✓ Activated" : hasCrm ? "● Pending" : "○ No Invite"}
+                              </span>
+
                               {/* Credit bar */}
                               {credits && (
-                                <div className="flex-1 flex items-center gap-1.5">
+                                <div className="flex-1 flex items-center gap-1.5 min-w-0">
                                   <div className={`flex-1 h-1 rounded-full overflow-hidden ${isDark ? "bg-white/[0.06]" : "bg-slate-200"}`}>
                                     <div
                                       className={`h-full rounded-full transition-all ${
@@ -1820,13 +2120,15 @@ export default function AdminDashboard() {
                                       style={{ width: `${utilPct}%` }}
                                     />
                                   </div>
-                                  <span className={`text-[10px] shrink-0 font-medium ${
+                                  <span className={`text-[9px] shrink-0 font-medium tabular-nums ${
                                     utilPct >= 90 ? "text-red-500" : utilPct >= 70 ? "text-amber-500" : isDark ? "text-slate-500" : "text-slate-400"
-                                  }`}>{credits.remainingHours}h left</span>
+                                  }`}>{credits.remainingHours}h</span>
                                 </div>
                               )}
+
+                              {/* Open tickets badge */}
                               {openCount > 0 && (
-                                <span className={`text-[10px] shrink-0 font-semibold px-1.5 py-0.5 rounded-md ${
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
                                   isDark ? "bg-amber-500/15 text-amber-400" : "bg-amber-50 text-amber-700"
                                 }`}>
                                   {openCount} open
@@ -1836,66 +2138,212 @@ export default function AdminDashboard() {
                           </div>
                         </div>
                       );
-                    })
-                }
-              </div>
+                    })}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* ── Client Detail Panel (right column) ── */}
-            <div className={`lg:col-span-3 admin-card sticky top-6 ${isDark ? "admin-dark" : ""} overflow-hidden`}>
-              {selectedClientView ? (() => {
-                const cv = selectedClientView;
+            <div className={`lg:col-span-3 admin-card sticky top-6 ${isDark ? "admin-dark" : ""} overflow-hidden flex flex-col`} style={{ maxHeight: "calc(100vh - 7rem)" }}>
+              {clientDetailLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 px-6">
+                  <Loader size="md" theme={isDark ? "dark" : "light"}  />
+                  <p className={`text-xs mt-3 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Loading client details...</p>
+                </div>
+              ) : selectedClientView ? (() => {
+                const cv = selectedClientView as any;
                 const credits = cv.customerCredits;
                 const clientTickets = tickets.filter(t => t.customer.id === cv.id);
                 const openTickets = clientTickets.filter(t => t.status === "OPEN" || t.status === "IN_PROGRESS");
-                const resolvedTickets = clientTickets.filter(t => t.status === "RESOLVED" || t.status === "CLOSED");
                 const allocH = credits?.allocatedHours ?? 0;
                 const usedH = credits?.usedHours ?? 0;
                 const remH = credits?.remainingHours ?? 0;
                 const billH = credits?.billableHours ?? 0;
                 const utilPct = allocH > 0 ? Math.min(100, Math.round((usedH / allocH) * 100)) : 0;
-                const initials = cv.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+                const initials = cv.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
+
+                const activeSub = cv.crmCustomer?.subscriptions?.find((s: any) => s.status === "ACTIVE");
+                const supportPlan = activeSub ? activeSub.planName : "Standard Support";
+                const latestInvitation = cv.crmCustomer?.invitations?.[0];
+                // Compute invitation state
+                const isAccountActivated = cv.emailVerified === true;
+                const inviteIsPending = latestInvitation && !latestInvitation.usedAt && new Date(latestInvitation.expiresAt).getTime() > Date.now();
+                const inviteIsExpired = latestInvitation && !latestInvitation.usedAt && new Date(latestInvitation.expiresAt).getTime() <= Date.now();
+                // Setup buttons are disabled once activated; resend only works while pending
+                const canSendSetupLink = !isAccountActivated; // disabled when already activated
+                const canResend = !isAccountActivated && !!latestInvitation && !latestInvitation.usedAt;
 
                 return (
-                  <div className="flex flex-col max-h-[85vh] overflow-y-auto">
-                    {/* Header */}
-                    <div className={`px-6 py-5 border-b flex items-start gap-4 ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
-                      {/* Big avatar */}
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-base font-bold shrink-0 ${
-                        isDark ? "bg-[#38b1f7]/15 text-[#5fc0f9]" : "bg-blue-100 text-blue-700"
-                      }`}>
-                        {initials}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>{cv.name}</h3>
-                          <span className={`admin-badge ${cv.isActive ? "admin-badge-active" : "admin-badge-suspended"}`}>
-                            {cv.isActive ? "Active" : "Suspended"}
-                          </span>
+                  <div className="flex flex-col flex-1 overflow-y-auto">
+                    {/* ── Premium Header with gradient banner ── */}
+                    <div className={`relative overflow-hidden shrink-0 ${isDark ? "bg-gradient-to-br from-slate-900 via-[#0a1628] to-[#0d1f35]" : "bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800"}`}>
+                      {/* Decorative circles */}
+                      <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10 -translate-y-8 translate-x-8" style={{ background: "radial-gradient(circle, white, transparent)" }} />
+                      <div className="absolute bottom-0 left-12 w-20 h-20 rounded-full opacity-5 translate-y-6" style={{ background: "radial-gradient(circle, white, transparent)" }} />
+
+                      <div className="relative px-6 pt-6 pb-5">
+                        <div className="flex items-start gap-4">
+                          {/* Avatar */}
+                          <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-lg font-bold shrink-0 bg-white/15 text-white border border-white/20 shadow-lg">
+                            {initials}
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <h3 className="text-lg font-bold text-white truncate">{cv.name}</h3>
+                                {cv.crmCustomer?.companyName && (
+                                  <p className="text-sm text-white/70 font-medium truncate mt-0.5">{cv.crmCustomer.companyName}</p>
+                                )}
+                                <p className="text-xs text-white/50 truncate mt-0.5">{cv.email}</p>
+                              </div>
+                              <button
+                                onClick={() => setSelectedClientView(null)}
+                                className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors shrink-0 mt-0.5"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            {/* Status badges */}
+                            <div className="flex items-center gap-1.5 flex-wrap mt-2.5">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                cv.isActive ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-300" : "bg-red-500/20 border-red-400/30 text-red-300"
+                              }`}>
+                                {cv.isActive ? "● Active" : "○ Suspended"}
+                              </span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                cv.crmCustomer ? "bg-blue-400/20 border-blue-400/30 text-blue-200" : "bg-slate-400/20 border-slate-400/30 text-slate-300"
+                              }`}>
+                                {cv.crmCustomer ? "CRM Synced" : "Local Only"}
+                              </span>
+                              {isAccountActivated && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-400/20 border-emerald-400/30 text-emerald-200">✓ Portal Activated</span>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <p className={`text-sm mt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>{cv.email}</p>
-                        <p className={`text-[11px] mt-1 ${isDark ? "text-slate-600" : "text-slate-400"}`}>
-                          ID: {cv.id.slice(0, 16)}… · Member since {new Date(cv.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-                        </p>
+
+                        {/* Quick stats bar */}
+                        <div className="grid grid-cols-3 gap-2 mt-4">
+                          <div className="bg-white/10 rounded-xl px-3 py-2 text-center border border-white/10">
+                            <p className="text-base font-bold text-white tabular-nums">{clientTickets.length}</p>
+                            <p className="text-[10px] text-white/50 font-medium mt-0.5">All Tickets</p>
+                          </div>
+                          <div className="bg-white/10 rounded-xl px-3 py-2 text-center border border-white/10">
+                            <p className="text-base font-bold text-white tabular-nums">{openTickets.length}</p>
+                            <p className="text-[10px] text-white/50 font-medium mt-0.5">Open Now</p>
+                          </div>
+                          <div className="bg-white/10 rounded-xl px-3 py-2 text-center border border-white/10">
+                            <p className={`text-base font-bold tabular-nums ${remH <= 2 ? "text-red-300" : "text-white"}`}>{remH}h</p>
+                            <p className="text-[10px] text-white/50 font-medium mt-0.5">Credits Left</p>
+                          </div>
+                        </div>
                       </div>
-                      <button
-                        onClick={() => setSelectedClientView(null)}
-                        className={`p-1.5 rounded-lg shrink-0 transition-colors ${isDark ? "text-slate-500 hover:text-white hover:bg-white/[0.05]" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"}`}
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
                     </div>
 
+                    {/* ── Invitation Status Banner ── */}
+                    {(() => {
+                      if (isAccountActivated) {
+                        return (
+                          <div className={`mx-6 mt-4 mb-0 flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-xs font-semibold shrink-0 ${
+                            isDark ? "bg-emerald-500/8 border-emerald-500/20 text-emerald-400" : "bg-emerald-50 border-emerald-200 text-emerald-700"
+                          }`}>
+                            <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>Account Activated — Client has set up their password and can log in.</span>
+                          </div>
+                        );
+                      }
+                      if (inviteIsPending) {
+                        return (
+                          <div className={`mx-6 mt-4 mb-0 flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-xs font-semibold shrink-0 ${
+                            isDark ? "bg-amber-500/8 border-amber-500/20 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-700"
+                          }`}>
+                            <Clock className="w-3.5 h-3.5 shrink-0 animate-pulse" />
+                            <span>Invitation Pending — Setup link sent. Awaiting client activation.</span>
+                            <span className={`ml-auto text-[10px] font-normal ${isDark ? "text-amber-500/60" : "text-amber-500"}`}>
+                              Expires {new Date(latestInvitation.expiresAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                        );
+                      }
+                      if (inviteIsExpired) {
+                        return (
+                          <div className={`mx-6 mt-4 mb-0 flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-xs font-semibold shrink-0 ${
+                            isDark ? "bg-red-500/8 border-red-500/20 text-red-400" : "bg-red-50 border-red-200 text-red-700"
+                          }`}>
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>Invitation Expired — Please send a new setup link for the client to activate.</span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className={`mx-6 mt-4 mb-0 flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-xs shrink-0 ${
+                          isDark ? "bg-slate-800/60 border-white/[0.05] text-slate-500" : "bg-slate-50 border-slate-200 text-slate-400"
+                        }`}>
+                          <Mail className="w-3.5 h-3.5 shrink-0" />
+                          <span>No invitation sent yet. Use the action buttons below to send a setup link.</span>
+                        </div>
+                      );
+                    })()}
+
                     {/* Quick Actions */}
-                    <div className={`px-6 py-3 border-b flex flex-wrap gap-2 items-center ${isDark ? "border-white/[0.05] bg-white/[0.01]" : "border-slate-100 bg-slate-50/50"}`}>
+                    <div className={`px-6 py-3 mt-3 border-b flex flex-wrap gap-2 items-center shrink-0 ${isDark ? "border-white/[0.05] bg-white/[0.01]" : "border-slate-100 bg-slate-50/50"}`}>
                       <span className={`text-[10px] uppercase font-bold tracking-wider ${isDark ? "text-slate-500" : "text-slate-450"}`}>Actions:</span>
-                      <button
-                        onClick={() => handleEditUserClick(cv)}
-                        className={`admin-btn admin-btn-ghost admin-btn-sm`}
-                      >
-                        <Edit2 className="w-3 h-3" />
-                        Edit Profile
-                      </button>
+                      
+                      {/* Send Setup Link — disabled once activated */}
+                      <div title={isAccountActivated ? "Account is already activated" : ""}>
+                        <button
+                          onClick={() => canSendSetupLink && handleSendInvitation(cv.id, false)}
+                          disabled={!canSendSetupLink}
+                          className={`admin-btn admin-btn-primary admin-btn-sm transition-opacity ${
+                            !canSendSetupLink ? "opacity-40 cursor-not-allowed pointer-events-none" : ""
+                          }`}
+                          style={{ height: 28 }}
+                        >
+                          <Mail className="w-3 h-3" />
+                          Send Setup Link
+                        </button>
+                      </div>
+
+                      {/* Send Setup Link + Temp Pass — disabled once activated */}
+                      <div title={isAccountActivated ? "Account is already activated" : ""}>
+                        <button
+                          onClick={() => canSendSetupLink && handleSendInvitation(cv.id, true)}
+                          disabled={!canSendSetupLink}
+                          className={`admin-btn admin-btn-ghost admin-btn-sm transition-opacity ${
+                            !canSendSetupLink ? "opacity-40 cursor-not-allowed pointer-events-none" : ""
+                          }`}
+                          style={{ height: 28 }}
+                        >
+                          Send Setup Link + Temp Pass
+                        </button>
+                      </div>
+
+                      {/* Resend Invitation — only visible while pending */}
+                      {canResend && (
+                        <button
+                          onClick={() => handleResendInvitation(cv.id)}
+                          className="admin-btn admin-btn-ghost admin-btn-sm"
+                          style={{ height: 28 }}
+                        >
+                          Resend Invitation
+                        </button>
+                      )}
+
+                      {/* Password Reset — visible only once activated */}
+                      {isAccountActivated && (
+                        <button
+                          onClick={() => handleSendResetPasswordLink(cv.id)}
+                          className={`admin-btn admin-btn-ghost admin-btn-sm`}
+                          style={{ height: 28 }}
+                        >
+                          Send Reset Link
+                        </button>
+                      )}
+
+                      {/* Toggle Login Access */}
                       <button
                         onClick={() => handleUpdateUser(cv.id, { isActive: !cv.isActive })}
                         className={`admin-btn admin-btn-sm ${
@@ -1906,8 +2354,10 @@ export default function AdminDashboard() {
                         style={{ height: 28, gap: 4 }}
                       >
                         {cv.isActive ? <MinusCircle className="w-3 h-3" /> : <CheckCircle className="w-3 h-3" />}
-                        {cv.isActive ? "Suspend" : "Reactivate"}
+                        {cv.isActive ? "Disable Login" : "Enable Login"}
                       </button>
+
+                      {/* Adjust Credits Action */}
                       <button
                         onClick={() => {
                           setCreditsEditingUser(cv);
@@ -1924,130 +2374,306 @@ export default function AdminDashboard() {
                         <Coins className="w-3 h-3" />
                         Adjust Credits
                       </button>
-                      <button
-                        onClick={() => { setActiveTab("tickets"); }}
-                        className={`admin-btn admin-btn-sm ${
-                          isDark ? "text-slate-300 border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06]" : "text-slate-600 border-slate-200 bg-white hover:bg-slate-50"
-                        }`}
-                        style={{ height: 28, gap: 4 }}
-                      >
-                        <Ticket className="w-3 h-3" />
-                        View Tickets
-                      </button>
                     </div>
 
+                    {/* Tab Navigation */}
+                    <div className={`flex border-b overflow-x-auto scrollbar-hide px-6 shrink-0 ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
+                      {[
+                        { id: "profile", label: "Profile" },
+                        { id: "contact", label: "Contact Info" },
+                        { id: "domains", label: "Domains" },
+                        { id: "services", label: "Services" },
+                        { id: "subscriptions", label: "Subscriptions" },
+                        { id: "tickets", label: "Tickets" },
+                        { id: "sla", label: "SLA & Credits" },
+                        { id: "audit", label: "Audit History" },
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setClientActiveTab(tab.id as any)}
+                          className={`py-3 px-4 border-b-2 text-xs font-semibold whitespace-nowrap transition-colors -mb-px ${
+                            clientActiveTab === tab.id
+                              ? isDark
+                                ? "border-[#38b1f7] text-[#5fc0f9]"
+                                : "border-blue-600 text-blue-600"
+                              : isDark
+                              ? "border-transparent text-slate-500 hover:text-slate-300"
+                              : "border-transparent text-slate-400 hover:text-slate-600"
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Tab Content */}
                     <div className="px-6 py-5 space-y-6">
 
-                      {/* Credits Overview Card */}
-                      <div className={`rounded-2xl border p-5 space-y-4 ${
-                        isDark ? "border-white/[0.06] bg-white/[0.02]" : "border-slate-200 bg-slate-50/50"
-                      }`}>
-                        <div className="flex items-center justify-between">
-                          <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
-                            isDark ? "text-slate-400" : "text-slate-500"
-                          }`}>
-                            <Coins className="w-3.5 h-3.5" />
-                            Support Credits
-                          </h4>
-                          {!credits && (
-                            <span className={`text-[10px] ${isDark ? "text-slate-600" : "text-slate-400"}`}>No credit record</span>
-                          )}
-                        </div>
+                      {/* 1. Profile Tab */}
+                      {clientActiveTab === "profile" && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {/* Display Name */}
+                            <div className={`p-4 rounded-xl border ${isDark ? "bg-white/[0.025] border-white/[0.07]" : "bg-white border-slate-200 shadow-sm"}`}>
+                              <p className={`text-[10px] uppercase font-bold tracking-widest mb-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Display Name</p>
+                              <p className={`text-sm font-semibold leading-snug ${isDark ? "text-white" : "text-slate-800"}`}>{cv.crmCustomer?.displayName || cv.name}</p>
+                            </div>
+                            {/* Company Name */}
+                            <div className={`p-4 rounded-xl border ${isDark ? "bg-white/[0.025] border-white/[0.07]" : "bg-white border-slate-200 shadow-sm"}`}>
+                              <p className={`text-[10px] uppercase font-bold tracking-widest mb-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Company Name</p>
+                              <p className={`text-sm font-semibold leading-snug ${isDark ? "text-white" : "text-slate-800"}`}>{cv.crmCustomer?.companyName || <span className={isDark ? "text-slate-600" : "text-slate-400"}>No Company Specified</span>}</p>
+                            </div>
+                            {/* CRM Customer ID */}
+                            <div className={`p-4 rounded-xl border ${isDark ? "bg-white/[0.025] border-white/[0.07]" : "bg-white border-slate-200 shadow-sm"}`}>
+                              <p className={`text-[10px] uppercase font-bold tracking-widest mb-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>CRM Customer ID</p>
+                              <p className={`text-sm font-mono font-medium leading-snug ${isDark ? "text-[#5fc0f9]" : "text-blue-700"}`}>{cv.crmCustomerId || <span className={isDark ? "text-slate-600" : "text-slate-400"}>Not Linked</span>}</p>
+                            </div>
+                            {/* Account Creation */}
+                            <div className={`p-4 rounded-xl border ${isDark ? "bg-white/[0.025] border-white/[0.07]" : "bg-white border-slate-200 shadow-sm"}`}>
+                              <p className={`text-[10px] uppercase font-bold tracking-widest mb-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Account Creation</p>
+                              <p className={`text-sm font-medium leading-snug ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                                {new Date(cv.createdAt).toLocaleString()}
+                              </p>
+                            </div>
+                            {/* Last Synced At */}
+                            <div className={`p-4 rounded-xl border ${isDark ? "bg-white/[0.025] border-white/[0.07]" : "bg-white border-slate-200 shadow-sm"}`}>
+                              <p className={`text-[10px] uppercase font-bold tracking-widest mb-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Last Synced At</p>
+                              <p className={`text-sm font-medium leading-snug ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                                {cv.crmCustomer?.lastSyncedAt ? new Date(cv.crmCustomer.lastSyncedAt).toLocaleString() : <span className={isDark ? "text-slate-600" : "text-slate-400"}>Never</span>}
+                              </p>
+                            </div>
+                            {/* Last Login At */}
+                            <div className={`p-4 rounded-xl border ${isDark ? "bg-white/[0.025] border-white/[0.07]" : "bg-white border-slate-200 shadow-sm"}`}>
+                              <p className={`text-[10px] uppercase font-bold tracking-widest mb-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Last Login At</p>
+                              <p className={`text-sm font-medium leading-snug ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                                {cv.lastLoginAt ? new Date(cv.lastLoginAt).toLocaleString() : <span className={isDark ? "text-slate-600" : "text-slate-400"}>Never Logged In</span>}
+                              </p>
+                            </div>
+                          </div>
 
-                        {credits ? (
-                          <>
-                            {/* Credit bar */}
-                            <div className="space-y-1.5">
-                              <div className="flex justify-between text-xs">
-                                <span className={isDark ? "text-slate-500" : "text-slate-400"}>{usedH}h used of {allocH}h allocated</span>
-                                <span className={`font-semibold ${
-                                  utilPct >= 90 ? "text-red-500" : utilPct >= 70 ? "text-amber-500" : isDark ? "text-emerald-400" : "text-emerald-600"
-                                }`}>{utilPct}%</span>
+                          {latestInvitation && (() => {
+                            const invStatus = isAccountActivated
+                              ? { label: "Account Activated", sub: `Activated on ${new Date(latestInvitation.usedAt).toLocaleString()}`, color: isDark ? "border-emerald-500/20 bg-emerald-500/5" : "border-emerald-200 bg-emerald-50", iconColor: "text-emerald-500", textColor: isDark ? "text-emerald-400" : "text-emerald-700" }
+                              : inviteIsPending
+                              ? { label: "Invitation Pending", sub: `Expires ${new Date(latestInvitation.expiresAt).toLocaleString()}`, color: isDark ? "border-amber-500/20 bg-amber-500/5" : "border-amber-200 bg-amber-50", iconColor: "text-amber-500", textColor: isDark ? "text-amber-400" : "text-amber-700" }
+                              : { label: "Invitation Expired", sub: `Expired ${new Date(latestInvitation.expiresAt).toLocaleString()}`, color: isDark ? "border-red-500/20 bg-red-500/5" : "border-red-200 bg-red-50", iconColor: "text-red-500", textColor: isDark ? "text-red-400" : "text-red-700" };
+                            return (
+                              <div className={`rounded-xl border mt-4 overflow-hidden`}>
+                                {/* Status header */}
+                                <div className={`px-4 py-3 flex items-center gap-2.5 border-b ${invStatus.color} ${
+                                  isDark ? "border-white/[0.06]" : "border-slate-100"
+                                }`}>
+                                  <ShieldAlert className={`w-4 h-4 shrink-0 ${invStatus.iconColor}`} />
+                                  <div className="min-w-0">
+                                    <p className={`text-xs font-bold ${invStatus.textColor}`}>{invStatus.label}</p>
+                                    <p className={`text-[10px] mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>{invStatus.sub}</p>
+                                  </div>
+                                </div>
+                                {/* Details grid */}
+                                <div className={`px-4 py-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs ${isDark ? "bg-white/[0.01]" : "bg-slate-50/60"}`}>
+                                  <div>
+                                    <span className={`${isDark ? "text-slate-500" : "text-slate-400"}`}>Sent To</span>
+                                    <p className={`font-semibold mt-0.5 ${isDark ? "text-slate-200" : "text-slate-800"}`}>{latestInvitation.email}</p>
+                                  </div>
+                                  <div>
+                                    <span className={`${isDark ? "text-slate-500" : "text-slate-400"}`}>Expires / Activated</span>
+                                    <p className={`font-semibold mt-0.5 ${isDark ? "text-slate-200" : "text-slate-800"}`}>
+                                      {isAccountActivated
+                                        ? new Date(latestInvitation.usedAt).toLocaleDateString()
+                                        : new Date(latestInvitation.expiresAt).toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                  {latestInvitation.temporaryPassword && !isAccountActivated && (
+                                    <div className="md:col-span-2">
+                                      <span className={`${isDark ? "text-slate-500" : "text-slate-400"}`}>Temporary Password</span>
+                                      <p className={`font-mono font-semibold mt-0.5 text-sm px-2.5 py-1 rounded-lg border inline-block ${isDark ? "bg-slate-800 border-white/[0.06] text-slate-200" : "bg-white border-slate-200 text-slate-700"}`}>
+                                        {latestInvitation.temporaryPassword}
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <div className={`h-2.5 rounded-full overflow-hidden ${isDark ? "bg-white/[0.06]" : "bg-slate-200"}`}>
-                                <div
-                                  className={`h-full rounded-full transition-all ${
-                                    utilPct >= 90 ? "bg-red-500" : utilPct >= 70 ? "bg-amber-500" : "bg-emerald-500"
-                                  }`}
-                                  style={{ width: `${utilPct}%` }}
-                                />
+                            );
+                          })()}
+                        </div>
+                      )}
+
+                      {/* 2. Contact Information Tab */}
+                      {clientActiveTab === "contact" && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className={`p-4 rounded-xl border ${isDark ? "bg-white/[0.02] border-white/[0.06]" : "bg-slate-50 border-slate-100"}`}>
+                              <h5 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 mb-3 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                                <Mail className="w-3.5 h-3.5" />
+                                Email Addresses
+                              </h5>
+                              <div className="space-y-2.5 text-xs">
+                                <div className="flex justify-between py-1 border-b border-dashed dark:border-white/[0.05] border-slate-200">
+                                  <span className="text-slate-400">Login/Credential Email</span>
+                                  <span className={`font-semibold ${isDark ? "text-slate-200" : "text-slate-800"}`}>{cv.email}</span>
+                                </div>
+                                <div className="flex justify-between py-1 border-b border-dashed dark:border-white/[0.05] border-slate-200">
+                                  <span className="text-slate-400">CRM Primary Email</span>
+                                  <span className={`font-semibold ${isDark ? "text-slate-200" : "text-slate-800"}`}>{cv.crmCustomer?.primaryEmail || "Not synced"}</span>
+                                </div>
+                                <div className="flex justify-between py-1">
+                                  <span className="text-slate-400">CRM Secondary Email</span>
+                                  <span className={`font-semibold ${isDark ? "text-slate-200" : "text-slate-800"}`}>{cv.crmCustomer?.secondaryEmail || "None"}</span>
+                                </div>
                               </div>
                             </div>
 
-                            {/* Credit stats grid */}
-                            <div className="grid grid-cols-4 gap-3">
-                              {[
-                                { label: "Allocated", value: allocH, unit: "hrs", color: isDark ? "text-slate-200" : "text-slate-800" },
-                                { label: "Used", value: usedH, unit: "hrs", color: isDark ? "text-amber-400" : "text-amber-600" },
-                                { label: "Remaining", value: remH, unit: "hrs", color: remH <= 0 ? "text-red-500" : isDark ? "text-emerald-400" : "text-emerald-600" },
-                                { label: "Billable", value: billH, unit: "hrs", color: billH > 0 ? "text-red-500" : isDark ? "text-slate-500" : "text-slate-400" },
-                              ].map(stat => (
-                                <div key={stat.label} className={`rounded-xl p-3 text-center ${
-                                  isDark ? "bg-white/[0.03] border border-white/[0.04]" : "bg-white border border-slate-100 shadow-sm"
-                                }`}>
-                                  <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
-                                  <p className={`text-[9px] uppercase tracking-wider font-medium mt-0.5 ${isDark ? "text-slate-600" : "text-slate-400"}`}>{stat.label}</p>
+                            <div className={`p-4 rounded-xl border ${isDark ? "bg-white/[0.02] border-white/[0.06]" : "bg-slate-50 border-slate-100"}`}>
+                              <h5 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 mb-3 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                                <Phone className="w-3.5 h-3.5" />
+                                Phone Numbers
+                              </h5>
+                              <div className="space-y-2.5 text-xs">
+                                <div className="flex justify-between py-1 border-b border-dashed dark:border-white/[0.05] border-slate-200">
+                                  <span className="text-slate-400">Login Phone Number</span>
+                                  <span className={`font-semibold ${isDark ? "text-slate-200" : "text-slate-800"}`}>{cv.phoneNumber || "None"}</span>
+                                </div>
+                                <div className="flex justify-between py-1 border-b border-dashed dark:border-white/[0.05] border-slate-200">
+                                  <span className="text-slate-400">CRM Primary Phone</span>
+                                  <span className={`font-semibold ${isDark ? "text-slate-200" : "text-slate-800"}`}>{cv.crmCustomer?.primaryPhone || "Not synced"}</span>
+                                </div>
+                                <div className="flex justify-between py-1">
+                                  <span className="text-slate-400">CRM Secondary Phone</span>
+                                  <span className={`font-semibold ${isDark ? "text-slate-200" : "text-slate-800"}`}>{cv.crmCustomer?.secondaryPhone || "None"}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 3. Domains Tab */}
+                      {clientActiveTab === "domains" && (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                              <Globe className="w-3.5 h-3.5" />
+                              Synced Domains ({cv.crmCustomer?.domains?.length || 0})
+                            </h4>
+                          </div>
+                          {!cv.crmCustomer?.domains || cv.crmCustomer.domains.length === 0 ? (
+                            <p className={`text-sm text-center py-8 border border-dashed rounded-xl ${isDark ? "text-slate-650 border-white/[0.06]" : "text-slate-400 border-slate-200"}`}>
+                              No domains registered for this customer in CRM.
+                            </p>
+                          ) : (
+                            <div className={`border rounded-xl overflow-hidden ${isDark ? "border-white/[0.05] divide-y divide-white/[0.04]" : "border-slate-200 divide-y divide-slate-100"}`}>
+                              {cv.crmCustomer.domains.map((dom: any) => (
+                                <div key={dom.id} className="flex justify-between items-center px-4 py-3 text-xs">
+                                  <span className={`font-semibold text-sm ${isDark ? "text-slate-200" : "text-slate-800"}`}>{dom.domainName}</span>
+                                  <span className={`text-[10px] font-mono ${isDark ? "text-slate-500" : "text-slate-400"}`}>CRM Domain ID: {dom.crmDomainId}</span>
                                 </div>
                               ))}
                             </div>
-                          </>
-                        ) : (
-                          <p className={`text-sm text-center py-2 ${isDark ? "text-slate-600" : "text-slate-400"}`}>
-                            No support credits allocated yet.
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Ticket Stats */}
-                      <div className={`rounded-2xl border p-5 space-y-4 ${
-                        isDark ? "border-white/[0.06] bg-white/[0.02]" : "border-slate-200 bg-slate-50/50"
-                      }`}>
-                        <div className="flex items-center justify-between">
-                          <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
-                            isDark ? "text-slate-400" : "text-slate-500"
-                          }`}>
-                            <Ticket className="w-3.5 h-3.5" />
-                            Support Tickets
-                          </h4>
-                          <span className={`text-xs font-medium ${isDark ? "text-slate-500" : "text-slate-400"}`}>{clientTickets.length} total</span>
+                          )}
                         </div>
+                      )}
 
-                        {/* Summary chips */}
-                        <div className="grid grid-cols-4 gap-2">
-                          {[
-                            { label: "Open", count: clientTickets.filter(t => t.status === "OPEN").length, color: isDark ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-700 border-blue-200" },
-                            { label: "In Progress", count: clientTickets.filter(t => t.status === "IN_PROGRESS").length, color: isDark ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-700 border-amber-200" },
-                            { label: "Resolved", count: clientTickets.filter(t => t.status === "RESOLVED").length, color: isDark ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-200" },
-                            { label: "Closed", count: clientTickets.filter(t => t.status === "CLOSED").length, color: isDark ? "bg-slate-700/50 text-slate-400 border-slate-600/40" : "bg-slate-100 text-slate-600 border-slate-200" },
-                          ].map(s => (
-                            <div key={s.label} className={`rounded-xl p-3 text-center border ${s.color}`}>
-                              <p className="text-lg font-bold">{s.count}</p>
-                              <p className="text-[9px] uppercase tracking-wider font-medium mt-0.5 opacity-70">{s.label}</p>
+                      {/* 4. Services Tab */}
+                      {clientActiveTab === "services" && (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                              <Server className="w-3.5 h-3.5" />
+                              Synced Services ({cv.crmCustomer?.services?.length || 0})
+                            </h4>
+                          </div>
+                          {!cv.crmCustomer?.services || cv.crmCustomer.services.length === 0 ? (
+                            <p className={`text-sm text-center py-8 border border-dashed rounded-xl ${isDark ? "text-slate-650 border-white/[0.06]" : "text-slate-400 border-slate-200"}`}>
+                              No services registered for this customer in CRM.
+                            </p>
+                          ) : (
+                            <div className={`border rounded-xl overflow-hidden ${isDark ? "border-white/[0.05] divide-y divide-white/[0.04]" : "border-slate-200 divide-y divide-slate-100"}`}>
+                              {cv.crmCustomer.services.map((srv: any) => (
+                                <div key={srv.id} className="flex justify-between items-center px-4 py-3 text-xs">
+                                  <div>
+                                    <p className={`font-semibold text-sm ${isDark ? "text-slate-200" : "text-slate-800"}`}>{srv.name}</p>
+                                    <p className={`text-[10px] mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>CRM Service ID: {srv.crmServiceId}</p>
+                                  </div>
+                                  <span className={`admin-badge ${srv.status === "ACTIVE" ? "admin-badge-active" : "admin-badge-suspended"}`}>
+                                    {srv.status}
+                                  </span>
+                                </div>
+                              ))}
                             </div>
-                          ))}
+                          )}
                         </div>
+                      )}
 
-                        {/* Recent tickets list */}
-                        {clientTickets.length > 0 && (
-                          <div className="space-y-2">
-                            <p className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? "text-slate-600" : "text-slate-400"}`}>Recent Tickets</p>
+                      {/* 5. Subscriptions Tab */}
+                      {clientActiveTab === "subscriptions" && (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                              <CreditCard className="w-3.5 h-3.5" />
+                              Synced Subscriptions ({cv.crmCustomer?.subscriptions?.length || 0})
+                            </h4>
+                          </div>
+                          {!cv.crmCustomer?.subscriptions || cv.crmCustomer.subscriptions.length === 0 ? (
+                            <p className={`text-sm text-center py-8 border border-dashed rounded-xl ${isDark ? "text-slate-650 border-white/[0.06]" : "text-slate-400 border-slate-200"}`}>
+                              No subscriptions registered for this customer in CRM.
+                            </p>
+                          ) : (
+                            <div className={`border rounded-xl overflow-hidden ${isDark ? "border-white/[0.05] divide-y divide-white/[0.04]" : "border-slate-200 divide-y divide-slate-100"}`}>
+                              {cv.crmCustomer.subscriptions.map((sub: any) => (
+                                <div key={sub.id} className="px-4 py-3.5 space-y-2">
+                                  <div className="flex justify-between items-start text-xs">
+                                    <div>
+                                      <p className={`font-bold text-sm ${isDark ? "text-slate-200" : "text-slate-800"}`}>{sub.planName}</p>
+                                      <p className={`text-[10px] mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>CRM Subscription ID: {sub.crmSubscriptionId}</p>
+                                    </div>
+                                    <span className={`admin-badge ${sub.status === "ACTIVE" ? "admin-badge-active" : "admin-badge-suspended"}`}>
+                                      {sub.status}
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-500 pt-1">
+                                    <p>Start Date: <span className="font-semibold text-slate-600 dark:text-slate-350">{new Date(sub.startDate).toLocaleDateString()}</span></p>
+                                    {sub.endDate && (
+                                      <p>End Date: <span className="font-semibold text-slate-600 dark:text-slate-355">{new Date(sub.endDate).toLocaleDateString()}</span></p>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 6. Tickets Tab */}
+                      {clientActiveTab === "tickets" && (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                              <Ticket className="w-3.5 h-3.5" />
+                              Support Tickets ({clientTickets.length} total)
+                            </h4>
+                          </div>
+
+                          {clientTickets.length === 0 ? (
+                            <p className={`text-sm text-center py-8 border border-dashed rounded-xl ${isDark ? "text-slate-650 border-white/[0.06]" : "text-slate-400 border-slate-200"}`}>
+                              No support tickets submitted yet.
+                            </p>
+                          ) : (
                             <div className={`divide-y rounded-xl border overflow-hidden ${
                               isDark ? "border-white/[0.05] divide-white/[0.04]" : "border-slate-200 divide-slate-100"
                             }`}>
                               {clientTickets
                                 .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-                                .slice(0, 5)
                                 .map(t => (
                                   <div
                                     key={t.id}
                                     onClick={() => { setActiveTab("tickets"); selectTicket(t); setSelectedClientView(null); }}
-                                    className={`flex items-center gap-3 px-3.5 py-2.5 cursor-pointer transition-colors ${
+                                    className={`flex items-center gap-3 px-3.5 py-3 cursor-pointer transition-colors ${
                                       isDark ? "hover:bg-white/[0.03]" : "hover:bg-slate-50"
                                     }`}
                                   >
                                     <StatusIcon status={t.status} />
                                     <div className="flex-1 min-w-0">
-                                      <p className={`text-xs font-medium truncate ${isDark ? "text-slate-200" : "text-slate-800"}`}>{t.title}</p>
+                                      <p className={`text-xs font-semibold truncate ${isDark ? "text-slate-200" : "text-slate-800"}`}>{t.title}</p>
                                       <p className={`text-[10px] ${isDark ? "text-slate-600" : "text-slate-400"}`}>
                                         {new Date(t.createdAt).toLocaleDateString()} · {t.category.name}
                                       </p>
@@ -2062,59 +2688,130 @@ export default function AdminDashboard() {
                                   </div>
                                 ))
                               }
-                              {clientTickets.length > 5 && (
-                                <div
-                                  onClick={() => { setActiveTab("tickets"); setSelectedClientView(null); }}
-                                  className={`px-3.5 py-2 text-center text-xs cursor-pointer transition-colors ${
-                                    isDark ? "text-[#5fc0f9] hover:bg-white/[0.02]" : "text-blue-600 hover:bg-slate-50"
-                                  }`}
-                                >
-                                  View all {clientTickets.length} tickets →
-                                </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 7. SLA & Credit Hours Tab */}
+                      {clientActiveTab === "sla" && (
+                        <div className="space-y-6">
+                          <div className={`rounded-2xl border p-5 space-y-4 ${
+                            isDark ? "border-white/[0.06] bg-white/[0.02]" : "border-slate-200 bg-slate-50/50"
+                          }`}>
+                            <div className="flex items-center justify-between">
+                              <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                                <Coins className="w-3.5 h-3.5" />
+                                Support Credits ({supportPlan})
+                              </h4>
+                              {!credits && (
+                                <span className={`text-[10px] ${isDark ? "text-slate-600" : "text-slate-450"}`}>No credit record</span>
                               )}
                             </div>
+
+                            {credits ? (
+                              <>
+                                <div className="space-y-1.5">
+                                  <div className="flex justify-between text-xs">
+                                    <span className={isDark ? "text-slate-500" : "text-slate-400"}>{usedH}h used of {allocH}h allocated</span>
+                                    <span className={`font-semibold ${
+                                      utilPct >= 90 ? "text-red-500" : utilPct >= 70 ? "text-amber-500" : isDark ? "text-emerald-400" : "text-emerald-600"
+                                    }`}>{utilPct}%</span>
+                                  </div>
+                                  <div className={`h-2.5 rounded-full overflow-hidden ${isDark ? "bg-white/[0.06]" : "bg-slate-200"}`}>
+                                    <div
+                                      className={`h-full rounded-full transition-all ${
+                                        utilPct >= 90 ? "bg-red-500" : utilPct >= 70 ? "bg-amber-500" : "bg-emerald-500"
+                                      }`}
+                                      style={{ width: `${utilPct}%` }}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-4 gap-2.5">
+                                  {[
+                                    { label: "Allocated", value: allocH, unit: "hrs", color: isDark ? "text-slate-200" : "text-slate-800" },
+                                    { label: "Used", value: usedH, unit: "hrs", color: isDark ? "text-amber-400" : "text-amber-600" },
+                                    { label: "Remaining", value: remH, unit: "hrs", color: remH <= 0 ? "text-red-500" : isDark ? "text-emerald-400" : "text-emerald-600" },
+                                    { label: "Billable", value: billH, unit: "hrs", color: billH > 0 ? "text-red-500" : isDark ? "text-slate-500" : "text-slate-400" },
+                                  ].map(stat => (
+                                    <div key={stat.label} className={`rounded-xl p-3 text-center border ${
+                                      isDark ? "bg-white/[0.03] border-white/[0.04]" : "bg-white border-slate-100 shadow-sm"
+                                    }`}>
+                                      <p className={`text-base font-bold ${stat.color}`}>{stat.value}</p>
+                                      <p className={`text-[9px] uppercase tracking-wider font-medium mt-0.5 ${isDark ? "text-slate-600" : "text-slate-400"}`}>{stat.label}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </>
+                            ) : (
+                              <p className={`text-sm text-center py-2 ${isDark ? "text-slate-650" : "text-slate-400"}`}>
+                                No support credits allocated yet.
+                              </p>
+                            )}
                           </div>
-                        )}
 
-                        {clientTickets.length === 0 && (
-                          <p className={`text-sm text-center py-2 ${isDark ? "text-slate-600" : "text-slate-400"}`}>
-                            No support tickets submitted yet.
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Account Info */}
-                      <div className={`rounded-2xl border p-5 space-y-3 ${
-                        isDark ? "border-white/[0.06] bg-white/[0.02]" : "border-slate-200 bg-slate-50/50"
-                      }`}>
-                        <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
-                          isDark ? "text-slate-400" : "text-slate-500"
-                        }`}>
-                          <User className="w-3.5 h-3.5" />
-                          Account Details
-                        </h4>
-                        {[
-                          { label: "User ID", value: cv.id.slice(0, 20) + "…" },
-                          { label: "Email Verified", value: cv.emailVerified ? "Yes" : "No" },
-                          { label: "Account Status", value: cv.isActive ? "Active" : "Suspended" },
-                          { label: "Role", value: cv.role },
-                          { label: "Member Since", value: new Date(cv.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) },
-                          { label: "Priority Tickets", value: clientTickets.filter(t => t.priority === "HIGH" || t.priority === "URGENT").length.toString() },
-                          { label: "SLA Breaches", value: clientTickets.filter(t => {
-                            if (t.status === "RESOLVED" || t.status === "CLOSED") return false;
-                            const elapsed = (Date.now() - new Date(t.createdAt).getTime()) / (1000 * 60 * 60);
-                            const limit = t.priority === "URGENT" || t.priority === "HIGH" ? 8 : t.priority === "MEDIUM" ? 24 : 72;
-                            return elapsed > limit;
-                          }).length.toString() + " active" },
-                        ].map(row => (
-                          <div key={row.label} className={`flex items-center justify-between py-2 border-b text-sm last:border-0 ${
-                            isDark ? "border-white/[0.05]" : "border-slate-100"
+                          <div className={`rounded-2xl border p-5 space-y-3.5 ${
+                            isDark ? "border-white/[0.06] bg-white/[0.02]" : "border-slate-200 bg-slate-50/50"
                           }`}>
-                            <span className={isDark ? "text-slate-500" : "text-slate-400"}>{row.label}</span>
-                            <span className={`font-medium text-right ${isDark ? "text-slate-200" : "text-slate-800"}`}>{row.value}</span>
+                            <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                              <Shield className="w-3.5 h-3.5" />
+                              SLA Performance
+                            </h4>
+                            {[
+                              { label: "Priority Tickets Submitted", value: clientTickets.filter(t => t.priority === "HIGH" || t.priority === "URGENT").length.toString() },
+                              { label: "SLA Breaches Active", value: clientTickets.filter(t => {
+                                if (t.status === "RESOLVED" || t.status === "CLOSED") return false;
+                                const elapsed = (Date.now() - new Date(t.createdAt).getTime()) / (1000 * 60 * 60);
+                                const limit = t.priority === "URGENT" || t.priority === "HIGH" ? 8 : t.priority === "MEDIUM" ? 24 : 72;
+                                return elapsed > limit;
+                              }).length.toString() + " breach(es)" },
+                            ].map(row => (
+                              <div key={row.label} className={`flex items-center justify-between py-2 border-b text-xs last:border-0 ${
+                                isDark ? "border-white/[0.05]" : "border-slate-100"
+                              }`}>
+                                <span className={isDark ? "text-slate-500" : "text-slate-400"}>{row.label}</span>
+                                <span className={`font-semibold ${isDark ? "text-slate-250" : "text-slate-750"}`}>{row.value}</span>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      )}
+
+                      {/* 8. Audit History Tab */}
+                      {clientActiveTab === "audit" && (
+                        <div className="space-y-3">
+                          <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                            <FileText className="w-3.5 h-3.5" />
+                            Audit History ({cv.auditLogs?.length || 0})
+                          </h4>
+                          {!cv.auditLogs || cv.auditLogs.length === 0 ? (
+                            <p className={`text-sm text-center py-8 border border-dashed rounded-xl ${isDark ? "text-slate-650 border-white/[0.06]" : "text-slate-400 border-slate-200"}`}>
+                              No audit logs available for this customer.
+                            </p>
+                          ) : (
+                            <div className="space-y-2.5 overflow-y-auto max-h-[350px] pr-1.5">
+                              {cv.auditLogs.map((log: any) => (
+                                <div key={log.id} className={`p-3 rounded-xl border text-xs space-y-1 ${isDark ? "bg-white/[0.01] border-white/[0.04]" : "bg-white border-slate-100 shadow-sm"}`}>
+                                  <div className="flex justify-between font-semibold">
+                                    <span className={isDark ? "text-[#5fc0f9]" : "text-blue-600"}>{log.action}</span>
+                                    <span className={isDark ? "text-slate-500" : "text-slate-400"}>{new Date(log.createdAt).toLocaleString()}</span>
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 flex justify-between">
+                                    <span>Actor: {log.actorEmail || "System"}</span>
+                                    <span>Entity: {log.entity}</span>
+                                  </div>
+                                  {log.payload && (
+                                    <pre className={`text-[10px] p-2 rounded font-mono overflow-x-auto ${isDark ? "bg-slate-900 text-slate-400" : "bg-slate-50 text-slate-600"}`}>
+                                      {JSON.stringify(JSON.parse(log.payload), null, 2)}
+                                    </pre>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                     </div>
                   </div>
@@ -2149,6 +2846,8 @@ export default function AdminDashboard() {
                 formRole={userFormRole} setFormRole={setUserFormRole}
                 formIsActive={userFormIsActive} setFormIsActive={setUserFormIsActive}
                 formTeams={userFormTeams} setFormTeams={setUserFormTeams}
+                formPhone={userFormPhone} setFormPhone={setUserFormPhone}
+                formCrmId={userFormCrmId} setFormCrmId={setUserFormCrmId}
                 teams={teams}
                 onClose={() => setShowCreateUser(false)}
                 onSubmit={handleCreateUser}
@@ -2171,6 +2870,8 @@ export default function AdminDashboard() {
                 formRole={userFormRole} setFormRole={setUserFormRole}
                 formIsActive={userFormIsActive} setFormIsActive={setUserFormIsActive}
                 formTeams={userFormTeams} setFormTeams={setUserFormTeams}
+                formPhone={userFormPhone} setFormPhone={setUserFormPhone}
+                formCrmId={userFormCrmId} setFormCrmId={setUserFormCrmId}
                 teams={teams}
                 onClose={() => { setShowEditUser(false); setSelectedUser(null); }}
                 onSubmit={handleSaveEditUser}
@@ -2271,6 +2972,8 @@ export default function AdminDashboard() {
                 formRole={userFormRole} setFormRole={setUserFormRole}
                 formIsActive={userFormIsActive} setFormIsActive={setUserFormIsActive}
                 formTeams={userFormTeams} setFormTeams={setUserFormTeams}
+                formPhone={userFormPhone} setFormPhone={setUserFormPhone}
+                formCrmId={userFormCrmId} setFormCrmId={setUserFormCrmId}
                 teams={teams}
                 onClose={() => setShowCreateUser(false)}
                 onSubmit={handleCreateUser}
@@ -2293,6 +2996,8 @@ export default function AdminDashboard() {
                 formRole={userFormRole} setFormRole={setUserFormRole}
                 formIsActive={userFormIsActive} setFormIsActive={setUserFormIsActive}
                 formTeams={userFormTeams} setFormTeams={setUserFormTeams}
+                formPhone={userFormPhone} setFormPhone={setUserFormPhone}
+                formCrmId={userFormCrmId} setFormCrmId={setUserFormCrmId}
                 teams={teams}
                 onClose={() => { setShowEditUser(false); setSelectedUser(null); }}
                 onSubmit={handleSaveEditUser}
@@ -3248,13 +3953,51 @@ interface UserModalProps {
   formRole: "CUSTOMER" | "ADMIN" | "AGENT" | "SUPPORT_L1" | "SUPPORT_L2" | "BILLING"; setFormRole: (v: any) => void;
   formIsActive: boolean; setFormIsActive: (v: boolean) => void;
   formTeams: string[]; setFormTeams: (v: string[]) => void;
+  formPhone: string; setFormPhone: (v: string) => void;
+  formCrmId: string; setFormCrmId: (v: string) => void;
   teams: { id: string; name: string }[];
   onClose: () => void; onSubmit: (e: React.FormEvent) => void;
   submitLabel: string;
 }
 
-function UserModal({ title, subtitle, isDark, showRole, showTeams, showStatusToggle, formName, setFormName, formEmail, setFormEmail, formPassword, setFormPassword, formRole, setFormRole, formIsActive, setFormIsActive, formTeams, setFormTeams, teams, onClose, onSubmit, submitLabel }: UserModalProps) {
+function UserModal({
+  title, subtitle, isDark, showRole, showTeams, showStatusToggle,
+  formName, setFormName, formEmail, setFormEmail, formPassword, setFormPassword,
+  formRole, setFormRole, formIsActive, setFormIsActive, formTeams, setFormTeams,
+  formPhone, setFormPhone, formCrmId, setFormCrmId,
+  teams, onClose, onSubmit, submitLabel
+}: UserModalProps) {
   const [showPassword, setShowPassword] = useState(false);
+  const [crmSearch, setCrmSearch] = useState("");
+  const [crmResults, setCrmResults] = useState<any[]>([]);
+  const [searchingCrm, setSearchingCrm] = useState(false);
+  const [showCrmDropdown, setShowCrmDropdown] = useState(false);
+
+  useEffect(() => {
+    if (formRole !== "CUSTOMER" || showStatusToggle) return;
+    if (!crmSearch.trim()) {
+      setCrmResults([]);
+      return;
+    }
+
+    const delayDebounce = setTimeout(async () => {
+      setSearchingCrm(true);
+      try {
+        const res = await fetchWithAuth(`/users/crm-customers?search=${encodeURIComponent(crmSearch)}`);
+        if (res.ok) {
+          const payload = await res.json();
+          setCrmResults(payload.data?.customers || []);
+        }
+      } catch (err) {
+        console.error("Error searching CRM customers:", err);
+      } finally {
+        setSearchingCrm(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounce);
+  }, [crmSearch, formRole, showStatusToggle]);
+
   return (
     <div className={`admin-modal-overlay ${isDark ? "admin-dark" : ""}`} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="admin-modal">
@@ -3268,6 +4011,65 @@ function UserModal({ title, subtitle, isDark, showRole, showTeams, showStatusTog
           </button>
         </div>
         <form onSubmit={onSubmit} className="space-y-4">
+          {formRole === "CUSTOMER" && !showStatusToggle && (
+            <div className="admin-form-group">
+              <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Link CRM Customer (Autocomplete)</label>
+              {/* wrapper must be relative so the icon+dropdown are positioned against the input, NOT the label */}
+              <div className="relative">
+                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${isDark ? "text-slate-500" : "text-slate-400"}`} />
+                <input
+                  type="text"
+                  value={crmSearch}
+                  onChange={(e) => {
+                    setCrmSearch(e.target.value);
+                    setShowCrmDropdown(true);
+                  }}
+                  onFocus={() => setShowCrmDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowCrmDropdown(false), 200)}
+                  placeholder="Search CRM by company, name, email..."
+                  className={`admin-input ${isDark ? "admin-dark" : ""} pl-10`}
+                />
+                {searchingCrm && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">Searching...</span>
+                )}
+
+                {showCrmDropdown && crmSearch.trim() && (
+                  <div
+                    className={`absolute z-50 left-0 right-0 top-full mt-1 border rounded-xl max-h-60 overflow-y-auto shadow-lg ${
+                      isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-white border-slate-200 text-slate-800"
+                    }`}
+                  >
+                    {crmResults.length === 0 ? (
+                      <div className="p-3 text-sm text-slate-400 text-center">No CRM customers found</div>
+                    ) : (
+                      crmResults.map((cust) => (
+                        <div
+                          key={cust.customerId}
+                          onClick={() => {
+                            setFormName(cust.displayName || "");
+                            setFormEmail(cust.primaryEmail || "");
+                            setFormPhone(cust.primaryPhone || "");
+                            setFormCrmId(cust.customerId || "");
+                            setCrmSearch(cust.displayName || "");
+                            setShowCrmDropdown(false);
+                          }}
+                          className={`p-3 text-sm cursor-pointer border-b last:border-b-0 transition-colors ${
+                            isDark ? "border-slate-800 hover:bg-slate-800" : "border-slate-100 hover:bg-slate-50"
+                          }`}
+                        >
+                          <div className="font-semibold text-left">{cust.displayName}</div>
+                          <div className="text-xs text-slate-400 text-left">
+                            {cust.primaryEmail} | {cust.companyName || "No Company"}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="admin-form-group">
             <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Full Name <span className="text-red-500">*</span></label>
             <input type="text" required value={formName} onChange={e => setFormName(e.target.value)} placeholder="Alex Carter" className={`admin-input ${isDark ? "admin-dark" : ""}`} />
@@ -3276,6 +4078,31 @@ function UserModal({ title, subtitle, isDark, showRole, showTeams, showStatusTog
             <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Email Address <span className="text-red-500">*</span></label>
             <input type="email" required value={formEmail} onChange={e => setFormEmail(e.target.value)} placeholder="alex@company.com" className={`admin-input ${isDark ? "admin-dark" : ""}`} />
           </div>
+          
+          <div className="admin-form-group">
+            <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Mobile Number</label>
+            <input
+              type="text"
+              value={formPhone}
+              onChange={(e) => setFormPhone(e.target.value)}
+              placeholder="+1-555-0199"
+              className={`admin-input ${isDark ? "admin-dark" : ""}`}
+            />
+          </div>
+
+          {formRole === "CUSTOMER" && (
+            <div className="admin-form-group">
+              <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>CRM Customer ID</label>
+              <input
+                type="text"
+                value={formCrmId}
+                onChange={(e) => setFormCrmId(e.target.value)}
+                placeholder="e.g. CID250825112437 (Optional)"
+                className={`admin-input ${isDark ? "admin-dark" : ""}`}
+              />
+            </div>
+          )}
+
           <div className="admin-form-group">
             <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Password {!showStatusToggle && <span className="text-red-500">*</span>}</label>
             <div className="relative">

@@ -30,8 +30,8 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
 
-    if (!email.trim() || !email.includes("@")) {
-      setError("Please enter a valid email address");
+    if (!email.trim()) {
+      setError("Please enter your email address or phone number");
       return;
     }
     if (!password) {
@@ -165,20 +165,20 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Email Address */}
+            {/* Email or Phone Number */}
             <div className="space-y-2">
               <label htmlFor="email" className="block text-xs font-bold uppercase tracking-wider text-slate-500 font-display">
-                Email Address
+                Email or Phone Number
               </label>
               <div className="relative flex items-center">
                 <input
                   id="email"
-                  type="email"
+                  type="text"
                   required
                   disabled={isSubmitting}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@company.com"
+                  placeholder="Email or phone number"
                   className="w-full h-12 pl-11 pr-4 bg-slate-50 hover:bg-slate-100/60 focus:bg-white text-slate-900 text-sm font-medium border border-slate-200 focus:border-[#38b1f7] focus:ring-1 focus:ring-[#38b1f7] rounded-xl outline-none transition-all duration-200 disabled:opacity-50"
                 />
                 <Mail className="absolute left-4 text-slate-400 w-4.5 h-4.5 pointer-events-none" />
@@ -255,13 +255,7 @@ export default function LoginPage() {
 
           {/* Form Footer */}
           <div className="pt-6 border-t border-slate-100 text-center text-xs text-slate-500 font-body">
-            {"Don't have an account?"}{" "}
-            <Link 
-              href="/register" 
-              className="font-bold text-[#38b1f7] hover:underline"
-            >
-              Sign up 
-            </Link>
+            Registration is by invitation only. Please contact your CRM administrator to request credentials.
           </div>
         </div>
       </div>

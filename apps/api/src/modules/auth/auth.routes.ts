@@ -9,6 +9,8 @@ import {
   magicLoginHandler,
   forgotPasswordHandler,
   resetPasswordHandler,
+  setupPasswordHandler,
+  verifyInvitationTokenHandler,
 } from "./auth.controller.js";
 import { requireAuth } from "../../middleware/auth.middleware.js";
 
@@ -23,6 +25,9 @@ router.post("/magic-link", requestMagicLinkHandler);
 router.post("/magic-login", magicLoginHandler);
 router.post("/forgot-password", forgotPasswordHandler);
 router.post("/reset-password", resetPasswordHandler);
+router.get("/invitation/verify-token", verifyInvitationTokenHandler);
+router.post("/invitation/setup-password", setupPasswordHandler);
+
 
 // Protected routes (requires a valid access token)
 router.get("/me", requireAuth, meHandler);

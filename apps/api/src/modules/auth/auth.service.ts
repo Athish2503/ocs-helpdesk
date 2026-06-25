@@ -10,7 +10,7 @@ import {
 import type { Role } from "../../generated/prisma/enums.js";
 import type { AuthResponse, UserPublic } from "./auth.types.js";
 import type { RegisterInput, LoginInput, RequestMagicLinkInput, ForgotPasswordInput, ResetPasswordInput } from "./auth.schemas.js";
-import { sendMagicLinkEmail, sendPasswordResetEmail } from "../../services/email.service.js";
+import { sendMagicLinkEmail, sendPasswordResetEmail, sendInvitationEmail } from "../../services/email.service.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -49,60 +49,9 @@ function buildTokens(user: { id: string; email: string; role: Role }) {
 // ---------------------------------------------------------------------------
 
 export async function register(input: RegisterInput): Promise<{ message: string; magicLink?: string }> {
-  // 1. Check for existing account
-  const existing = await prisma.user.findUnique({ where: { email: input.email } });
-  if (existing) {
-    const error = new Error("An account with this email already exists") as Error & { statusCode: number };
-    error.statusCode = 409;
-    throw error;
-  }
-
-  // 2. Hash password
-  const passwordHash = await hashPassword(input.password);
-
-  // 3. Create user (emailVerified defaults to false)
-  await prisma.user.create({
-    data: {
-      name: input.name,
-      email: input.email,
-      passwordHash,
-      role: "CUSTOMER",
-      emailVerified: false,
-    },
-  });
-
-  // 4. Generate secure token for email verification
-  const token = crypto.randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-
-  // 5. Persist the magic token
-  await prisma.magicToken.create({
-    data: {
-      token,
-      email: input.email,
-      name: null,
-      expiresAt,
-    },
-  });
-
-  // 6. Compose verification URL pointing to the frontend callback page
-  const frontendUrl = process.env["FRONTEND_URL"] || "http://localhost:3000";
-  const magicLink = `${frontendUrl}/auth/callback?token=${token}`;
-
-  // 7. Send verification email
-  await sendMagicLinkEmail(input.email, magicLink, input.name);
-
-  // In development, return the link in the response body for easier manual verification
-  if (process.env["NODE_ENV"] === "development") {
-    return {
-      message: "Registration successful. Verification email sent (logged to console).",
-      magicLink,
-    };
-  }
-
-  return {
-    message: "Registration successful. Please check your inbox to verify your email.",
-  };
+  const error = new Error("Self-registration is disabled. Customer accounts must be created in the CRM and invited.") as Error & { statusCode: number };
+  error.statusCode = 400;
+  throw error;
 }
 
 // ---------------------------------------------------------------------------
@@ -110,18 +59,45 @@ export async function register(input: RegisterInput): Promise<{ message: string;
 // ---------------------------------------------------------------------------
 
 export async function login(input: LoginInput): Promise<AuthResponse> {
-  // 1. Look up user
-  const user = await prisma.user.findUnique({ where: { email: input.email } });
+  // 1. Look up user by email or phone format
+  const identifier = input.email.trim();
+  const isEmail = identifier.includes("@");
+  let user = null;
+
+  if (isEmail) {
+    user = await prisma.user.findUnique({ where: { email: identifier.toLowerCase() } });
+  } else {
+    // Search by user's direct phone number
+    user = await prisma.user.findFirst({
+      where: { phoneNumber: identifier }
+    });
+
+    // Fallback: search crm customer records
+    if (!user) {
+      const crmCustomer = await prisma.crmCustomer.findFirst({
+        where: {
+          OR: [
+            { primaryPhone: identifier },
+            { secondaryPhone: identifier }
+          ]
+        },
+        include: { user: true }
+      });
+      if (crmCustomer?.user) {
+        user = crmCustomer.user;
+      }
+    }
+  }
 
   // Use a generic message to prevent user enumeration attacks
-  const invalidCredentials = new Error("Invalid email or password") as Error & { statusCode: number };
+  const invalidCredentials = new Error("Invalid email/phone or password") as Error & { statusCode: number };
   invalidCredentials.statusCode = 401;
 
   if (!user) throw invalidCredentials;
 
   // 2. Verify password
   if (!user.passwordHash) {
-    const err = new Error("This account is passwordless. Please sign in using Magic Link.") as Error & { statusCode: number };
+    const err = new Error("This account is not set up. Please use your setup password link or contact an administrator.") as Error & { statusCode: number };
     err.statusCode = 401;
     throw err;
   }
@@ -129,8 +105,8 @@ export async function login(input: LoginInput): Promise<AuthResponse> {
   const passwordValid = await verifyPassword(input.password, user.passwordHash);
   if (!passwordValid) throw invalidCredentials;
 
-  // 3. Ensure email is verified
-  if (!user.emailVerified) {
+  // 3. Ensure email is verified (only for non-customers)
+  if (!user.emailVerified && user.role !== "CUSTOMER") {
     const err = new Error("Please verify your email address before logging in. Check your inbox for the verification link.") as Error & { statusCode: number };
     err.statusCode = 403;
     throw err;
@@ -143,10 +119,16 @@ export async function login(input: LoginInput): Promise<AuthResponse> {
     throw err;
   }
 
-  // 4. Issue tokens
+  // Update lastLoginAt
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() }
+  });
+
+  // 5. Issue tokens
   const { accessToken, refreshToken } = buildTokens(user);
 
-  // 5. Persist refresh token
+  // 6. Persist refresh token
   await prisma.refreshToken.create({
     data: {
       token: refreshToken,
@@ -239,9 +221,8 @@ export async function requestMagicLink(
   // 1. Check if it's register vs login
   const existingUser = await prisma.user.findUnique({ where: { email: input.email } });
 
-  // If registering, name is required
-  if (!existingUser && !input.name) {
-    const error = new Error("Account does not exist. Please register by providing your name.") as Error & { statusCode: number };
+  if (!existingUser) {
+    const error = new Error("Account does not exist. Public self-registration is disabled.") as Error & { statusCode: number };
     error.statusCode = 400;
     throw error;
   }
@@ -452,5 +433,209 @@ export async function resetPassword(
   ]);
 
   return { message: "Password reset successful. You can now log in with your new password." };
+}
+
+export async function sendInvitation(userId: string, currentUserId: string, generateTempPassword = false) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { crmCustomer: true }
+  });
+
+  if (!user) {
+    const error = new Error("User not found.") as Error & { statusCode: number };
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (!user.crmCustomerId) {
+    const error = new Error("Only CRM-synced customers can be invited.") as Error & { statusCode: number };
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+  let tempPassword = undefined;
+  if (generateTempPassword) {
+    tempPassword = crypto.randomBytes(6).toString("hex"); // e.g. "a1b2c3"
+  }
+
+  // Create Invitation record
+  const invitation = await prisma.invitation.create({
+    data: {
+      crmCustomerId: user.crmCustomerId,
+      email: user.email,
+      temporaryPassword: tempPassword,
+      setupToken: token,
+      expiresAt,
+      sentByAdminId: currentUserId
+    }
+  });
+
+  // Compose invitation setup link
+  const frontendUrl = process.env["FRONTEND_URL"] || "http://localhost:3000";
+  const invitationLink = `${frontendUrl}/setup-password?token=${token}`;
+
+  // Send Email
+  await sendInvitationEmail(user.email, invitationLink, tempPassword, user.name);
+
+  // Log in AuditLog
+  await prisma.auditLog.create({
+    data: {
+      action: "INVITATION_SENT",
+      entity: "User",
+      entityId: user.id,
+      actorId: currentUserId,
+      payload: JSON.stringify({ invitationId: invitation.id, timestamp: new Date() })
+    }
+  });
+
+  return invitation;
+}
+
+export async function resendInvitation(userId: string, currentUserId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { crmCustomer: true }
+  });
+
+  if (!user || !user.crmCustomerId) {
+    const error = new Error("CRM-linked Customer user not found.") as Error & { statusCode: number };
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // Find latest invitation
+  const lastInvite = await prisma.invitation.findFirst({
+    where: { crmCustomerId: user.crmCustomerId },
+    orderBy: { createdAt: "desc" }
+  });
+
+  if (!lastInvite) {
+    const error = new Error("No previous invitation exists to resend. Please create a new invitation.") as Error & { statusCode: number };
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+  const invitation = await prisma.invitation.create({
+    data: {
+      crmCustomerId: user.crmCustomerId,
+      email: user.email,
+      temporaryPassword: lastInvite.temporaryPassword,
+      setupToken: token,
+      expiresAt,
+      sentByAdminId: currentUserId
+    }
+  });
+
+  const frontendUrl = process.env["FRONTEND_URL"] || "http://localhost:3000";
+  const invitationLink = `${frontendUrl}/setup-password?token=${token}`;
+
+  await sendInvitationEmail(user.email, invitationLink, lastInvite.temporaryPassword || undefined, user.name);
+
+  await prisma.auditLog.create({
+    data: {
+      action: "INVITATION_RESENT",
+      entity: "User",
+      entityId: user.id,
+      actorId: currentUserId,
+      payload: JSON.stringify({ invitationId: invitation.id, timestamp: new Date() })
+    }
+  });
+
+  return invitation;
+}
+
+export async function setupPassword(token: string, passwordString: string) {
+  const invitation = await prisma.invitation.findUnique({
+    where: { setupToken: token },
+    include: { crmCustomer: true }
+  });
+
+  if (!invitation) {
+    const error = new Error("Invalid invitation setup token.") as Error & { statusCode: number };
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (invitation.usedAt) {
+    const error = new Error("This invitation setup link has already been used.") as Error & { statusCode: number };
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (new Date(invitation.expiresAt) < new Date()) {
+    const error = new Error("This invitation setup link has expired. Please request a new one.") as Error & { statusCode: number };
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const user = await prisma.user.findFirst({
+    where: { crmCustomerId: invitation.crmCustomerId }
+  });
+
+  if (!user) {
+    const error = new Error("No Helpdesk user record is linked to this CRM Customer.") as Error & { statusCode: number };
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const passwordHash = await hashPassword(passwordString);
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        isActive: true,
+        emailVerified: true
+      }
+    }),
+    prisma.invitation.update({
+      where: { id: invitation.id },
+      data: { usedAt: new Date() }
+    }),
+    prisma.auditLog.create({
+      data: {
+        action: "PASSWORD_SETUP",
+        entity: "User",
+        entityId: user.id,
+        payload: JSON.stringify({ invitationId: invitation.id, timestamp: new Date() })
+      }
+    })
+  ]);
+
+  return { email: invitation.email };
+}
+
+export async function verifyInvitationToken(token: string) {
+  const invitation = await prisma.invitation.findUnique({
+    where: { setupToken: token },
+    include: { crmCustomer: true }
+  });
+
+  if (!invitation) {
+    const error = new Error("Invalid invitation setup token.") as Error & { statusCode: number };
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (invitation.usedAt) {
+    const error = new Error("This invitation setup link has already been used.") as Error & { statusCode: number };
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (new Date(invitation.expiresAt) < new Date()) {
+    const error = new Error("This invitation setup link has expired. Please request a new one.") as Error & { statusCode: number };
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return { email: invitation.email, success: true };
 }
 

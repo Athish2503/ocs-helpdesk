@@ -13,6 +13,10 @@ exports.requestMagicLink = requestMagicLink;
 exports.magicLogin = magicLogin;
 exports.forgotPassword = forgotPassword;
 exports.resetPassword = resetPassword;
+exports.sendInvitation = sendInvitation;
+exports.resendInvitation = resendInvitation;
+exports.setupPassword = setupPassword;
+exports.verifyInvitationToken = verifyInvitationToken;
 const crypto_1 = __importDefault(require("crypto"));
 const prisma_js_1 = require("../../config/prisma.js");
 const password_js_1 = require("../../utils/password.js");
@@ -38,75 +42,58 @@ function buildTokens(user) {
 // Register
 // ---------------------------------------------------------------------------
 async function register(input) {
-    // 1. Check for existing account
-    const existing = await prisma_js_1.prisma.user.findUnique({ where: { email: input.email } });
-    if (existing) {
-        const error = new Error("An account with this email already exists");
-        error.statusCode = 409;
-        throw error;
-    }
-    // 2. Hash password
-    const passwordHash = await (0, password_js_1.hashPassword)(input.password);
-    // 3. Create user (emailVerified defaults to false)
-    await prisma_js_1.prisma.user.create({
-        data: {
-            name: input.name,
-            email: input.email,
-            passwordHash,
-            role: "CUSTOMER",
-            emailVerified: false,
-        },
-    });
-    // 4. Generate secure token for email verification
-    const token = crypto_1.default.randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-    // 5. Persist the magic token
-    await prisma_js_1.prisma.magicToken.create({
-        data: {
-            token,
-            email: input.email,
-            name: null,
-            expiresAt,
-        },
-    });
-    // 6. Compose verification URL pointing to the frontend callback page
-    const frontendUrl = process.env["FRONTEND_URL"] || "http://localhost:3000";
-    const magicLink = `${frontendUrl}/auth/callback?token=${token}`;
-    // 7. Send verification email
-    await (0, email_service_js_1.sendMagicLinkEmail)(input.email, magicLink, input.name);
-    // In development, return the link in the response body for easier manual verification
-    if (process.env["NODE_ENV"] === "development") {
-        return {
-            message: "Registration successful. Verification email sent (logged to console).",
-            magicLink,
-        };
-    }
-    return {
-        message: "Registration successful. Please check your inbox to verify your email.",
-    };
+    const error = new Error("Self-registration is disabled. Customer accounts must be created in the CRM and invited.");
+    error.statusCode = 400;
+    throw error;
 }
 // ---------------------------------------------------------------------------
 // Login
 // ---------------------------------------------------------------------------
 async function login(input) {
-    // 1. Look up user
-    const user = await prisma_js_1.prisma.user.findUnique({ where: { email: input.email } });
+    // 1. Look up user by email or phone format
+    const identifier = input.email.trim();
+    const isEmail = identifier.includes("@");
+    let user = null;
+    if (isEmail) {
+        user = await prisma_js_1.prisma.user.findUnique({ where: { email: identifier.toLowerCase() } });
+    }
+    else {
+        // Search by user's direct phone number
+        user = await prisma_js_1.prisma.user.findFirst({
+            where: { phoneNumber: identifier }
+        });
+        // Fallback: search crm customer records
+        if (!user) {
+            const crmCustomer = await prisma_js_1.prisma.crmCustomer.findFirst({
+                where: {
+                    OR: [
+                        { primaryPhone: identifier },
+                        { secondaryPhone: identifier }
+                    ]
+                },
+                include: { user: true }
+            });
+            if (crmCustomer?.user) {
+                user = crmCustomer.user;
+            }
+        }
+    }
     // Use a generic message to prevent user enumeration attacks
-    const invalidCredentials = new Error("Invalid email or password");
+    const invalidCredentials = new Error("Invalid email/phone or password");
     invalidCredentials.statusCode = 401;
     if (!user)
         throw invalidCredentials;
     // 2. Verify password
     if (!user.passwordHash) {
-        const err = new Error("This account is passwordless. Please sign in using Magic Link.");
+        const err = new Error("This account is not set up. Please use your setup password link or contact an administrator.");
         err.statusCode = 401;
         throw err;
     }
     const passwordValid = await (0, password_js_1.verifyPassword)(input.password, user.passwordHash);
     if (!passwordValid)
         throw invalidCredentials;
-    // 3. Ensure email is verified
-    if (!user.emailVerified) {
+    // 3. Ensure email is verified (only for non-customers)
+    if (!user.emailVerified && user.role !== "CUSTOMER") {
         const err = new Error("Please verify your email address before logging in. Check your inbox for the verification link.");
         err.statusCode = 403;
         throw err;
@@ -117,9 +104,14 @@ async function login(input) {
         err.statusCode = 403;
         throw err;
     }
-    // 4. Issue tokens
+    // Update lastLoginAt
+    await prisma_js_1.prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() }
+    });
+    // 5. Issue tokens
     const { accessToken, refreshToken } = buildTokens(user);
-    // 5. Persist refresh token
+    // 6. Persist refresh token
     await prisma_js_1.prisma.refreshToken.create({
         data: {
             token: refreshToken,
@@ -195,9 +187,8 @@ async function logoutAll(userId) {
 async function requestMagicLink(input) {
     // 1. Check if it's register vs login
     const existingUser = await prisma_js_1.prisma.user.findUnique({ where: { email: input.email } });
-    // If registering, name is required
-    if (!existingUser && !input.name) {
-        const error = new Error("Account does not exist. Please register by providing your name.");
+    if (!existingUser) {
+        const error = new Error("Account does not exist. Public self-registration is disabled.");
         error.statusCode = 400;
         throw error;
     }
@@ -374,4 +365,174 @@ async function resetPassword(input) {
         prisma_js_1.prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
     ]);
     return { message: "Password reset successful. You can now log in with your new password." };
+}
+async function sendInvitation(userId, currentUserId, generateTempPassword = false) {
+    const user = await prisma_js_1.prisma.user.findUnique({
+        where: { id: userId },
+        include: { crmCustomer: true }
+    });
+    if (!user) {
+        const error = new Error("User not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+    if (!user.crmCustomerId) {
+        const error = new Error("Only CRM-synced customers can be invited.");
+        error.statusCode = 400;
+        throw error;
+    }
+    const token = crypto_1.default.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    let tempPassword = undefined;
+    if (generateTempPassword) {
+        tempPassword = crypto_1.default.randomBytes(6).toString("hex"); // e.g. "a1b2c3"
+    }
+    // Create Invitation record
+    const invitation = await prisma_js_1.prisma.invitation.create({
+        data: {
+            crmCustomerId: user.crmCustomerId,
+            email: user.email,
+            temporaryPassword: tempPassword,
+            setupToken: token,
+            expiresAt,
+            sentByAdminId: currentUserId
+        }
+    });
+    // Compose invitation setup link
+    const frontendUrl = process.env["FRONTEND_URL"] || "http://localhost:3000";
+    const invitationLink = `${frontendUrl}/setup-password?token=${token}`;
+    // Send Email
+    await (0, email_service_js_1.sendInvitationEmail)(user.email, invitationLink, tempPassword, user.name);
+    // Log in AuditLog
+    await prisma_js_1.prisma.auditLog.create({
+        data: {
+            action: "INVITATION_SENT",
+            entity: "User",
+            entityId: user.id,
+            actorId: currentUserId,
+            payload: JSON.stringify({ invitationId: invitation.id, timestamp: new Date() })
+        }
+    });
+    return invitation;
+}
+async function resendInvitation(userId, currentUserId) {
+    const user = await prisma_js_1.prisma.user.findUnique({
+        where: { id: userId },
+        include: { crmCustomer: true }
+    });
+    if (!user || !user.crmCustomerId) {
+        const error = new Error("CRM-linked Customer user not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+    // Find latest invitation
+    const lastInvite = await prisma_js_1.prisma.invitation.findFirst({
+        where: { crmCustomerId: user.crmCustomerId },
+        orderBy: { createdAt: "desc" }
+    });
+    if (!lastInvite) {
+        const error = new Error("No previous invitation exists to resend. Please create a new invitation.");
+        error.statusCode = 400;
+        throw error;
+    }
+    const token = crypto_1.default.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    const invitation = await prisma_js_1.prisma.invitation.create({
+        data: {
+            crmCustomerId: user.crmCustomerId,
+            email: user.email,
+            temporaryPassword: lastInvite.temporaryPassword,
+            setupToken: token,
+            expiresAt,
+            sentByAdminId: currentUserId
+        }
+    });
+    const frontendUrl = process.env["FRONTEND_URL"] || "http://localhost:3000";
+    const invitationLink = `${frontendUrl}/setup-password?token=${token}`;
+    await (0, email_service_js_1.sendInvitationEmail)(user.email, invitationLink, lastInvite.temporaryPassword || undefined, user.name);
+    await prisma_js_1.prisma.auditLog.create({
+        data: {
+            action: "INVITATION_RESENT",
+            entity: "User",
+            entityId: user.id,
+            actorId: currentUserId,
+            payload: JSON.stringify({ invitationId: invitation.id, timestamp: new Date() })
+        }
+    });
+    return invitation;
+}
+async function setupPassword(token, passwordString) {
+    const invitation = await prisma_js_1.prisma.invitation.findUnique({
+        where: { setupToken: token },
+        include: { crmCustomer: true }
+    });
+    if (!invitation) {
+        const error = new Error("Invalid invitation setup token.");
+        error.statusCode = 400;
+        throw error;
+    }
+    if (invitation.usedAt) {
+        const error = new Error("This invitation setup link has already been used.");
+        error.statusCode = 400;
+        throw error;
+    }
+    if (new Date(invitation.expiresAt) < new Date()) {
+        const error = new Error("This invitation setup link has expired. Please request a new one.");
+        error.statusCode = 400;
+        throw error;
+    }
+    const user = await prisma_js_1.prisma.user.findFirst({
+        where: { crmCustomerId: invitation.crmCustomerId }
+    });
+    if (!user) {
+        const error = new Error("No Helpdesk user record is linked to this CRM Customer.");
+        error.statusCode = 404;
+        throw error;
+    }
+    const passwordHash = await (0, password_js_1.hashPassword)(passwordString);
+    await prisma_js_1.prisma.$transaction([
+        prisma_js_1.prisma.user.update({
+            where: { id: user.id },
+            data: {
+                passwordHash,
+                isActive: true,
+                emailVerified: true
+            }
+        }),
+        prisma_js_1.prisma.invitation.update({
+            where: { id: invitation.id },
+            data: { usedAt: new Date() }
+        }),
+        prisma_js_1.prisma.auditLog.create({
+            data: {
+                action: "PASSWORD_SETUP",
+                entity: "User",
+                entityId: user.id,
+                payload: JSON.stringify({ invitationId: invitation.id, timestamp: new Date() })
+            }
+        })
+    ]);
+    return { email: invitation.email };
+}
+async function verifyInvitationToken(token) {
+    const invitation = await prisma_js_1.prisma.invitation.findUnique({
+        where: { setupToken: token },
+        include: { crmCustomer: true }
+    });
+    if (!invitation) {
+        const error = new Error("Invalid invitation setup token.");
+        error.statusCode = 400;
+        throw error;
+    }
+    if (invitation.usedAt) {
+        const error = new Error("This invitation setup link has already been used.");
+        error.statusCode = 400;
+        throw error;
+    }
+    if (new Date(invitation.expiresAt) < new Date()) {
+        const error = new Error("This invitation setup link has expired. Please request a new one.");
+        error.statusCode = 400;
+        throw error;
+    }
+    return { email: invitation.email, success: true };
 }

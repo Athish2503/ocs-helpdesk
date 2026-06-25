@@ -47,8 +47,14 @@ exports.createRoutingRuleHandler = createRoutingRuleHandler;
 exports.deleteRoutingRuleHandler = deleteRoutingRuleHandler;
 exports.listRolePermissionsHandler = listRolePermissionsHandler;
 exports.updateRolePermissionsHandler = updateRolePermissionsHandler;
+exports.inviteUserHandler = inviteUserHandler;
+exports.resendInviteUserHandler = resendInviteUserHandler;
+exports.sendResetPasswordLinkHandler = sendResetPasswordLinkHandler;
+exports.getCrmCustomersHandler = getCrmCustomersHandler;
 const users_schemas_js_1 = require("./users.schemas.js");
 const UsersService = __importStar(require("./users.service.js"));
+const crmService = __importStar(require("../../services/crm.service.js"));
+const AuthService = __importStar(require("../auth/auth.service.js"));
 const role_middleware_js_1 = require("../../middleware/role.middleware.js");
 const enums_js_1 = require("../../generated/prisma/enums.js");
 function ok(res, data) {
@@ -308,6 +314,50 @@ async function updateRolePermissionsHandler(req, res, next) {
             create: { role, permissions },
         });
         ok(res, { record });
+    }
+    catch (err) {
+        next(err);
+    }
+}
+async function inviteUserHandler(req, res, next) {
+    try {
+        const { id } = req.params;
+        const currentUserId = req.user.id;
+        const { generateTempPassword } = req.body;
+        const result = await AuthService.sendInvitation(id, currentUserId, !!generateTempPassword);
+        ok(res, { invitation: result });
+    }
+    catch (err) {
+        next(err);
+    }
+}
+async function resendInviteUserHandler(req, res, next) {
+    try {
+        const { id } = req.params;
+        const currentUserId = req.user.id;
+        const result = await AuthService.resendInvitation(id, currentUserId);
+        ok(res, { invitation: result });
+    }
+    catch (err) {
+        next(err);
+    }
+}
+async function sendResetPasswordLinkHandler(req, res, next) {
+    try {
+        const { id } = req.params;
+        const user = await UsersService.getUserById(id);
+        const result = await AuthService.forgotPassword({ email: user.email });
+        ok(res, result);
+    }
+    catch (err) {
+        next(err);
+    }
+}
+async function getCrmCustomersHandler(req, res, next) {
+    try {
+        const search = req.query.search || "";
+        const crmData = await crmService.getCustomers({ search, limit: 50 });
+        ok(res, crmData);
     }
     catch (err) {
         next(err);

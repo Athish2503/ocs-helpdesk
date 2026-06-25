@@ -12,7 +12,13 @@ interface UserContext {
  * Create a new ticket for a customer.
  */
 export async function createTicket(
-  input: CreateTicketInput & { affectedDomain?: string | null; issueCategory?: string | null },
+  input: CreateTicketInput & {
+    affectedDomain?: string | null;
+    issueCategory?: string | null;
+    domainId?: string | null;
+    subscriptionId?: string | null;
+    serviceId?: string | null;
+  },
   customerId: string,
   userRole: Role
 ) {
@@ -96,6 +102,12 @@ export async function createTicket(
   }
 
 
+  // Fetch customer's CRM Customer ID
+  const customerUser = await prisma.user.findUnique({
+    where: { id: customerId },
+    select: { crmCustomerId: true }
+  });
+
   const ticket = await prisma.ticket.create({
     data: {
       title: input.title,
@@ -108,6 +120,10 @@ export async function createTicket(
       teamId,
       affectedDomain: input.affectedDomain,
       issueCategory,
+      crmCustomerId: customerUser?.crmCustomerId || null,
+      domainId: input.domainId || null,
+      subscriptionId: input.subscriptionId || null,
+      serviceId: input.serviceId || null,
     },
     include: {
       category: true,
@@ -272,8 +288,21 @@ export async function getTicketById(id: string, user: UserContext) {
           id: true,
           name: true,
           email: true,
+          phoneNumber: true,
+          crmCustomerId: true,
+          crmCustomer: {
+            include: {
+              domains: true,
+              services: true,
+              subscriptions: true,
+            }
+          },
+          customerCredits: true,
         },
       },
+      domain: true,
+      subscription: true,
+      service: true,
       agent: {
         select: {
           id: true,

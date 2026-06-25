@@ -42,6 +42,8 @@ exports.requestMagicLinkHandler = requestMagicLinkHandler;
 exports.magicLoginHandler = magicLoginHandler;
 exports.forgotPasswordHandler = forgotPasswordHandler;
 exports.resetPasswordHandler = resetPasswordHandler;
+exports.setupPasswordHandler = setupPasswordHandler;
+exports.verifyInvitationTokenHandler = verifyInvitationTokenHandler;
 const auth_schemas_js_1 = require("./auth.schemas.js");
 const AuthService = __importStar(require("./auth.service.js"));
 // ---------------------------------------------------------------------------
@@ -161,6 +163,34 @@ async function resetPasswordHandler(req, res, next) {
     try {
         const input = auth_schemas_js_1.resetPasswordSchema.parse(req.body);
         const result = await AuthService.resetPassword(input);
+        ok(res, result);
+    }
+    catch (err) {
+        next(err);
+    }
+}
+async function setupPasswordHandler(req, res, next) {
+    try {
+        const { token, password } = req.body;
+        if (!token || !password) {
+            res.status(400).json({ success: false, error: "Missing token or password" });
+            return;
+        }
+        const result = await AuthService.setupPassword(token, password);
+        ok(res, result);
+    }
+    catch (err) {
+        next(err);
+    }
+}
+async function verifyInvitationTokenHandler(req, res, next) {
+    try {
+        const token = req.query.token;
+        if (!token) {
+            res.status(400).json({ success: false, error: "Missing token" });
+            return;
+        }
+        const result = await AuthService.verifyInvitationToken(token);
         ok(res, result);
     }
     catch (err) {

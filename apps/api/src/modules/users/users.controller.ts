@@ -1,6 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import { createUserSchema, updateUserSchema } from "./users.schemas.js";
 import * as UsersService from "./users.service.js";
+import * as crmService from "../../services/crm.service.js";
+import * as AuthService from "../auth/auth.service.js";
 import { DEFAULT_PERMISSIONS } from "../../middleware/role.middleware.js";
 import { Role } from "../../generated/prisma/enums.js";
 
@@ -278,6 +280,50 @@ export async function updateRolePermissionsHandler(req: Request, res: Response, 
     });
 
     ok(res, { record });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function inviteUserHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const currentUserId = req.user!.id;
+    const { generateTempPassword } = req.body;
+    const result = await AuthService.sendInvitation(id as string, currentUserId, !!generateTempPassword);
+    ok(res, { invitation: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function resendInviteUserHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const currentUserId = req.user!.id;
+    const result = await AuthService.resendInvitation(id as string, currentUserId);
+    ok(res, { invitation: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function sendResetPasswordLinkHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const user = await UsersService.getUserById(id as string);
+    const result = await AuthService.forgotPassword({ email: user.email });
+    ok(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getCrmCustomersHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const search = (req.query.search as string) || "";
+    const crmData = await crmService.getCustomers({ search, limit: 50 });
+    ok(res, crmData);
   } catch (err) {
     next(err);
   }

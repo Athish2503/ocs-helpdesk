@@ -11,6 +11,8 @@ const tickets_routes_js_1 = __importDefault(require("./modules/tickets/tickets.r
 const users_routes_js_1 = __importDefault(require("./modules/users/users.routes.js"));
 const teams_routes_js_1 = __importDefault(require("./modules/teams/teams.routes.js"));
 const kb_routes_js_1 = __importDefault(require("./modules/kb/kb.routes.js"));
+const sync_routes_js_1 = __importDefault(require("./modules/sync/sync.routes.js"));
+const integrations_routes_js_1 = __importDefault(require("./modules/integrations/integrations.routes.js"));
 const error_middleware_js_1 = require("./middleware/error.middleware.js");
 const swagger_js_1 = require("./config/swagger.js");
 const app = (0, express_1.default)();
@@ -33,6 +35,8 @@ app.get("/health", (_, res) => {
 // API routes
 // ---------------------------------------------------------------------------
 app.use("/api/auth", auth_routes_js_1.default);
+app.use("/api/sync", sync_routes_js_1.default);
+app.use("/api/integrations", integrations_routes_js_1.default);
 app.use("/api/categories", categories_routes_js_1.default);
 app.use("/api/tickets", tickets_routes_js_1.default);
 app.use("/api/users", users_routes_js_1.default);

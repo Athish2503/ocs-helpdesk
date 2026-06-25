@@ -136,3 +136,32 @@ export async function resetPasswordHandler(req: Request, res: Response, next: Ne
   }
 }
 
+export async function setupPasswordHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) {
+      res.status(400).json({ success: false, error: "Missing token or password" });
+      return;
+    }
+    const result = await AuthService.setupPassword(token, password);
+    ok(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function verifyInvitationTokenHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const token = req.query.token as string;
+    if (!token) {
+      res.status(400).json({ success: false, error: "Missing token" });
+      return;
+    }
+    const result = await AuthService.verifyInvitationToken(token);
+    ok(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+

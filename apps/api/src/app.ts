@@ -6,6 +6,8 @@ import ticketsRouter from "./modules/tickets/tickets.routes.js";
 import usersRouter from "./modules/users/users.routes.js";
 import teamsRouter from "./modules/teams/teams.routes.js";
 import kbRouter from "./modules/kb/kb.routes.js";
+import syncRouter from "./modules/sync/sync.routes.js";
+import integrationsRouter from "./modules/integrations/integrations.routes.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import { setupSwagger } from "./config/swagger.js";
 
@@ -33,6 +35,8 @@ app.get("/health", (_, res) => {
 // API routes
 // ---------------------------------------------------------------------------
 app.use("/api/auth", authRouter);
+app.use("/api/sync", syncRouter);
+app.use("/api/integrations", integrationsRouter);
 app.use("/api/categories", categoriesRouter);
 app.use("/api/tickets", ticketsRouter);
 app.use("/api/users", usersRouter);

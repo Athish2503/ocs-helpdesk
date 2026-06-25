@@ -10,6 +10,9 @@ export const createTicketSchema = z.object({
   priority: TicketPriorityEnum.optional().default("MEDIUM"),
   affectedDomain: z.string().optional().nullable(),
   issueCategory: z.string().optional().nullable(),
+  domainId: z.string().optional().nullable(),
+  subscriptionId: z.string().optional().nullable(),
+  serviceId: z.string().optional().nullable(),
 });
 
 export const addMessageSchema = z.object({

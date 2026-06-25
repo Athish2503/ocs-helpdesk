@@ -26,6 +26,10 @@ router.patch("/:id/credits", (0, role_middleware_js_1.requirePermission)("adjust
 // User CRUD operations
 router.post("/", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.createUserHandler);
 router.get("/", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.listUsersHandler);
+router.get("/crm-customers", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.getCrmCustomersHandler);
 router.get("/:id", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.getUserByIdHandler);
 router.patch("/:id", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.updateUserHandler);
+router.post("/:id/invite", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.inviteUserHandler);
+router.post("/:id/resend-invite", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.resendInviteUserHandler);
+router.post("/:id/reset-password-link", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.sendResetPasswordLinkHandler);
 exports.default = router;

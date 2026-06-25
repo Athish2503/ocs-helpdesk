@@ -27,10 +27,9 @@ exports.registerSchema = zod_1.z.object({
 // ---------------------------------------------------------------------------
 exports.loginSchema = zod_1.z.object({
     email: zod_1.z
-        .string({ error: "Email is required" })
+        .string({ error: "Email or phone number is required" })
         .trim()
-        .toLowerCase()
-        .email("Please provide a valid email address"),
+        .min(1, "Email or phone number is required"),
     password: zod_1.z.string({ error: "Password is required" }).min(1, "Password is required"),
 });
 // ---------------------------------------------------------------------------

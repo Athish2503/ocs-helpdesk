@@ -28,9 +28,12 @@ async function listUsers(query) {
             id: true,
             name: true,
             email: true,
+            phoneNumber: true,
+            crmCustomerId: true,
             role: true,
             isActive: true,
             emailVerified: true,
+            lastLoginAt: true,
             createdAt: true,
             updatedAt: true,
             teams: {
@@ -43,6 +46,14 @@ async function listUsers(query) {
                     usedHours: true,
                     remainingHours: true,
                     billableHours: true,
+                },
+            },
+            crmCustomer: {
+                include: {
+                    invitations: {
+                        orderBy: { createdAt: "desc" },
+                        take: 1,
+                    },
                 },
             },
         },
@@ -56,9 +67,12 @@ async function getUserById(id) {
             id: true,
             name: true,
             email: true,
+            phoneNumber: true,
+            crmCustomerId: true,
             role: true,
             isActive: true,
             emailVerified: true,
+            lastLoginAt: true,
             createdAt: true,
             updatedAt: true,
             teams: {
@@ -73,6 +87,14 @@ async function getUserById(id) {
                     billableHours: true,
                 },
             },
+            crmCustomer: {
+                include: {
+                    domains: { orderBy: { createdAt: "desc" } },
+                    services: { orderBy: { createdAt: "desc" } },
+                    subscriptions: { orderBy: { createdAt: "desc" } },
+                    invitations: { orderBy: { createdAt: "desc" } },
+                },
+            },
         },
     });
     if (!user) {
@@ -80,7 +102,17 @@ async function getUserById(id) {
         error.statusCode = 404;
         throw error;
     }
-    return user;
+    // Fetch independent audit logs
+    const auditLogs = await prisma_js_1.prisma.auditLog.findMany({
+        where: {
+            OR: [
+                { entityId: id },
+                ...(user.crmCustomerId ? [{ entityId: user.crmCustomerId }] : []),
+            ],
+        },
+        orderBy: { createdAt: "desc" },
+    });
+    return { ...user, auditLogs };
 }
 async function createUser(input) {
     const existing = await prisma_js_1.prisma.user.findUnique({ where: { email: input.email } });
@@ -98,6 +130,8 @@ async function createUser(input) {
             role: input.role,
             emailVerified: true,
             isActive: true,
+            phoneNumber: input.phoneNumber,
+            crmCustomerId: input.crmCustomerId,
             teams: input.teamIds
                 ? {
                     connect: input.teamIds.map((id) => ({ id })),
@@ -108,6 +142,8 @@ async function createUser(input) {
             id: true,
             name: true,
             email: true,
+            phoneNumber: true,
+            crmCustomerId: true,
             role: true,
             isActive: true,
             emailVerified: true,
@@ -140,6 +176,8 @@ async function updateUser(id, input) {
             id: true,
             name: true,
             email: true,
+            phoneNumber: true,
+            crmCustomerId: true,
             role: true,
             isActive: true,
             emailVerified: true,

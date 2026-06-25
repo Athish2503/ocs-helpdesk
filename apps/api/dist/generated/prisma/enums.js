@@ -13,6 +13,7 @@ exports.TicketPriority = exports.TicketStatus = exports.Role = void 0;
 exports.Role = {
     CUSTOMER: 'CUSTOMER',
     AGENT: 'AGENT',
+    SUPERVISOR: 'SUPERVISOR',
     SUPPORT_L1: 'SUPPORT_L1',
     SUPPORT_L2: 'SUPPORT_L2',
     BILLING: 'BILLING',

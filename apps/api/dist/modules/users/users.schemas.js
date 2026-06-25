@@ -8,6 +8,8 @@ exports.createUserSchema = zod_1.z.object({
     email: zod_1.z.string().email("Invalid email address"),
     role: zod_1.z.nativeEnum(enums_js_1.Role),
     password: zod_1.z.string().min(6, "Password must be at least 6 characters"),
+    phoneNumber: zod_1.z.string().optional().nullable(),
+    crmCustomerId: zod_1.z.string().optional().nullable(),
     teamIds: zod_1.z.array(zod_1.z.string()).optional(),
 });
 exports.updateUserSchema = zod_1.z.object({
@@ -16,5 +18,7 @@ exports.updateUserSchema = zod_1.z.object({
     role: zod_1.z.nativeEnum(enums_js_1.Role).optional(),
     isActive: zod_1.z.boolean().optional(),
     password: zod_1.z.string().min(6).optional(),
+    phoneNumber: zod_1.z.string().optional().nullable(),
+    crmCustomerId: zod_1.z.string().optional().nullable(),
     teamIds: zod_1.z.array(zod_1.z.string()).optional(),
 });

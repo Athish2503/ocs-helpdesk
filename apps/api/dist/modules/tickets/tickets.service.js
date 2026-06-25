@@ -77,6 +77,11 @@ async function createTicket(input, customerId, userRole) {
         agentId = rule.assigneeId;
         teamId = rule.teamId;
     }
+    // Fetch customer's CRM Customer ID
+    const customerUser = await prisma_js_1.prisma.user.findUnique({
+        where: { id: customerId },
+        select: { crmCustomerId: true }
+    });
     const ticket = await prisma_js_1.prisma.ticket.create({
         data: {
             title: input.title,
@@ -89,6 +94,10 @@ async function createTicket(input, customerId, userRole) {
             teamId,
             affectedDomain: input.affectedDomain,
             issueCategory,
+            crmCustomerId: customerUser?.crmCustomerId || null,
+            domainId: input.domainId || null,
+            subscriptionId: input.subscriptionId || null,
+            serviceId: input.serviceId || null,
         },
         include: {
             category: true,
@@ -242,8 +251,21 @@ async function getTicketById(id, user) {
                     id: true,
                     name: true,
                     email: true,
+                    phoneNumber: true,
+                    crmCustomerId: true,
+                    crmCustomer: {
+                        include: {
+                            domains: true,
+                            services: true,
+                            subscriptions: true,
+                        }
+                    },
+                    customerCredits: true,
                 },
             },
+            domain: true,
+            subscription: true,
+            service: true,
             agent: {
                 select: {
                     id: true,
