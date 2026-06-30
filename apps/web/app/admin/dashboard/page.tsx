@@ -46,6 +46,7 @@ import {
   CreditCard,
   FileText,
   ShieldAlert,
+  Lock,
 } from "lucide-react";
 import { useDialog } from "../../../context/DialogContext";
 import AdminShell, { AdminShellSkeleton } from "../../../components/admin/AdminShell";
@@ -2849,6 +2850,7 @@ export default function AdminDashboard() {
                 formPhone={userFormPhone} setFormPhone={setUserFormPhone}
                 formCrmId={userFormCrmId} setFormCrmId={setUserFormCrmId}
                 teams={teams}
+                users={users}
                 onClose={() => setShowCreateUser(false)}
                 onSubmit={handleCreateUser}
                 submitLabel="Create Client"
@@ -2873,6 +2875,8 @@ export default function AdminDashboard() {
                 formPhone={userFormPhone} setFormPhone={setUserFormPhone}
                 formCrmId={userFormCrmId} setFormCrmId={setUserFormCrmId}
                 teams={teams}
+                users={users}
+                editingUserId={selectedUser.id}
                 onClose={() => { setShowEditUser(false); setSelectedUser(null); }}
                 onSubmit={handleSaveEditUser}
                 submitLabel="Save Changes"
@@ -2975,6 +2979,7 @@ export default function AdminDashboard() {
                 formPhone={userFormPhone} setFormPhone={setUserFormPhone}
                 formCrmId={userFormCrmId} setFormCrmId={setUserFormCrmId}
                 teams={teams}
+                users={users}
                 onClose={() => setShowCreateUser(false)}
                 onSubmit={handleCreateUser}
                 submitLabel="Create Staff"
@@ -2999,6 +3004,8 @@ export default function AdminDashboard() {
                 formPhone={userFormPhone} setFormPhone={setUserFormPhone}
                 formCrmId={userFormCrmId} setFormCrmId={setUserFormCrmId}
                 teams={teams}
+                users={users}
+                editingUserId={selectedUser.id}
                 onClose={() => { setShowEditUser(false); setSelectedUser(null); }}
                 onSubmit={handleSaveEditUser}
                 submitLabel="Save Changes"
@@ -3943,6 +3950,44 @@ function AdjustCreditsModal({
   );
 }
 
+const COUNTRIES = [
+  { name: "United States", code: "US", dialCode: "+1", flag: "🇺🇸" },
+  { name: "Canada", code: "CA", dialCode: "+1", flag: "🇨🇦" },
+  { name: "United Kingdom", code: "GB", dialCode: "+44", flag: "🇬🇧" },
+  { name: "India", code: "IN", dialCode: "+91", flag: "🇮🇳" },
+  { name: "Australia", code: "AU", dialCode: "+61", flag: "🇦🇺" },
+  { name: "Germany", code: "DE", dialCode: "+49", flag: "🇩🇪" },
+  { name: "France", code: "FR", dialCode: "+33", flag: "🇫🇷" },
+  { name: "United Arab Emirates", code: "AE", dialCode: "+971", flag: "🇦🇪" },
+  { name: "Saudi Arabia", code: "SA", dialCode: "+966", flag: "🇸🇦" },
+  { name: "Singapore", code: "SG", dialCode: "+65", flag: "🇸🇬" },
+  { name: "Qatar", code: "QA", dialCode: "+974", flag: "🇶🇦" },
+  { name: "Kuwait", code: "KW", dialCode: "+965", flag: "🇰🇼" },
+  { name: "Oman", code: "OM", dialCode: "+968", flag: "🇴🇲" },
+  { name: "Bahrain", code: "BH", dialCode: "+973", flag: "🇧🇭" },
+  { name: "New Zealand", code: "NZ", dialCode: "+64", flag: "🇳🇿" },
+  { name: "Japan", code: "JP", dialCode: "+81", flag: "🇯🇵" },
+  { name: "China", code: "CN", dialCode: "+86", flag: "🇨🇳" },
+  { name: "Brazil", code: "BR", dialCode: "+55", flag: "🇧🇷" },
+  { name: "South Africa", code: "ZA", dialCode: "+27", flag: "🇿🇦" },
+  { name: "Malaysia", code: "MY", dialCode: "+60", flag: "🇲🇾" },
+  { name: "Indonesia", code: "ID", dialCode: "+62", flag: "🇮🇩" },
+  { name: "Philippines", code: "PH", dialCode: "+63", flag: "🇵🇭" },
+  { name: "Pakistan", code: "PK", dialCode: "+92", flag: "🇵🇰" },
+  { name: "Bangladesh", code: "BD", dialCode: "+880", flag: "🇧🇩" },
+  { name: "Sri Lanka", code: "LK", dialCode: "+94", flag: "🇱🇰" },
+  { name: "Nepal", code: "NP", dialCode: "+977", flag: "🇳🇵" },
+  { name: "Egypt", code: "EG", dialCode: "+20", flag: "🇪🇬" },
+  { name: "Turkey", code: "TR", dialCode: "+90", flag: "🇹🇷" },
+  { name: "Spain", code: "ES", dialCode: "+34", flag: "🇪🇸" },
+  { name: "Italy", code: "IT", dialCode: "+39", flag: "🇮🇹" },
+  { name: "Netherlands", code: "NL", dialCode: "+31", flag: "🇳🇱" },
+  { name: "Switzerland", code: "CH", dialCode: "+41", flag: "🇨🇭" },
+  { name: "Sweden", code: "SE", dialCode: "+46", flag: "🇸🇪" },
+  { name: "Norway", code: "NO", dialCode: "+47", flag: "🇳🇴" },
+  { name: "Ireland", code: "IE", dialCode: "+353", flag: "🇮🇪" },
+];
+
 // Shared User Create/Edit Modal
 interface UserModalProps {
   title: string; subtitle: string; isDark: boolean;
@@ -3956,6 +4001,8 @@ interface UserModalProps {
   formPhone: string; setFormPhone: (v: string) => void;
   formCrmId: string; setFormCrmId: (v: string) => void;
   teams: { id: string; name: string }[];
+  users: UserProfile[];
+  editingUserId?: string;
   onClose: () => void; onSubmit: (e: React.FormEvent) => void;
   submitLabel: string;
 }
@@ -3965,200 +4012,640 @@ function UserModal({
   formName, setFormName, formEmail, setFormEmail, formPassword, setFormPassword,
   formRole, setFormRole, formIsActive, setFormIsActive, formTeams, setFormTeams,
   formPhone, setFormPhone, formCrmId, setFormCrmId,
-  teams, onClose, onSubmit, submitLabel
+  teams, users = [], editingUserId, onClose, onSubmit, submitLabel
 }: UserModalProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [crmSearch, setCrmSearch] = useState("");
   const [crmResults, setCrmResults] = useState<any[]>([]);
   const [searchingCrm, setSearchingCrm] = useState(false);
   const [showCrmDropdown, setShowCrmDropdown] = useState(false);
+  const [linkedCompany, setLinkedCompany] = useState("");
+  const [allCrmCustomers, setAllCrmCustomers] = useState<any[]>([]);
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false);
+  const [countrySearch, setCountrySearch] = useState("");
 
+  // Load all CRM customers once
   useEffect(() => {
     if (formRole !== "CUSTOMER" || showStatusToggle) return;
-    if (!crmSearch.trim()) {
-      setCrmResults([]);
-      return;
-    }
-
-    const delayDebounce = setTimeout(async () => {
+    const fetchAllCrmCustomers = async () => {
       setSearchingCrm(true);
       try {
-        const res = await fetchWithAuth(`/users/crm-customers?search=${encodeURIComponent(crmSearch)}`);
+        const res = await fetchWithAuth("/users/crm-customers?limit=1000");
         if (res.ok) {
           const payload = await res.json();
-          setCrmResults(payload.data?.customers || []);
+          const list = payload.data?.customers || [];
+          setAllCrmCustomers(list);
+          setCrmResults(list);
         }
       } catch (err) {
-        console.error("Error searching CRM customers:", err);
+        console.error("Error fetching CRM customers:", err);
       } finally {
         setSearchingCrm(false);
       }
-    }, 300);
+    };
+    fetchAllCrmCustomers();
+  }, [formRole, showStatusToggle]);
 
-    return () => clearTimeout(delayDebounce);
-  }, [crmSearch, formRole, showStatusToggle]);
+  // Client-side filtering of the CRM customers
+  useEffect(() => {
+    if (formRole !== "CUSTOMER" || showStatusToggle) return;
+    if (!crmSearch.trim()) {
+      setCrmResults(allCrmCustomers);
+      return;
+    }
+    const query = crmSearch.toLowerCase();
+    const filtered = allCrmCustomers.filter(cust => {
+      return (
+        (cust.displayName && cust.displayName.toLowerCase().includes(query)) ||
+        (cust.primaryEmail && cust.primaryEmail.toLowerCase().includes(query)) ||
+        (cust.companyName && cust.companyName.toLowerCase().includes(query)) ||
+        (cust.primaryPhone && cust.primaryPhone.toLowerCase().includes(query)) ||
+        (cust.customerId && cust.customerId.toLowerCase().includes(query))
+      );
+    });
+    setCrmResults(filtered);
+  }, [crmSearch, allCrmCustomers, formRole, showStatusToggle]);
+
+  const existingUser = users.find(u => {
+    if (editingUserId && u.id === editingUserId) return false;
+    const crmMatch = u.crmCustomerId && formCrmId && u.crmCustomerId === formCrmId;
+    const emailMatch = u.email && formEmail && u.email.toLowerCase() === formEmail.toLowerCase();
+    return crmMatch || emailMatch;
+  });
+  const accountExists = !!existingUser;
+
+  // Helper to parse phone number into dial code and national number
+  const parsePhone = (phone: string) => {
+    if (!phone) return { dialCode: "+91", nationalNumber: "" };
+    const cleanPhone = phone.trim();
+    const sorted = [...COUNTRIES].sort((a, b) => b.dialCode.length - a.dialCode.length);
+    for (const c of sorted) {
+      if (cleanPhone.startsWith(c.dialCode)) {
+        return { dialCode: c.dialCode, nationalNumber: cleanPhone.slice(c.dialCode.length).trim() };
+      }
+      const cleanDial = c.dialCode.replace("+", "");
+      if (cleanPhone.startsWith(cleanDial)) {
+        return { dialCode: c.dialCode, nationalNumber: cleanPhone.slice(cleanDial.length).trim() };
+      }
+    }
+    if (cleanPhone.startsWith("+")) {
+      const spaceIdx = cleanPhone.indexOf(" ");
+      if (spaceIdx > 0) {
+        return { dialCode: cleanPhone.slice(0, spaceIdx), nationalNumber: cleanPhone.slice(spaceIdx).trim() };
+      }
+      return { dialCode: cleanPhone.slice(0, 4), nationalNumber: cleanPhone.slice(4).trim() };
+    }
+    return { dialCode: "+91", nationalNumber: cleanPhone };
+  };
+
+  const initialParsed = React.useMemo(() => parsePhone(formPhone), [formPhone]);
+
+  const [dialPart, setDialPart] = useState(initialParsed.dialCode);
+  const [localPart, setLocalPart] = useState(initialParsed.nationalNumber);
+
+  useEffect(() => {
+    const parsed = parsePhone(formPhone);
+    const combined = (dialPart + localPart).replace(/\s+/g, "");
+    const cleanFormPhone = formPhone.replace(/\s+/g, "");
+    if (cleanFormPhone !== combined) {
+      setDialPart(parsed.dialCode);
+      setLocalPart(parsed.nationalNumber);
+    }
+  }, [formPhone]);
+
+  const getCountryFromDialCode = (dial: string) => {
+    if (!dial) return null;
+    const cleanDial = dial.trim();
+    const sorted = [...COUNTRIES].sort((a, b) => b.dialCode.length - a.dialCode.length);
+    for (const c of sorted) {
+      if (cleanDial === c.dialCode || cleanDial === c.dialCode.replace("+", "")) return c;
+    }
+    return null;
+  };
+
+  const selectedCountry = getCountryFromDialCode(dialPart) || { name: "", code: "", dialCode: dialPart, flag: "🌐" };
+
+  const handleSelectCountry = (country: typeof COUNTRIES[0]) => {
+    setDialPart(country.dialCode);
+    setFormPhone(country.dialCode + " " + localPart.trim());
+    setShowCountryDropdown(false);
+    setCountrySearch("");
+  };
 
   return (
     <div className={`admin-modal-overlay ${isDark ? "admin-dark" : ""}`} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="admin-modal">
-        <div className="flex items-start justify-between mb-5">
+      <div className={`admin-modal w-full ${formRole === "CUSTOMER" && !showStatusToggle ? "!max-w-[1000px] !p-8" : "!max-w-[560px]"} admin-fade-in ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"} shadow-2xl overflow-hidden`}>
+        {/* Header */}
+        <div className="flex items-start justify-between mb-6 pb-4 border-b border-slate-100 dark:border-slate-800/80">
           <div>
-            <h3 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>{title}</h3>
-            <p className={`text-xs mt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>{subtitle}</p>
+            <h3 className={`text-lg font-bold tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>{title}</h3>
+            <p className={`text-xs mt-1 ${isDark ? "text-slate-400" : "text-slate-500"}`}>{subtitle}</p>
           </div>
-          <button type="button" onClick={onClose} className={`p-1.5 rounded-lg mt-0.5 ${isDark ? "text-slate-400 hover:text-white hover:bg-white/[0.05]" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"}`}>
+          <button 
+            type="button" 
+            onClick={onClose} 
+            className={`p-1.5 rounded-lg mt-0.5 transition-all hover:rotate-90 hover:scale-105 ${isDark ? "text-slate-400 hover:text-white hover:bg-white/[0.05]" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"}`}
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
-        <form onSubmit={onSubmit} className="space-y-4">
-          {formRole === "CUSTOMER" && !showStatusToggle && (
-            <div className="admin-form-group">
-              <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Link CRM Customer (Autocomplete)</label>
-              {/* wrapper must be relative so the icon+dropdown are positioned against the input, NOT the label */}
-              <div className="relative">
-                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${isDark ? "text-slate-500" : "text-slate-400"}`} />
-                <input
-                  type="text"
-                  value={crmSearch}
-                  onChange={(e) => {
-                    setCrmSearch(e.target.value);
-                    setShowCrmDropdown(true);
-                  }}
-                  onFocus={() => setShowCrmDropdown(true)}
-                  onBlur={() => setTimeout(() => setShowCrmDropdown(false), 200)}
-                  placeholder="Search CRM by company, name, email..."
-                  className={`admin-input ${isDark ? "admin-dark" : ""} pl-10`}
-                />
-                {searchingCrm && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">Searching...</span>
-                )}
 
-                {showCrmDropdown && crmSearch.trim() && (
-                  <div
-                    className={`absolute z-50 left-0 right-0 top-full mt-1 border rounded-xl max-h-60 overflow-y-auto shadow-lg ${
-                      isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-white border-slate-200 text-slate-800"
-                    }`}
-                  >
-                    {crmResults.length === 0 ? (
-                      <div className="p-3 text-sm text-slate-400 text-center">No CRM customers found</div>
-                    ) : (
-                      crmResults.map((cust) => (
-                        <div
-                          key={cust.customerId}
-                          onClick={() => {
-                            setFormName(cust.displayName || "");
-                            setFormEmail(cust.primaryEmail || "");
-                            setFormPhone(cust.primaryPhone || "");
-                            setFormCrmId(cust.customerId || "");
-                            setCrmSearch(cust.displayName || "");
-                            setShowCrmDropdown(false);
+        <form onSubmit={onSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
+            {/* LEFT COLUMN: CRM LINK PANEL (Only for CUSTOMER creation) */}
+            {formRole === "CUSTOMER" && !showStatusToggle && (
+              <div className={`md:col-span-4 flex flex-col justify-between p-5 rounded-xl border min-h-[390px] transition-all duration-300 ${
+                isDark 
+                  ? "bg-slate-955/20 border-slate-800/80" 
+                  : "bg-slate-50/50 border-slate-100"
+              }`}>
+                {!formCrmId ? (
+                  /* SEARCH & LINK STATE */
+                  <div className="space-y-4 flex-1 flex flex-col justify-start">
+                    <div>
+                      <label className={`text-xs font-bold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"} mb-1.5 block`}>
+                        CRM Integration
+                      </label>
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-normal mb-3">
+                        Search to link an external customer profile and auto-fill details.
+                      </p>
+                      <div className="relative">
+                        <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${isDark ? "text-slate-500" : "text-slate-400"}`} />
+                        <input
+                          type="text"
+                          value={crmSearch}
+                          onChange={(e) => {
+                            setCrmSearch(e.target.value);
+                            setShowCrmDropdown(true);
                           }}
-                          className={`p-3 text-sm cursor-pointer border-b last:border-b-0 transition-colors ${
-                            isDark ? "border-slate-800 hover:bg-slate-800" : "border-slate-100 hover:bg-slate-50"
-                          }`}
-                        >
-                          <div className="font-semibold text-left">{cust.displayName}</div>
-                          <div className="text-xs text-slate-400 text-left">
-                            {cust.primaryEmail} | {cust.companyName || "No Company"}
-                          </div>
+                          onFocus={() => setShowCrmDropdown(true)}
+                          placeholder="Search by company, name, email..."
+                          className={`admin-input ${isDark ? "admin-dark" : ""} !pl-10 h-11 text-sm border-slate-200 dark:border-slate-800 focus:border-[#38b1f7] rounded-lg w-full`}
+                        />
+                        {searchingCrm && (
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center">
+                            <span className="animate-pulse text-[10px] text-slate-400 font-medium">Searching...</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Inline Results List (Intuitive selection list inside the left panel) */}
+                    <div className={`flex-1 min-h-[200px] overflow-y-auto max-h-[250px] scrollbar-hide border rounded-lg p-1 transition-all ${
+                      isDark ? "border-slate-800/50 bg-slate-950/40" : "border-slate-200/55 bg-white/40"
+                    }`}>
+                      {crmResults.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-10 text-[11px] text-slate-400 text-center">
+                          {searchingCrm ? "Searching records..." : "No CRM records found"}
                         </div>
-                      ))
-                    )}
+                      ) : (
+                        crmResults.map((cust) => {
+                          const isAlreadyImported = users.some(u => 
+                            (u.crmCustomerId && u.crmCustomerId === cust.customerId) || 
+                            (u.email && cust.primaryEmail && u.email.toLowerCase() === cust.primaryEmail.toLowerCase())
+                          );
+
+                          return (
+                            <div
+                              key={cust.customerId}
+                              onClick={() => {
+                                if (isAlreadyImported) return;
+                                setFormName(cust.displayName || "");
+                                setFormEmail(cust.primaryEmail || "");
+                                setFormPhone(cust.primaryPhone || "");
+                                setFormCrmId(cust.customerId || "");
+                                setCrmSearch(cust.displayName || "");
+                                setLinkedCompany(cust.companyName || "");
+                                setShowCrmDropdown(false);
+                              }}
+                              className={`p-2.5 text-xs border-b last:border-b-0 transition-all text-left flex items-start gap-2.5 rounded-lg ${
+                                isAlreadyImported 
+                                  ? "opacity-50 cursor-not-allowed select-none bg-slate-100/20 dark:bg-slate-950/20" 
+                                  : "cursor-pointer"
+                              } ${
+                                isDark 
+                                  ? "border-slate-900/60 hover:bg-slate-800/50" 
+                                  : "border-slate-100 hover:bg-slate-100/60"
+                              }`}
+                            >
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[10px] font-bold ${
+                                isDark ? "bg-slate-800 text-[#38b1f7]" : "bg-sky-50 text-[#0d9fea]"
+                              }`}>
+                                {(cust.displayName || "C").charAt(0).toUpperCase()}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-1.5">
+                                  <div className={`font-semibold truncate ${isDark ? "text-slate-300" : "text-slate-700"}`}>{cust.displayName}</div>
+                                  {isAlreadyImported && (
+                                    <span className="text-[9px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-650 dark:text-emerald-450 px-1.5 py-0.5 rounded border border-emerald-100 dark:border-emerald-900/40 shrink-0">
+                                      Imported
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-slate-450 dark:text-slate-550 truncate">
+                                  {cust.primaryEmail}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* LINKED PROFILE CARD STATE */
+                  <div className="space-y-4 flex-1 flex flex-col justify-between animate-fade-in">
+                    <div>
+                      <div className="flex justify-between items-center mb-4">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                          CRM Integration
+                        </span>
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/55 text-[10px] font-semibold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                          Connected
+                        </div>
+                      </div>
+
+                      <div className={`p-5 rounded-xl border flex flex-col items-center text-center shadow-sm ${
+                        isDark ? "bg-slate-955/60 border-slate-800" : "bg-white border-slate-200"
+                      }`}>
+                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-3 text-xl font-black tracking-wide ${
+                          isDark ? "bg-slate-800/80 text-[#38b1f7]" : "bg-sky-50 text-[#0d9fea]"
+                        }`}>
+                          {(formName || "C").charAt(0).toUpperCase()}
+                        </div>
+                        <h4 className={`text-sm font-bold truncate max-w-full ${isDark ? "text-slate-200" : "text-slate-800"}`}>
+                          {formName}
+                        </h4>
+                        <p className="text-[11px] text-slate-400 dark:text-slate-550 truncate max-w-full mt-0.5">
+                          {formEmail}
+                        </p>
+                        {linkedCompany && (
+                          <div className={`mt-2.5 px-2.5 py-0.5 text-[10px] rounded font-medium ${
+                            isDark ? "bg-slate-800/60 text-slate-350" : "bg-slate-100 text-slate-600"
+                          }`}>
+                            {linkedCompany}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      <div className="text-[10px] text-slate-450 dark:text-slate-550 text-center leading-normal">
+                        Linking auto-fills the primary fields. Click below to disconnect.
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormName("");
+                          setFormEmail("");
+                          setFormPhone("");
+                          setFormCrmId("");
+                          setCrmSearch("");
+                          setLinkedCompany("");
+                        }}
+                        className={`w-full py-2 text-xs font-semibold rounded-lg border transition-all ${
+                          isDark 
+                            ? "border-red-955/50 bg-red-950/20 text-red-400 hover:bg-red-950/40 hover:text-red-300" 
+                            : "border-red-100 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700"
+                        }`}
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
 
-          <div className="admin-form-group">
-            <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Full Name <span className="text-red-500">*</span></label>
-            <input type="text" required value={formName} onChange={e => setFormName(e.target.value)} placeholder="Alex Carter" className={`admin-input ${isDark ? "admin-dark" : ""}`} />
-          </div>
-          <div className="admin-form-group">
-            <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Email Address <span className="text-red-500">*</span></label>
-            <input type="email" required value={formEmail} onChange={e => setFormEmail(e.target.value)} placeholder="alex@company.com" className={`admin-input ${isDark ? "admin-dark" : ""}`} />
-          </div>
-          
-          <div className="admin-form-group">
-            <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Mobile Number</label>
-            <input
-              type="text"
-              value={formPhone}
-              onChange={(e) => setFormPhone(e.target.value)}
-              placeholder="+1-555-0199"
-              className={`admin-input ${isDark ? "admin-dark" : ""}`}
-            />
-          </div>
-
-          {formRole === "CUSTOMER" && (
-            <div className="admin-form-group">
-              <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>CRM Customer ID</label>
-              <input
-                type="text"
-                value={formCrmId}
-                onChange={(e) => setFormCrmId(e.target.value)}
-                placeholder="e.g. CID250825112437 (Optional)"
-                className={`admin-input ${isDark ? "admin-dark" : ""}`}
-              />
-            </div>
-          )}
-
-          <div className="admin-form-group">
-            <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Password {!showStatusToggle && <span className="text-red-500">*</span>}</label>
-            <div className="relative">
-              <input 
-                type={showPassword ? "text" : "password"} 
-                required={!showStatusToggle} 
-                value={formPassword} 
-                onChange={e => setFormPassword(e.target.value)} 
-                placeholder={showStatusToggle ? "Leave blank to keep current" : "••••••••"} 
-                className={`admin-input ${isDark ? "admin-dark" : ""} pr-10`} 
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${
-                  isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-          {showRole && (
-            <div className="admin-form-group">
-              <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Role</label>
-              <select value={formRole} onChange={e => setFormRole(e.target.value)} className={`admin-select ${isDark ? "admin-dark" : ""}`}>
-                <option value="AGENT">Agent — Support Representative</option>
-                <option value="ADMIN">Admin — Full Access</option>
-              </select>
-            </div>
-          )}
-          {showStatusToggle && (
-            <div className="admin-form-group">
-              <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Account Status</label>
-              <select value={formIsActive ? "true" : "false"} onChange={e => setFormIsActive(e.target.value === "true")} className={`admin-select ${isDark ? "admin-dark" : ""}`}>
-                <option value="true">Active</option>
-                <option value="false">Suspended</option>
-              </select>
-            </div>
-          )}
-          {showTeams && teams.length > 0 && (
-            <div className="admin-form-group">
-              <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Assign to Teams</label>
-              <div className={`border rounded-xl p-3 max-h-36 overflow-y-auto grid grid-cols-2 gap-2 ${isDark ? "border-[#1e293b] bg-white/[0.02]" : "border-slate-200 bg-slate-50"}`}>
-                {teams.map(t => (
-                  <label key={t.id} className={`flex items-center gap-2 text-sm cursor-pointer ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-                    <input type="checkbox" checked={formTeams.includes(t.id)} onChange={() => setFormTeams(formTeams.includes(t.id) ? formTeams.filter(id => id !== t.id) : [...formTeams, t.id])} className="rounded accent-[#38b1f7]" />
-                    <span className="truncate">{t.name}</span>
+            {/* RIGHT COLUMN: PRIMARY FORM FIELDS */}
+            <div className={`${formRole === "CUSTOMER" && !showStatusToggle ? "md:col-span-8" : "md:col-span-12"} space-y-4`}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Full Name */}
+                <div className="admin-form-group">
+                  <label className={`admin-form-label flex items-center gap-1.5 ${isDark ? "admin-dark" : ""}`}>
+                    Full Name <span className="text-red-500 font-bold">*</span>
                   </label>
-                ))}
+                  <div className="relative">
+                    <User className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${isDark ? "text-slate-500" : "text-slate-400"}`} />
+                    <input
+                      type="text"
+                      required
+                      value={formName}
+                      onChange={e => setFormName(e.target.value)}
+                      placeholder="Alex Carter"
+                      className={`admin-input ${isDark ? "admin-dark" : ""} !pl-10 h-11 text-sm rounded-lg border-slate-200 dark:border-slate-800/80 transition-all ${
+                        formCrmId ? "border-sky-300 dark:border-sky-800/80 bg-sky-50/[0.02]" : ""
+                      }`}
+                    />
+                    {formCrmId && (
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-sky-500 dark:text-sky-400 uppercase tracking-wider pointer-events-none">CRM</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Email Address */}
+                <div className="admin-form-group">
+                  <label className={`admin-form-label flex items-center gap-1.5 ${isDark ? "admin-dark" : ""}`}>
+                    Email Address <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <div className="relative">
+                    <Mail className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${isDark ? "text-slate-500" : "text-slate-400"}`} />
+                    <input
+                      type="email"
+                      required
+                      value={formEmail}
+                      onChange={e => setFormEmail(e.target.value)}
+                      placeholder="alex@company.com"
+                      className={`admin-input ${isDark ? "admin-dark" : ""} !pl-10 h-11 text-sm rounded-lg border-slate-200 dark:border-slate-800/80 transition-all ${
+                        formCrmId ? "border-sky-300 dark:border-sky-800/80 bg-sky-50/[0.02]" : ""
+                      }`}
+                    />
+                    {formCrmId && (
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-sky-500 dark:text-sky-400 uppercase tracking-wider pointer-events-none">CRM</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Mobile Number */}
+                <div className="admin-form-group">
+                  <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Mobile Number</label>
+                  <div className="flex gap-2">
+                    {/* Country Selector Dropdown / Input Container */}
+                    <div className="relative shrink-0">
+                      <div className={`flex items-center gap-1.5 px-3 h-11 rounded-[10px] border transition-all ${
+                        isDark 
+                          ? "bg-[#0f172a] border-[#1e293b] text-[#f8fafc] hover:border-[#334155] focus-within:border-[#38b1f7] focus-within:ring-3 focus-within:ring-[#38b1f7]/12" 
+                          : "bg-white border-[#e2e8f0] text-[#0f172a] hover:border-[#cbd5e1] focus-within:border-[#38b1f7] focus-within:ring-3 focus-within:ring-[#38b1f7]/15"
+                      }`}>
+                        {/* Flag Button */}
+                        <button
+                          type="button"
+                          onClick={() => setShowCountryDropdown(!showCountryDropdown)}
+                          className="text-base leading-none transition-transform hover:scale-110 active:scale-95 shrink-0"
+                          title="Select Country"
+                        >
+                          {selectedCountry.flag || "🌐"}
+                        </button>
+                        
+                        {/* Typable Dial Code Input */}
+                        <input
+                          type="text"
+                          value={dialPart}
+                          onChange={(e) => {
+                            let val = e.target.value;
+                            // Allow numbers and + symbol
+                            val = val.replace(/[^\d+]/g, "");
+                            // Ensure it starts with + if it's not empty and doesn't start with it
+                            if (val && !val.startsWith("+")) {
+                              val = "+" + val;
+                            }
+                            setDialPart(val);
+                            setFormPhone(val + " " + localPart.trim());
+                          }}
+                          placeholder="+91"
+                          className="w-12 bg-transparent border-0 p-0 text-sm font-semibold focus:ring-0 focus:outline-none placeholder-slate-400 dark:placeholder-slate-600"
+                        />
+                        
+                        <ChevronDown 
+                          className="w-3.5 h-3.5 opacity-60 cursor-pointer hover:opacity-100 shrink-0" 
+                          onClick={() => setShowCountryDropdown(!showCountryDropdown)}
+                        />
+                      </div>
+
+                      {showCountryDropdown && (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-40" 
+                            onClick={() => {
+                              setShowCountryDropdown(false);
+                              setCountrySearch("");
+                            }}
+                          />
+                          <div className={`absolute left-0 mt-1.5 w-64 rounded-xl border p-2 shadow-xl z-50 animate-fade-in ${
+                            isDark 
+                              ? "bg-slate-955 border-slate-800 text-slate-300" 
+                              : "bg-white border-slate-200 text-slate-755"
+                          }`}>
+                            <div className="relative mb-2">
+                              <Search className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? "text-slate-650" : "text-slate-400"}`} />
+                              <input
+                                type="text"
+                                value={countrySearch}
+                                onChange={(e) => setCountrySearch(e.target.value)}
+                                placeholder="Search country or code..."
+                                className={`w-full pl-8 pr-2.5 py-1.5 text-xs rounded-lg border focus:outline-none focus:ring-1 focus:ring-[#38b1f7] transition-all ${
+                                  isDark 
+                                    ? "bg-slate-900 border-slate-800 text-white placeholder-slate-500" 
+                                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-450"
+                                }`}
+                              />
+                            </div>
+                            <div className="max-h-48 overflow-y-auto scrollbar-hide space-y-0.5">
+                              {COUNTRIES.filter(c => 
+                                c.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
+                                c.dialCode.includes(countrySearch) ||
+                                c.code.toLowerCase().includes(countrySearch.toLowerCase())
+                              ).map((c) => (
+                                <button
+                                  key={`${c.code}-${c.dialCode}`}
+                                  type="button"
+                                  onClick={() => handleSelectCountry(c)}
+                                  className={`w-full flex items-center justify-between p-2 text-xs rounded-lg text-left transition-all ${
+                                    selectedCountry.code === c.code && selectedCountry.dialCode === c.dialCode
+                                      ? (isDark ? "bg-[#38b1f7]/10 text-[#38b1f7] font-semibold" : "bg-sky-50 text-[#0d9fea] font-semibold")
+                                      : (isDark ? "hover:bg-slate-900" : "hover:bg-slate-50")
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 truncate">
+                                    <span className="text-base leading-none shrink-0">{c.flag}</span>
+                                    <span className="truncate">{c.name}</span>
+                                  </div>
+                                  <span className="text-slate-400 font-medium shrink-0 ml-1.5">{c.dialCode}</span>
+                                </button>
+                              ))}
+                              {COUNTRIES.filter(c => 
+                                c.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
+                                c.dialCode.includes(countrySearch) ||
+                                c.code.toLowerCase().includes(countrySearch.toLowerCase())
+                              ).length === 0 && (
+                                <div className="text-[11px] text-slate-450 dark:text-slate-550 text-center py-4">
+                                  No countries found
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Main Phone Number Text Input */}
+                    <div className="relative flex-1">
+                      <Phone className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${isDark ? "text-slate-500" : "text-slate-400"}`} />
+                      <input
+                        type="text"
+                        value={localPart}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setLocalPart(val);
+                          setFormPhone(dialPart + " " + val.trim());
+                        }}
+                        placeholder="555-0199"
+                        className={`admin-input ${isDark ? "admin-dark" : ""} !pl-10 h-11 text-sm rounded-lg border-slate-200 dark:border-slate-800/80 transition-all ${
+                          formCrmId ? "border-sky-300 dark:border-sky-800/80 bg-sky-50/[0.02]" : ""
+                        }`}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* CRM Customer ID or Role */}
+                {formRole === "CUSTOMER" ? (
+                  <div className="admin-form-group">
+                    <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>CRM Customer ID</label>
+                    <div className="relative">
+                      <FileText className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${isDark ? "text-slate-500" : "text-slate-400"}`} />
+                      <input
+                        type="text"
+                        value={formCrmId}
+                        onChange={(e) => setFormCrmId(e.target.value)}
+                        placeholder="e.g. CID250825 (Optional)"
+                        className={`admin-input ${isDark ? "admin-dark" : ""} !pl-10 h-11 text-sm rounded-lg border-slate-200 dark:border-slate-800/80 transition-all ${
+                          formCrmId ? "border-sky-300 dark:border-sky-800/80 bg-sky-50/[0.02]" : ""
+                        }`}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  showRole && (
+                    <div className="admin-form-group">
+                      <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Role</label>
+                      <select
+                        value={formRole}
+                        onChange={e => setFormRole(e.target.value)}
+                        className={`admin-select ${isDark ? "admin-dark" : ""} h-11 text-sm rounded-lg border-slate-200 dark:border-slate-800`}
+                      >
+                        <option value="AGENT">Agent — Support Representative</option>
+                        <option value="ADMIN">Admin — Full Access</option>
+                      </select>
+                    </div>
+                  )
+                )}
+              </div>
+
+              {/* Password & Account Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Password */}
+                <div className={`admin-form-group ${showStatusToggle ? "sm:col-span-1" : "sm:col-span-2"}`}>
+                  <label className={`admin-form-label flex items-center gap-1.5 ${isDark ? "admin-dark" : ""}`}>
+                    Password {!showStatusToggle && <span className="text-red-500 font-bold">*</span>}
+                  </label>
+                  <div className="relative">
+                    <Lock className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${isDark ? "text-slate-500" : "text-slate-400"}`} />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required={!showStatusToggle}
+                      value={formPassword}
+                      onChange={e => setFormPassword(e.target.value)}
+                      placeholder={showStatusToggle ? "Leave blank to keep current" : "••••••••"}
+                      className={`admin-input ${isDark ? "admin-dark" : ""} !pl-10 !pr-10 h-11 text-sm rounded-lg border-slate-200 dark:border-slate-800`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${
+                        isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Account Status Toggle (Only on Edit) */}
+                {showStatusToggle && (
+                  <div className="admin-form-group">
+                    <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Account Status</label>
+                    <select
+                      value={formIsActive ? "true" : "false"}
+                      onChange={e => setFormIsActive(e.target.value === "true")}
+                      className={`admin-select ${isDark ? "admin-dark" : ""} h-11 text-sm rounded-lg border-slate-200 dark:border-slate-800`}
+                    >
+                      <option value="true">Active</option>
+                      <option value="false">Suspended</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Assign Teams (Only if enabled) */}
+              {showTeams && teams.length > 0 && (
+                <div className="admin-form-group">
+                  <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Assign to Teams</label>
+                  <div className={`border rounded-xl p-4 max-h-36 overflow-y-auto grid grid-cols-2 gap-3 ${
+                    isDark 
+                      ? "border-slate-800 bg-slate-955/40" 
+                      : "border-slate-200 bg-slate-50/50"
+                  }`}>
+                    {teams.map(t => (
+                      <label 
+                        key={t.id} 
+                        className={`flex items-center gap-2.5 text-sm cursor-pointer p-1.5 rounded-lg transition-all hover:bg-slate-100/50 dark:hover:bg-slate-800/40 ${
+                          isDark ? "text-slate-350" : "text-slate-700"
+                        }`}
+                      >
+                        <input 
+                          type="checkbox" 
+                          checked={formTeams.includes(t.id)} 
+                          onChange={() => setFormTeams(formTeams.includes(t.id) ? formTeams.filter(id => id !== t.id) : [...formTeams, t.id])} 
+                          className="rounded text-[#38b1f7] focus:ring-[#38b1f7] accent-[#38b1f7] w-4 h-4 cursor-pointer" 
+                        />
+                        <span className="truncate font-medium">{t.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Warning Banner for Duplicate Accounts */}
+          {accountExists && (
+            <div className="p-3.5 rounded-xl bg-red-500/10 dark:bg-red-500/5 border border-red-500/20 text-xs text-red-600 dark:text-red-400 flex items-start gap-2.5">
+              <AlertTriangle className="w-4.5 h-4.5 shrink-0 mt-0.5 text-red-500" />
+              <div>
+                <div className="font-bold mb-0.5">Account Already Exists</div>
+                <div className="leading-relaxed opacity-95">
+                  An account for <span className="font-semibold">{existingUser?.name}</span> ({existingUser?.email}) is already registered in the Helpdesk with this Email or CRM Customer ID.
+                </div>
               </div>
             </div>
           )}
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="admin-btn admin-btn-ghost">Cancel</button>
-            <button type="submit" className="admin-btn admin-btn-primary">{submitLabel}</button>
+
+          {/* Footer Actions */}
+          <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+            <button 
+              type="button" 
+              onClick={onClose} 
+              className={`px-5 py-2 text-sm font-semibold rounded-lg transition-all ${
+                isDark 
+                  ? "text-slate-300 hover:text-white hover:bg-slate-800" 
+                  : "text-slate-600 hover:text-slate-800 hover:bg-slate-100"
+              }`}
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit" 
+              disabled={accountExists}
+              className={`px-5 py-2 text-sm font-semibold text-white transition-all rounded-lg shadow-lg ${
+                accountExists 
+                  ? "bg-slate-300 dark:bg-slate-800 text-slate-500 dark:text-slate-600 cursor-not-allowed shadow-none border border-slate-200 dark:border-slate-700" 
+                  : "bg-[#0d9fea] hover:bg-[#38b1f7] active:scale-[0.98] shadow-sky-500/10 hover:shadow-sky-500/20"
+              }`}
+            >
+              {accountExists ? "Account Exists" : submitLabel}
+            </button>
           </div>
         </form>
       </div>

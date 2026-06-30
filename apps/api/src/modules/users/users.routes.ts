@@ -18,6 +18,7 @@ import {
   resendInviteUserHandler,
   sendResetPasswordLinkHandler,
   getCrmCustomersHandler,
+  getMyCrmDetailsHandler,
 } from "./users.controller.js";
 import { requireAuth } from "../../middleware/auth.middleware.js";
 import { requireRole, requirePermission } from "../../middleware/role.middleware.js";
@@ -32,6 +33,10 @@ router.patch("/me/profile", updateProfileHandler);
 
 // Credits check for current user
 router.get("/me/credits", getMyCreditsHandler);
+
+// CRM details for current user (domains, subscriptions, services)
+router.get("/me/crm-details", getMyCrmDetailsHandler);
+
 
 // Agents listing can be accessed by both admins and agents (or anyone with staff view access)
 router.get("/agents", requireRole("ADMIN", "SUPPORT_L1", "SUPPORT_L2", "BILLING", "AGENT"), getAgentsHandler);

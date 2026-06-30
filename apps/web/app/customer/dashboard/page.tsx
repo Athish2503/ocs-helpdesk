@@ -32,8 +32,15 @@ import {
   AlertTriangle,
   CheckCircle2,
   Globe,
+  Server,
   FileText,
   LogOut,
+  User,
+  Building,
+  Phone,
+  History,
+  Activity,
+  Shield,
 } from "lucide-react";
 
 interface Category {
@@ -228,7 +235,7 @@ export default function CustomerDashboard() {
   const isDark = theme === 'dark';
   
   // Navigation tab state
-  const [activeTab, setActiveTab] = useState<"dashboard" | "tickets" | "kb" | "settings">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "profile" | "tickets" | "kb" | "settings">("dashboard");
 
   // Customer Knowledge Base States
   const [kbArticles, setKbArticles] = useState<KbArticle[]>([]);
@@ -274,6 +281,31 @@ export default function CustomerDashboard() {
     transactions: any[];
   } | null>(null);
 
+  // CRM domain/service states
+  const [crmDetails, setCrmDetails] = useState<{
+    customer: {
+      crmCustomerId: string;
+      companyName: string | null;
+      displayName: string;
+      primaryEmail: string;
+      secondaryEmail: string | null;
+      primaryPhone: string | null;
+      secondaryPhone: string | null;
+      customerStatus: string;
+      lastSyncedAt: string;
+    } | null;
+    domains: Array<{ id: string; crmDomainId: string; domainName: string }>;
+    subscriptions: Array<{ id: string; crmSubscriptionId: string; planName: string; status: string; startDate: string; endDate?: string | null }>;
+    services: Array<{ id: string; crmServiceId: string; name: string; status: string }>;
+  }>({ customer: null, domains: [], subscriptions: [], services: [] });
+  const [loadingCrm, setLoadingCrm] = useState(false);
+  const [selectedDomainId, setSelectedDomainId] = useState<string>("");
+  const [selectedServiceId, setSelectedServiceId] = useState<string>("");
+  const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<string>("");
+  const [selectedServiceName, setSelectedServiceName] = useState<string>("");
+  const [customDomainInput, setCustomDomainInput] = useState<string>("");
+  const [useCustomDomain, setUseCustomDomain] = useState<boolean>(false);
+
   // Modal / Creation state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createForm, setCreateForm] = useState({
@@ -285,7 +317,7 @@ export default function CustomerDashboard() {
     issueType: "" as "" | "billing" | "technical" | "critical" | "other",
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [wizardStep, setWizardStep] = useState<"choice" | "intake" | "self-help" | "routing">("choice");
+  const [wizardStep, setWizardStep] = useState<"select-domain" | "select-service" | "self-help" | "intake" | "routing">("select-domain");
   const [suggestedArticles, setSuggestedArticles] = useState<any[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState<boolean>(false);
   const [submittingCreate, setSubmittingCreate] = useState(false);
@@ -384,14 +416,30 @@ export default function CustomerDashboard() {
     }
   }, []);
 
+  const loadCrmDetails = useCallback(async () => {
+    try {
+      setLoadingCrm(true);
+      const res = await fetchWithAuth("/users/me/crm-details");
+      if (res.ok) {
+        const body = await res.json();
+        setCrmDetails(body.data || { customer: null, domains: [], subscriptions: [], services: [] });
+      }
+    } catch (err) {
+      console.error("Failed to load CRM details:", err);
+    } finally {
+      setLoadingCrm(false);
+    }
+  }, []);
+
   // Sync initial load
   useEffect(() => {
     if (user) {
       loadTickets();
       loadCategories();
       loadCredits();
+      loadCrmDetails();
     }
-  }, [user, loadTickets, loadCategories, loadCredits]);
+  }, [user, loadTickets, loadCategories, loadCredits, loadCrmDetails]);
 
   // Sync details when selection changes
   useEffect(() => {
@@ -429,6 +477,9 @@ export default function CustomerDashboard() {
           priority: createForm.priority,
           affectedDomain: createForm.affectedDomain.trim() || null,
           issueCategory,
+          domainId: selectedDomainId || null,
+          subscriptionId: selectedSubscriptionId || null,
+          serviceId: selectedServiceId || null,
         }),
       });
 
@@ -444,7 +495,7 @@ export default function CustomerDashboard() {
           // Build a readable summary for the banner
           const summary = resBody.error.details.map((d: { field: string; message: string }) => d.message).join(" · ");
           setCreateError(summary);
-          // Navigate back to Step 1 so user can fix the fields
+          // Navigate back to Step intake so user can fix the fields
           setWizardStep("intake");
           toast.error("Please fix the highlighted fields.");
         } else {
@@ -489,7 +540,13 @@ export default function CustomerDashboard() {
         issueType: "",
       });
       setSelectedFile(null);
-      setWizardStep("intake");
+      setSelectedDomainId("");
+      setSelectedServiceId("");
+      setSelectedSubscriptionId("");
+      setSelectedServiceName("");
+      setCustomDomainInput("");
+      setUseCustomDomain(false);
+      setWizardStep("select-domain");
       setSuggestedArticles([]);
       setShowCreateModal(false);
       setFieldErrors({});
@@ -534,33 +591,7 @@ export default function CustomerDashboard() {
     setFieldErrors({});
     setCreateError(null);
 
-    try {
-      setLoadingSuggestions(true);
-      setCreateError(null);
-
-      const params = new URLSearchParams();
-      params.append("text", createForm.description.trim());
-      if (createForm.categoryId) {
-        params.append("categoryId", createForm.categoryId);
-      }
-
-      const res = await fetchWithAuth(`/kb/suggest?${params.toString()}`);
-      if (res.ok) {
-        const body = await res.json();
-        const found = body.data.articles || [];
-        if (found.length > 0) {
-          setSuggestedArticles(found);
-          setWizardStep("self-help");
-          setLoadingSuggestions(false);
-          return;
-        }
-      }
-    } catch (err) {
-      console.error("Failed to load suggested articles:", err);
-    }
-
-    // No suggestions — go straight to routing preview
-    setLoadingSuggestions(false);
+    // Go straight to routing preview since self-help suggestions were already shown
     setWizardStep("routing");
   };
 
@@ -842,6 +873,15 @@ export default function CustomerDashboard() {
             collapsed={isSidebarCollapsed}
             isDark={isDark}
             onClick={() => { setActiveTab("dashboard"); setSelectedTicketId(null); setSelectedArticle(null); }}
+          />
+
+          <CustomerNavItem
+            label="My Profile"
+            icon={User}
+            active={activeTab === "profile"}
+            collapsed={isSidebarCollapsed}
+            isDark={isDark}
+            onClick={() => { setActiveTab("profile"); setSelectedTicketId(null); setSelectedArticle(null); }}
           />
           
           <CustomerNavItem
@@ -1282,6 +1322,453 @@ export default function CustomerDashboard() {
                   </div>
                 </section>
               </>
+            )}
+
+            {activeTab === "profile" && (
+              <div className="space-y-8 animate-fade-in">
+                {/* 1. Header Overview Card */}
+                <div className={`p-6 border rounded-2xl relative overflow-hidden transition-all duration-300 ${
+                  isDark ? 'glass-card bg-[#0F172A]/45 border-white/[0.06] shadow-2xl shadow-slate-950/20' : 'bg-white border-slate-200/80 shadow-sm'
+                }`}>
+                  {/* Decorative background blur shapes in dark mode */}
+                  {isDark && (
+                    <>
+                      <div className="absolute top-0 right-0 w-64 h-64 bg-[#38b1f7]/5 rounded-full blur-[80px] pointer-events-none" />
+                      <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-emerald-500/[0.02] rounded-full blur-[100px] pointer-events-none" />
+                    </>
+                  )}
+                  
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+                    <div className="flex items-start md:items-center gap-5">
+                      {/* Avatar */}
+                      <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-bold border shrink-0 transition-transform hover:scale-105 duration-300 ${
+                        isDark 
+                          ? 'bg-[#38b1f7]/10 text-[#5fc0f9] border-[#38b1f7]/20 shadow-[0_0_20px_rgba(56,177,247,0.15)]' 
+                          : 'bg-sky-50 text-[#0d7fc0] border-sky-100 shadow-sm'
+                      }`}>
+                        {user.name.split(" ").map(n => n[0]).join("").toUpperCase()}
+                      </div>
+                      
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <h2 className={`text-xl font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-950'}`}>
+                            {user.name}
+                          </h2>
+                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold border flex items-center gap-1 ${
+                            crmDetails.customer?.customerStatus === "ACTIVE" || !crmDetails.customer
+                              ? isDark ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : isDark ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-slate-100 text-slate-500 border-slate-200"
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              crmDetails.customer?.customerStatus === "ACTIVE" || !crmDetails.customer ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
+                            }`} />
+                            {crmDetails.customer?.customerStatus || "ACTIVE"}
+                          </span>
+                        </div>
+                        {crmDetails.customer?.companyName && (
+                          <div className={`flex items-center gap-1.5 text-xs font-semibold ${isDark ? 'text-[#38b1f7]' : 'text-[#0d7fc0]'}`}>
+                            <Building className="w-3.5 h-3.5" />
+                            <span>{crmDetails.customer.companyName}</span>
+                          </div>
+                        )}
+                        <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                          Role: <span className="font-bold text-slate-300 capitalize">{user.role.toLowerCase().replace('_', ' ')}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-left md:text-right text-xs space-y-1 font-mono text-slate-400">
+                      <div>Account ID: <span className={isDark ? 'text-slate-200' : 'text-slate-700'}>{user.id}</span></div>
+                      {crmDetails.customer && (
+                        <div>CRM ID: <span className={isDark ? 'text-slate-200' : 'text-slate-700'}>{crmDetails.customer.crmCustomerId}</span></div>
+                      )}
+                      <div>Member Since: <span className={isDark ? 'text-slate-200' : 'text-slate-700'}>{formatJoinedDate(user.createdAt)}</span></div>
+                    </div>
+                  </div>
+
+                  <hr className={`my-6 ${isDark ? 'border-white/[0.05]' : 'border-slate-100'}`} />
+
+                  {/* Metadata Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-xs relative z-10">
+                    <div className="space-y-1">
+                      <span className={`block text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Primary Email</span>
+                      <span className={`font-semibold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{user.email}</span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className={`block text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Secondary Email</span>
+                      <span className={`font-semibold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                        {crmDetails.customer?.secondaryEmail || <span className="text-slate-500 italic">None Provided</span>}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className={`block text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Primary Phone</span>
+                      <span className={`font-semibold flex items-center gap-1.5 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                        {crmDetails.customer?.primaryPhone ? (
+                          <>
+                            <Phone className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{crmDetails.customer.primaryPhone}</span>
+                          </>
+                        ) : (
+                          <span className="text-slate-500 italic">None Provided</span>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className={`block text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Secondary Phone</span>
+                      <span className={`font-semibold flex items-center gap-1.5 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                        {crmDetails.customer?.secondaryPhone ? (
+                          <>
+                            <Phone className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{crmDetails.customer.secondaryPhone}</span>
+                          </>
+                        ) : (
+                          <span className="text-slate-500 italic">None Provided</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {crmDetails.customer && (
+                    <div className="mt-5 pt-3 border-t border-slate-100 dark:border-white/[0.03] flex justify-between items-center text-[10px] text-slate-400">
+                      <span className="flex items-center gap-1">
+                        <Activity className="w-3 h-3 text-emerald-400" /> Live Synchronized from CRM
+                      </span>
+                      <span>Last sync: {new Date(crmDetails.customer.lastSyncedAt).toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. KPIs Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Card 1: Support Plan SLA */}
+                  <div className={`p-5 border rounded-2xl flex flex-col justify-between min-h-[160px] transition-all duration-300 ${
+                    isDark ? 'bg-[#0F172A]/45 border-white/[0.04]' : 'bg-white border-slate-200/80 shadow-sm'
+                  }`}>
+                    <div>
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Active Subscription</h3>
+                        <span className={`text-[9px] font-mono px-2 py-0.5 rounded border ${
+                          crmDetails.subscriptions.length > 0
+                            ? isDark ? "bg-emerald-950/40 text-[#12B76A] border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : isDark ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-slate-50 text-slate-400 border-slate-200"
+                        }`}>
+                          {crmDetails.subscriptions.length > 0 ? "Subscribed" : "No Plan"}
+                        </span>
+                      </div>
+                      
+                      {crmDetails.subscriptions.length > 0 ? (
+                        <div className="space-y-1">
+                          <p className={`text-xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                            {crmDetails.subscriptions[0].planName}
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            Status: <span className="capitalize font-semibold text-emerald-500">{crmDetails.subscriptions[0].status.toLowerCase()}</span>
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 italic">No subscriptions registered in CRM database.</p>
+                      )}
+                    </div>
+                    
+                    {crmDetails.subscriptions.length > 0 && (
+                      <div className={`text-[10px] font-mono pt-3 border-t text-slate-400 flex justify-between ${
+                        isDark ? 'border-white/[0.03]' : 'border-slate-100'
+                      }`}>
+                        <span>Start: {new Date(crmDetails.subscriptions[0].startDate).toLocaleDateString()}</span>
+                        {crmDetails.subscriptions[0].endDate && (
+                          <span>End: {new Date(crmDetails.subscriptions[0].endDate).toLocaleDateString()}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card 2: Support Credits */}
+                  <div className={`p-5 border rounded-2xl flex flex-col justify-between min-h-[160px] transition-all duration-300 ${
+                    isDark ? 'bg-[#0F172A]/45 border-white/[0.04]' : 'bg-white border-slate-200/80 shadow-sm'
+                  }`}>
+                    <div>
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Support Credits Balance</h3>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                          credits && credits.remainingHours > 0
+                            ? isDark ? "bg-emerald-950/40 text-[#12B76A] border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : isDark ? "bg-red-950/40 text-red-400 border-red-500/20" : "bg-red-50 text-red-700 border-red-200"
+                        }`}>
+                          {credits ? `${credits.remainingHours} hrs left` : "0 hrs left"}
+                        </span>
+                      </div>
+                      
+                      {credits && credits.allocatedHours > 0 ? (
+                        <div>
+                          <div className={`w-full h-2 rounded-full overflow-hidden mb-1.5 ${
+                            isDark ? 'bg-slate-800' : 'bg-slate-100'
+                          }`}>
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-[#38b1f7] to-emerald-400 transition-all duration-700"
+                              style={{ width: `${Math.max(0, Math.min(100, (credits.remainingHours / credits.allocatedHours) * 100))}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between text-[9px] text-slate-400 font-mono mb-2">
+                            <span>Used: {credits.usedHours} hrs</span>
+                            <span>Total: {credits.allocatedHours} hrs</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 italic">No credits allocated yet.</p>
+                      )}
+                    </div>
+                    
+                    <div className={`grid grid-cols-2 gap-x-2 text-[10px] pt-3 border-t text-slate-400 ${
+                      isDark ? 'border-white/[0.03]' : 'border-slate-100'
+                    }`}>
+                      <div>Remaining: <span className="font-bold text-emerald-500">{credits?.remainingHours ?? 0} hrs</span></div>
+                      <div>Billable: <span className="font-bold text-amber-500">{credits?.billableHours ?? 0} hrs</span></div>
+                    </div>
+                  </div>
+
+                  {/* Card 3: Ticket Metrics */}
+                  <div className={`p-5 border rounded-2xl flex flex-col justify-between min-h-[160px] transition-all duration-300 ${
+                    isDark ? 'bg-[#0F172A]/45 border-white/[0.04]' : 'bg-white border-slate-200/80 shadow-sm'
+                  }`}>
+                    <div>
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Ticket Statistics</h3>
+                        <span className={`text-[9px] font-mono px-2 py-0.5 rounded border ${
+                          isDark ? "bg-[#38b1f7]/15 text-[#5fc0f9] border-[#38b1f7]/20" : "bg-sky-50 text-[#0d7fc0] border-sky-200"
+                        }`}>
+                          Resolution {resolutionRate}%
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-2 py-1 text-center">
+                        <div className="p-1 rounded bg-slate-100/50 dark:bg-white/[0.02]">
+                          <span className="block text-lg font-extrabold text-slate-800 dark:text-slate-200">{tickets.length}</span>
+                          <span className="text-[9px] text-slate-400 uppercase">Total</span>
+                        </div>
+                        <div className="p-1 rounded bg-amber-100/30 dark:bg-amber-950/15">
+                          <span className="block text-lg font-extrabold text-amber-500">{activeTicketsCount}</span>
+                          <span className="text-[9px] text-slate-400 uppercase font-medium">Open</span>
+                        </div>
+                        <div className="p-1 rounded bg-green-100/30 dark:bg-green-950/15">
+                          <span className="block text-lg font-extrabold text-green-500">{resolvedTicketsCount}</span>
+                          <span className="text-[9px] text-slate-400 uppercase">Resolved</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <p className={`text-[9.5px] leading-relaxed pt-2.5 border-t text-slate-400 ${
+                      isDark ? 'border-white/[0.03]' : 'border-slate-100'
+                    }`}>
+                      A total of {resolvedTicketsCount} solved issues out of {tickets.length} queued help requests.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 3. Detailed Data Sections */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                  
+                  {/* Left Column: Subscriptions, Services, Domains (2 cols) */}
+                  <div className="lg:col-span-2 space-y-6">
+                    
+                    {/* Subscriptions detail section */}
+                    <div className={`p-6 border rounded-2xl transition-all duration-300 ${
+                      isDark ? 'bg-[#0F172A]/45 border-white/[0.04]' : 'bg-white border-slate-200/80 shadow-sm'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+                          <Shield className="w-4 h-4" />
+                        </div>
+                        <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Registered Subscriptions</h3>
+                      </div>
+                      
+                      {crmDetails.subscriptions.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs text-left">
+                            <thead>
+                              <tr className={`border-b text-[10px] font-bold uppercase tracking-wider ${
+                                isDark ? 'border-white/[0.05] text-slate-400' : 'border-slate-100 text-slate-500'
+                              }`}>
+                                <th className="pb-3 pr-4">Plan Name</th>
+                                <th className="pb-3 pr-4">CRM ID</th>
+                                <th className="pb-3 pr-4">Status</th>
+                                <th className="pb-3 pr-4">Start Date</th>
+                                <th className="pb-3 text-right">End Date</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-white/[0.03]">
+                              {crmDetails.subscriptions.map((sub) => (
+                                <tr key={sub.id} className={`hover:bg-slate-50/50 dark:hover:bg-white/[0.01] transition-colors`}>
+                                  <td className={`py-3.5 pr-4 font-bold ${isDark ? 'text-slate-250' : 'text-slate-800'}`}>
+                                    {sub.planName}
+                                  </td>
+                                  <td className="py-3.5 pr-4 text-slate-400 font-mono text-[10px]">
+                                    {sub.crmSubscriptionId}
+                                  </td>
+                                  <td className="py-3.5 pr-4">
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                                      sub.status.toUpperCase() === "ACTIVE"
+                                        ? isDark ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/15" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                        : isDark ? "bg-rose-950/40 text-rose-450 border-rose-500/15" : "bg-rose-50 text-rose-700 border-rose-200"
+                                    }`}>
+                                      <span className={`w-1 h-1 rounded-full ${sub.status.toUpperCase() === "ACTIVE" ? "bg-emerald-400" : "bg-rose-450"}`} />
+                                      {sub.status}
+                                    </span>
+                                  </td>
+                                  <td className="py-3.5 pr-4 text-slate-400 font-mono">
+                                    {new Date(sub.startDate).toLocaleDateString()}
+                                  </td>
+                                  <td className="py-3.5 text-right text-slate-400 font-mono">
+                                    {sub.endDate ? new Date(sub.endDate).toLocaleDateString() : "Lifetime / Ongoing"}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="p-8 text-center text-xs text-slate-400 italic bg-slate-50/50 dark:bg-white/[0.01] rounded-xl border border-dashed dark:border-white/[0.04]">
+                          No subscriptions associated with this account.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Services and Domains dual grids */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Services Card */}
+                      <div className={`p-6 border rounded-2xl transition-all duration-300 ${
+                        isDark ? 'bg-[#0F172A]/45 border-white/[0.04]' : 'bg-white border-slate-200/80 shadow-sm'
+                      }`}>
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="p-1.5 rounded-lg bg-sky-500/10 text-sky-400">
+                            <Server className="w-4 h-4" />
+                          </div>
+                          <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Purchased Services</h3>
+                        </div>
+
+                        {crmDetails.services.length > 0 ? (
+                          <div className="space-y-3">
+                            {crmDetails.services.map((svc) => (
+                              <div key={svc.id} className={`p-3 rounded-xl border flex items-center justify-between transition-colors hover:border-[#38b1f7]/30 ${
+                                isDark ? 'bg-white/[0.01] border-white/[0.05]' : 'bg-slate-50/50 border-slate-100'
+                              }`}>
+                                <div className="space-y-1 min-w-0 pr-2">
+                                  <span className={`block text-xs font-bold truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                    {svc.name}
+                                  </span>
+                                  <span className="block text-[9.5px] font-mono text-slate-455 truncate">
+                                    ID: {svc.crmServiceId}
+                                  </span>
+                                </div>
+                                <span className={`shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8.5px] font-extrabold border ${
+                                  svc.status.toUpperCase() === "ACTIVE"
+                                    ? isDark ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-150"
+                                    : isDark ? "bg-amber-950/40 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-700 border-amber-150"
+                                }`}>
+                                  {svc.status}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-8 text-center text-xs text-slate-400 italic bg-slate-50/50 dark:bg-white/[0.01] rounded-xl border border-dashed dark:border-white/[0.04]">
+                            No services registered for this account.
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Domains Card */}
+                      <div className={`p-6 border rounded-2xl transition-all duration-300 ${
+                        isDark ? 'bg-[#0F172A]/45 border-white/[0.04]' : 'bg-white border-slate-200/80 shadow-sm'
+                      }`}>
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400">
+                            <Globe className="w-4 h-4" />
+                          </div>
+                          <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Associated Domains</h3>
+                        </div>
+
+                        {crmDetails.domains.length > 0 ? (
+                          <div className="space-y-3">
+                            {crmDetails.domains.map((dom) => (
+                              <div key={dom.id} className={`p-3 rounded-xl border flex items-center justify-between transition-colors hover:border-[#38b1f7]/30 ${
+                                isDark ? 'bg-white/[0.01] border-white/[0.05]' : 'bg-slate-50/50 border-slate-100'
+                              }`}>
+                                <div className="space-y-1 min-w-0 pr-2">
+                                  <span className={`block text-xs font-bold truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                    {dom.domainName}
+                                  </span>
+                                  <span className="block text-[9.5px] font-mono text-slate-455 truncate">
+                                    ID: {dom.crmDomainId}
+                                  </span>
+                                </div>
+                                <span className={`shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8.5px] font-mono text-slate-455 border border-slate-250 dark:border-white/5`}>
+                                  Verified
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-8 text-center text-xs text-slate-400 italic bg-slate-50/50 dark:bg-white/[0.01] rounded-xl border border-dashed dark:border-white/[0.04]">
+                            No domains linked to this profile.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Billing Transactions Log (1 col) */}
+                  <div className="space-y-6">
+                    <div className={`p-6 border rounded-2xl transition-all duration-300 ${
+                      isDark ? 'bg-[#0F172A]/45 border-white/[0.04]' : 'bg-white border-slate-200/80 shadow-sm'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
+                          <History className="w-4 h-4" />
+                        </div>
+                        <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Credit Logs</h3>
+                      </div>
+
+                      {credits?.transactions && credits.transactions.length > 0 ? (
+                        <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
+                          {credits.transactions.map((tx: any) => {
+                            const isAddition = tx.hours > 0;
+                            return (
+                              <div key={tx.id} className="relative pl-5 border-l-2 border-slate-100 dark:border-white/[0.05] pb-1">
+                                {/* Bullet indicator */}
+                                <div className={`absolute -left-[6px] top-1 w-2.5 h-2.5 rounded-full border-2 ${
+                                  isDark ? 'border-[#020617]' : 'border-white'
+                                } ${isAddition ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]' : 'bg-amber-450'}`} />
+
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between text-[11px]">
+                                    <span className={`font-semibold ${isDark ? 'text-slate-355' : 'text-slate-500'}`}>
+                                      {new Date(tx.createdAt).toLocaleDateString()}
+                                    </span>
+                                    <span className={`font-bold font-mono text-xs ${isAddition ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                      {isAddition ? "+" : ""}{tx.hours.toFixed(1)} hrs
+                                    </span>
+                                  </div>
+                                  <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                                    {tx.description}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="p-8 text-center text-xs text-slate-400 italic bg-slate-50/50 dark:bg-white/[0.01] rounded-xl border border-dashed dark:border-white/[0.04]">
+                          No credit transactions found.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+              </div>
             )}
 
             {activeTab === "tickets" && (
@@ -1829,7 +2316,7 @@ export default function CustomerDashboard() {
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
           <div className={`w-full overflow-hidden shadow-2xl border transition-all duration-500 rounded-2xl my-8 ${
-            wizardStep === "choice" ? "max-w-3xl" : "max-w-xl"
+            ["select-domain", "select-service", "self-help"].includes(wizardStep) ? "max-w-2xl" : "max-w-xl"
           } ${
             isDark ? 'glass-card border-white/[0.08]' : 'bg-white border-slate-200 shadow-2xl'
           }`}>
@@ -1843,24 +2330,32 @@ export default function CustomerDashboard() {
                   <h3 className={`font-bold text-base tracking-tight ${
                     isDark ? 'text-[#F8FAFC]' : 'text-slate-900'
                   }`}>
-                    {wizardStep === "choice" && "Create Support Ticket"}
-                    {wizardStep === "intake" && "New Support Request"}
+                    {wizardStep === "select-domain" && "Select Affected Domain"}
+                    {wizardStep === "select-service" && "Select Affected Service"}
                     {wizardStep === "self-help" && "💡 Search & Read Help Articles"}
+                    {wizardStep === "intake" && "New Support Request"}
                     {wizardStep === "routing" && "Review & Submit"}
                   </h3>
                   <p className={`text-[11px] mt-0.5 ${
                     isDark ? 'text-slate-400' : 'text-slate-500'
                   }`}>
-                    {wizardStep === "choice" && "Select whether to search self-help articles or raise a support ticket"}
-                    {wizardStep === "intake" && "Tell us what's happening and we'll route it to the right team"}
+                    {wizardStep === "select-domain" && "Choose which domain is experiencing issues"}
+                    {wizardStep === "select-service" && "Select the subscribed service under that domain"}
                     {wizardStep === "self-help" && "Search for solutions instantly or read suggested articles"}
+                    {wizardStep === "intake" && "Tell us what's happening and we'll route it to the right team"}
                     {wizardStep === "routing" && "Confirm your ticket details before sending"}
                   </p>
                 </div>
                 <button
                   onClick={() => {
                     setShowCreateModal(false);
-                    setWizardStep("choice");
+                    setWizardStep("select-domain");
+                    setSelectedDomainId("");
+                    setSelectedServiceId("");
+                    setSelectedSubscriptionId("");
+                    setSelectedServiceName("");
+                    setCustomDomainInput("");
+                    setUseCustomDomain(false);
                     setSelectedFile(null);
                     setSuggestedArticles([]);
                     setCreateError(null);
@@ -1879,151 +2374,158 @@ export default function CustomerDashboard() {
               </div>
 
               {/* Step progress bar */}
-              {wizardStep !== "choice" && (
-                <div className="flex items-center gap-1 pb-4">
-                  {(["intake", "self-help", "routing"] as const).map((step, idx) => {
-                    const stepIndex = ["intake", "self-help", "routing"].indexOf(wizardStep);
-                    const isActive = step === wizardStep;
-                    const isDone = idx < stepIndex;
-                    return (
-                      <div key={step} className="flex items-center gap-1 flex-1">
-                        <div className={`h-1 flex-1 rounded-full transition-all duration-500 ${
-                          isDone
-                            ? 'bg-[#38b1f7]'
-                            : isActive
-                              ? 'bg-[#38b1f7]/50'
-                              : isDark ? 'bg-slate-800' : 'bg-slate-200'
-                        }`} />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <div className="flex items-center gap-1 pb-4">
+                {(["select-domain", "select-service", "self-help", "intake", "routing"] as const).map((step, idx) => {
+                  const stepIndex = ["select-domain", "select-service", "self-help", "intake", "routing"].indexOf(wizardStep);
+                  const isActive = step === wizardStep;
+                  const isDone = idx < stepIndex;
+                  return (
+                    <div key={step} className="flex items-center gap-1 flex-1">
+                      <div className={`h-1 flex-1 rounded-full transition-all duration-500 ${
+                        isDone
+                          ? 'bg-[#38b1f7]'
+                          : isActive
+                            ? 'bg-[#38b1f7]/50'
+                            : isDark ? 'bg-slate-800' : 'bg-slate-200'
+                      }`} />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* ── STEP 0: CHOICE STEP ────────────────────────────────────────── */}
-            {wizardStep === "choice" && (
+            {/* ── STEP 1: SELECT DOMAIN ────────────────────────────────────────── */}
+            {wizardStep === "select-domain" && (
               <div className="p-6 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Option 1: Self-Help */}
-                  <div
-                    onClick={() => {
-                      setWizardStep("self-help");
-                      // Pre-load KB articles in modal
-                      searchModalKb("");
-                    }}
-                    className={`p-5 rounded-2xl border cursor-pointer text-left transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl ${
-                      isDark
-                        ? "bg-slate-900/60 border-white/[0.06] hover:border-[#38b1f7]/40 hover:bg-slate-900"
-                        : "bg-white border-slate-200 hover:border-[#38b1f7]/40 hover:shadow-md"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                        isDark ? "bg-[#38b1f7]/15 text-[#38b1f7]" : "bg-sky-50 text-[#0d7fc0]"
-                      }`}>
-                        <BookOpen className="w-5 h-5 shrink-0" />
-                      </div>
-                      <div>
-                        <h4 className={`text-sm font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
-                          Option 1: Self-Help
-                        </h4>
-                        <p className={`text-[10px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                          Search Help Articles
-                        </p>
-                      </div>
-                    </div>
-                    <p className={`text-xs leading-relaxed mb-4 ${isDark ? "text-slate-350" : "text-slate-600"}`}>
-                      Solve basic requests (like password changes or email client setup) instantly using our extensive knowledge base guides to bypass ticket queue waits.
-                    </p>
-                    <div className="space-y-2">
-                      <p className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? "text-slate-500" : "text-slate-400"}`}>
-                        Quick Solutions
+                <div className="space-y-4">
+                  <h4 className={`text-sm font-bold ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>
+                    Select Affected Domain
+                  </h4>
+                  {loadingCrm ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-3">
+                      <RefreshCw className="w-8 h-8 text-[#38b1f7] animate-spin" />
+                      <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                        Loading subscriptions and domains...
                       </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        <button
-                          type="button"
-                          className={`text-[10px] px-2.5 py-1 rounded-full border transition-all ${
-                            isDark ? "bg-slate-800/40 border-slate-700 text-slate-300 hover:bg-slate-800" : "bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100"
-                          }`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setWizardStep("self-help");
-                            setModalKbSearch("password");
-                            searchModalKb("password");
-                          }}
-                        >
-                          🔑 Password Reset
-                        </button>
-                        <button
-                          type="button"
-                          className={`text-[10px] px-2.5 py-1 rounded-full border transition-all ${
-                            isDark ? "bg-slate-800/40 border-slate-700 text-slate-300 hover:bg-slate-800" : "bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100"
-                          }`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setWizardStep("self-help");
-                            setModalKbSearch("outlook");
-                            searchModalKb("outlook");
-                          }}
-                        >
-                          📧 Outlook Config
-                        </button>
-                      </div>
                     </div>
-                  </div>
+                  ) : crmDetails.domains.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 gap-3 max-h-[280px] overflow-y-auto pr-1">
+                        {crmDetails.domains.map((d) => {
+                          const isSelected = selectedDomainId === d.crmDomainId && !useCustomDomain;
+                          return (
+                            <div
+                              key={d.id}
+                              onClick={() => {
+                                setSelectedDomainId(d.crmDomainId);
+                                setUseCustomDomain(false);
+                                setCreateForm(prev => ({ ...prev, affectedDomain: d.domainName }));
+                                // Find subscription matching domain name
+                                const sub = crmDetails.subscriptions.find(
+                                  s => s.planName.trim().toLowerCase() === d.domainName.trim().toLowerCase()
+                                );
+                                setSelectedSubscriptionId(sub ? sub.crmSubscriptionId : "");
+                              }}
+                              className={`p-4 rounded-xl border cursor-pointer text-left transition-all flex items-center justify-between ${
+                                isSelected
+                                  ? isDark
+                                    ? "bg-sky-950/40 border-[#38b1f7]/60 shadow-[0_0_12px_rgba(56,177,247,0.1)]"
+                                    : "bg-sky-50 border-[#38b1f7] shadow-sm"
+                                  : isDark
+                                    ? "bg-slate-900/40 border-white/[0.04] hover:bg-slate-800/50 hover:border-white/[0.08]"
+                                    : "bg-white border-slate-200 hover:bg-slate-55 hover:border-slate-350"
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                                  isSelected ? "bg-[#38b1f7]/20 text-[#38b1f7]" : "bg-slate-100 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500"
+                                }`}>
+                                  <Globe className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <p className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                    {d.domainName}
+                                  </p>
+                                </div>
+                              </div>
+                              <ChevronRight className={`w-4 h-4 transition-transform ${isSelected ? 'text-[#38b1f7] translate-x-0.5' : 'text-slate-500'}`} />
+                            </div>
+                          );
+                        })}
+                      </div>
 
-                  {/* Option 2: Raise Ticket */}
-                  <div
-                    onClick={() => {
-                      setWizardStep("intake");
-                      setCreateForm(prev => ({
-                        ...prev,
-                        issueType: "technical", // Default select technical support
-                      }));
-                    }}
-                    className={`p-5 rounded-2xl border cursor-pointer text-left transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl ${
-                      isDark
-                        ? "bg-slate-900/60 border-white/[0.06] hover:border-[#38b1f7]/40 hover:bg-slate-900"
-                        : "bg-white border-slate-200 hover:border-[#38b1f7]/40 hover:shadow-md"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                        isDark ? "bg-[#38b1f7]/15 text-[#38b1f7]" : "bg-sky-50 text-[#0d7fc0]"
-                      }`}>
-                        <MessageSquare className="w-5 h-5 shrink-0" />
-                      </div>
-                      <div>
-                        <h4 className={`text-sm font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
-                          Option 2: Raise Ticket
-                        </h4>
-                        <p className={`text-[10px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                          Submit Ticket to Staff
-                        </p>
+                      <div className={`pt-3 border-t ${isDark ? 'border-white/[0.05]' : 'border-slate-100'}`}>
+                        <div
+                          onClick={() => {
+                            setUseCustomDomain(true);
+                            setSelectedDomainId("");
+                            setSelectedSubscriptionId("");
+                          }}
+                          className={`p-4 rounded-xl border cursor-pointer text-left transition-all ${
+                            useCustomDomain
+                              ? isDark
+                                ? "bg-sky-950/40 border-[#38b1f7]/60"
+                                : "bg-sky-50 border-[#38b1f7]"
+                              : isDark
+                                ? "bg-slate-900/40 border-white/[0.04]"
+                                : "bg-white border-slate-200"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 mb-3">
+                            <input
+                              type="radio"
+                              checked={useCustomDomain}
+                              onChange={() => {}}
+                              className="w-3.5 h-3.5 accent-[#38b1f7]"
+                            />
+                            <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-850'}`}>
+                              Use a custom or different domain
+                            </span>
+                          </div>
+                          {useCustomDomain && (
+                            <input
+                              type="text"
+                              value={customDomainInput}
+                              onChange={(e) => {
+                                setCustomDomainInput(e.target.value);
+                                setCreateForm(prev => ({ ...prev, affectedDomain: e.target.value }));
+                              }}
+                              placeholder="Enter domain (e.g. example.com)"
+                              className={`w-full px-3 py-2 text-xs rounded-lg outline-none border transition-all ${
+                                isDark
+                                  ? "bg-slate-950/60 border-white/[0.06] focus:border-[#38b1f7] text-white"
+                                  : "bg-white border-slate-200 focus:border-[#38b1f7] text-slate-800"
+                              }`}
+                            />
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <p className={`text-xs leading-relaxed mb-4 ${isDark ? "text-slate-350" : "text-slate-600"}`}>
-                      Proceed to generate a new support ticket. It will route directly to the responsible team based on your request department:
-                    </p>
-                    <div className="space-y-2 text-[10px] pt-1">
-                      <div className="flex items-center justify-between pb-1 border-b border-dashed dark:border-white/[0.03] border-slate-100">
-                        <span className={isDark ? "text-slate-400" : "text-slate-550"}>Billing & Renewals</span>
-                        <span className="font-semibold text-violet-400">Routes to Manjula</span>
-                      </div>
-                      <div className="flex items-center justify-between pb-1 border-b border-dashed dark:border-white/[0.03] border-slate-100">
-                        <span className={isDark ? "text-slate-400" : "text-slate-550"}>Technical Support</span>
-                        <span className="font-semibold text-[#38b1f7]">Routes to Support Team</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className={isDark ? "text-slate-400" : "text-slate-550"}>Critical Outages</span>
-                        <span className="font-semibold text-red-400">Escalates to L1 + Manager L2</span>
-                      </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-550'}`}>
+                        No domains found in your subscriptions. Please enter your domain name manually:
+                      </p>
+                      <input
+                        type="text"
+                        value={customDomainInput}
+                        onChange={(e) => {
+                          setCustomDomainInput(e.target.value);
+                          setCreateForm(prev => ({ ...prev, affectedDomain: e.target.value }));
+                          setUseCustomDomain(true);
+                        }}
+                        placeholder="Enter domain (e.g. example.com)"
+                        className={`w-full px-3 py-2.5 text-xs rounded-xl outline-none border transition-all ${
+                          isDark
+                            ? "bg-slate-950/60 border-white/[0.06] focus:border-[#38b1f7] text-white"
+                            : "bg-white border-slate-200 focus:border-[#38b1f7] text-slate-850"
+                        }`}
+                      />
                     </div>
-                  </div>
+                  )}
                 </div>
 
-                <div className={`px-6 py-4 border-t flex items-center justify-end ${
+                <div className={`px-6 py-4 border-t flex items-center justify-between -mx-6 -mb-6 ${
                   isDark ? 'border-[#1E293B] bg-slate-900/20' : 'border-slate-100 bg-slate-50/50'
                 }`}>
                   <button
@@ -2033,11 +2535,173 @@ export default function CustomerDashboard() {
                       isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    Close
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!createForm.affectedDomain.trim()}
+                    onClick={() => setWizardStep("select-service")}
+                    className="btn-cyber h-9 px-5 text-xs flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none"
+                  >
+                    <span>Next: Select Service</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
             )}
+
+            {/* ── STEP 2: SELECT SERVICE ───────────────────────────────────────── */}
+            {wizardStep === "select-service" && (() => {
+              const filteredServices = crmDetails.services.filter(s => {
+                const lowerName = s.name.toLowerCase();
+                const domain = createForm.affectedDomain.trim().toLowerCase();
+                if (lowerName.includes("domain")) {
+                  const match = lowerName.match(/\.([a-z0-9.]+)\s+domain/);
+                  if (match) {
+                    const tld = match[1];
+                    return domain.endsWith("." + tld);
+                  }
+                  return false;
+                }
+                return true;
+              });
+
+              return (
+                <div className="p-6 space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className={`text-sm font-bold ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>
+                        Select Affected Service
+                      </h4>
+                      <span className={`text-[10px] px-2 py-0.5 rounded bg-[#38b1f7]/10 text-[#38b1f7] font-semibold`}>
+                        {createForm.affectedDomain}
+                      </span>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 gap-3 max-h-[280px] overflow-y-auto pr-1">
+                        {filteredServices.length > 0 ? (
+                          filteredServices.map((s) => {
+                            const isSelected = selectedServiceId === s.crmServiceId;
+                            return (
+                              <div
+                                key={s.id}
+                                onClick={() => {
+                                  setSelectedServiceId(s.crmServiceId);
+                                  setSelectedServiceName(s.name);
+                                }}
+                                className={`p-4 rounded-xl border cursor-pointer text-left transition-all flex items-center justify-between ${
+                                  isSelected
+                                    ? isDark
+                                      ? "bg-sky-950/40 border-[#38b1f7]/60 shadow-[0_0_12px_rgba(56,177,247,0.1)]"
+                                      : "bg-sky-50 border-[#38b1f7] shadow-sm"
+                                    : isDark
+                                      ? "bg-slate-900/40 border-white/[0.04] hover:bg-slate-800/50 hover:border-white/[0.08]"
+                                      : "bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-350"
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                                    isSelected ? "bg-[#38b1f7]/20 text-[#38b1f7]" : "bg-slate-100 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500"
+                                  }`}>
+                                    <Server className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <p className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                      {s.name}
+                                    </p>
+                                    <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                                      Status: {s.status}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
+                                  isSelected ? 'border-[#38b1f7] bg-[#38b1f7]/10' : 'border-slate-400'
+                                }`}>
+                                  {isSelected && <div className="w-2 h-2 rounded-full bg-[#38b1f7]" />}
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className={`p-4 text-center rounded-xl border ${isDark ? 'bg-slate-900/40 border-white/[0.04]' : 'bg-slate-50 border-slate-200'}`}>
+                            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                              No matching services found for this domain.
+                            </p>
+                          </div>
+                        )}
+
+                        {/* General Query Fallback Option */}
+                        <div
+                          onClick={() => {
+                            setSelectedServiceId("");
+                            setSelectedServiceName("General Support");
+                          }}
+                          className={`p-4 rounded-xl border cursor-pointer text-left transition-all flex items-center justify-between ${
+                            selectedServiceId === ""
+                              ? isDark
+                                ? "bg-sky-950/40 border-[#38b1f7]/60 shadow-[0_0_12px_rgba(56,177,247,0.1)]"
+                                : "bg-sky-50 border-[#38b1f7] shadow-sm"
+                              : isDark
+                                ? "bg-slate-900/40 border-white/[0.04] hover:bg-slate-800/50 hover:border-white/[0.08]"
+                                : "bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-350"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                              selectedServiceId === "" ? "bg-[#38b1f7]/20 text-[#38b1f7]" : "bg-slate-100 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500"
+                            }`}>
+                              <HelpCircle className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                General Support / Other Issues
+                              </p>
+                              <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                                Choose this if your issue is not related to a specific active subscription package
+                              </p>
+                            </div>
+                          </div>
+                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
+                            selectedServiceId === "" ? 'border-[#38b1f7] bg-[#38b1f7]/10' : 'border-slate-400'
+                          }`}>
+                            {selectedServiceId === "" && <div className="w-2 h-2 rounded-full bg-[#38b1f7]" />}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={`px-6 py-4 border-t flex items-center justify-between -mx-6 -mb-6 ${
+                    isDark ? 'border-[#1E293B] bg-slate-900/20' : 'border-slate-100 bg-slate-50/50'
+                  }`}>
+                    <button
+                      type="button"
+                      onClick={() => setWizardStep("select-domain")}
+                      className={`flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-lg transition-colors ${
+                        isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const q = selectedServiceId === "" ? "general" : selectedServiceName;
+                        setModalKbSearch(q);
+                        searchModalKb(q);
+                        setWizardStep("self-help");
+                      }}
+                      className="btn-cyber h-9 px-5 text-xs flex items-center gap-1.5"
+                    >
+                      <span>Next: Suggested Solutions</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* ── STEP 1: INTAKE FORM ─────────────────────────────────────────── */}
             {wizardStep === "intake" && (
@@ -2102,6 +2766,34 @@ export default function CustomerDashboard() {
                       {createError}
                     </div>
                   )}
+
+                  {/* Selected Domain and Service Summary */}
+                  <div className={`p-4 rounded-xl border flex flex-col sm:flex-row gap-4 justify-between ${
+                    isDark ? 'bg-slate-900/45 border-white/[0.06] shadow-sm' : 'bg-slate-50/50 border-slate-200/80'
+                  }`}>
+                    <div className="flex-1 min-w-0">
+                      <span className={`text-[9px] font-bold uppercase tracking-wider ${
+                        isDark ? 'text-slate-400' : 'text-slate-500'
+                      }`}>Selected Domain</span>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Globe className="w-3.5 h-3.5 text-[#38b1f7]" />
+                        <p className={`text-xs font-bold truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                          {createForm.affectedDomain || "None"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0 border-t sm:border-t-0 sm:border-l pt-3 sm:pt-0 sm:pl-4 border-slate-250 dark:border-white/[0.06]">
+                      <span className={`text-[9px] font-bold uppercase tracking-wider ${
+                        isDark ? 'text-slate-400' : 'text-slate-500'
+                      }`}>Selected Service</span>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Server className="w-3.5 h-3.5 text-emerald-400" />
+                        <p className={`text-xs font-bold truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                          {selectedServiceName || "General Support"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
                   {/* Issue Type Selector */}
                   <div className="space-y-2">
@@ -2236,15 +2928,14 @@ export default function CustomerDashboard() {
                       </label>
                       <input
                         type="text"
+                        disabled
                         placeholder="e.g. mycompany.com"
-                        className={`text-sm h-[42px] rounded-xl outline-none transition-all duration-200 px-4 w-full border ${
+                        className={`text-sm h-[42px] rounded-xl outline-none px-4 w-full border ${
                           isDark
-                            ? "bg-slate-950/60 border-white/[0.06] focus:border-[#38b1f7] focus:shadow-[0_0_0_3px_rgba(56,177,247,0.12)] text-[#F8FAFC] placeholder:text-slate-600"
-                            : "bg-white border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] focus:shadow-[0_0_0_3px_rgba(56,177,247,0.12)] text-slate-900 placeholder:text-slate-400"
+                            ? "bg-slate-950/20 border-white/[0.04] text-slate-500 cursor-not-allowed"
+                            : "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed"
                         }`}
                         value={createForm.affectedDomain}
-                        onChange={(e) => setCreateForm(prev => ({ ...prev, affectedDomain: e.target.value }))}
-                        disabled={submittingCreate || loadingSuggestions}
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -2389,24 +3080,18 @@ export default function CustomerDashboard() {
                 <div className={`px-6 py-4 border-t flex items-center justify-between ${
                   isDark ? 'border-[#1E293B] bg-slate-900/20' : 'border-slate-100 bg-slate-50/50'
                 }`}>
-                  <button
+                   <button
                     type="button"
                     onClick={() => {
-                      setShowCreateModal(false);
-                      setWizardStep("choice");
-                      setSelectedFile(null);
-                      setSuggestedArticles([]);
-                      setCreateError(null);
-                      setFieldErrors({});
-                      setModalKbSearch("");
-                      setModalSelectedArticle(null);
+                      setWizardStep("self-help");
                     }}
-                    className={`text-xs font-semibold px-4 py-2 rounded-lg transition-colors ${
+                    className={`flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-lg transition-colors ${
                       isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                     }`}
                     disabled={loadingSuggestions}
                   >
-                    Cancel
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span>Back</span>
                   </button>
                   <button
                     type="submit"
@@ -2464,7 +3149,7 @@ export default function CustomerDashboard() {
                           type="button"
                           onClick={() => {
                             setShowCreateModal(false);
-                            setWizardStep("choice");
+                            setWizardStep("select-domain");
                             setModalSelectedArticle(null);
                             setModalKbSearch("");
                             toast.success("Awesome! We are glad this article solved your issue.");
@@ -2582,7 +3267,7 @@ export default function CustomerDashboard() {
                       <button
                         type="button"
                         onClick={() => {
-                          setWizardStep("choice");
+                          setWizardStep("select-service");
                           setModalKbSearch("");
                           setModalKbArticles([]);
                         }}
@@ -2599,7 +3284,7 @@ export default function CustomerDashboard() {
                           setWizardStep("intake");
                           setCreateForm(prev => ({
                             ...prev,
-                            issueType: "technical",
+                            issueType: prev.issueType || "technical",
                           }));
                         }}
                         className="btn-cyber h-10 px-5 text-xs flex items-center gap-2"
@@ -2795,7 +3480,7 @@ export default function CustomerDashboard() {
                   }`}>
                     <button
                       type="button"
-                      onClick={() => setWizardStep(suggestedArticles.length > 0 ? "self-help" : "intake")}
+                      onClick={() => setWizardStep("intake")}
                       className={`flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-lg transition-colors ${
                         isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                       }`}

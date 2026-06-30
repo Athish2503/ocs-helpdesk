@@ -322,10 +322,40 @@ export async function sendResetPasswordLinkHandler(req: Request, res: Response, 
 export async function getCrmCustomersHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const search = (req.query.search as string) || "";
-    const crmData = await crmService.getCustomers({ search, limit: 50 });
+    const limitQuery = req.query.limit ? parseInt(req.query.limit as string, 10) : 1000;
+    const crmData = await crmService.getCustomers({ search, limit: limitQuery });
     ok(res, crmData);
   } catch (err) {
     next(err);
   }
 }
+
+export async function getMyCrmDetailsHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user!.id;
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { crmCustomerId: true },
+    });
+
+    if (!user || !user.crmCustomerId) {
+      ok(res, { customer: null, domains: [], subscriptions: [], services: [] });
+      return;
+    }
+
+    const crmCustomerId = user.crmCustomerId;
+
+    const [customer, domains, subscriptions, services] = await Promise.all([
+      prisma.crmCustomer.findUnique({ where: { crmCustomerId } }),
+      prisma.crmDomain.findMany({ where: { crmCustomerId } }),
+      prisma.crmSubscription.findMany({ where: { crmCustomerId } }),
+      prisma.crmService.findMany({ where: { crmCustomerId } }),
+    ]);
+
+    ok(res, { customer, domains, subscriptions, services });
+  } catch (err) {
+    next(err);
+  }
+}
+
 

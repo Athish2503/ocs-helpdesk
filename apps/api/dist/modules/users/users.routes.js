@@ -11,6 +11,8 @@ router.use(auth_middleware_js_1.requireAuth);
 router.patch("/me/profile", users_controller_js_1.updateProfileHandler);
 // Credits check for current user
 router.get("/me/credits", users_controller_js_1.getMyCreditsHandler);
+// CRM details for current user (domains, subscriptions, services)
+router.get("/me/crm-details", users_controller_js_1.getMyCrmDetailsHandler);
 // Agents listing can be accessed by both admins and agents (or anyone with staff view access)
 router.get("/agents", (0, role_middleware_js_1.requireRole)("ADMIN", "SUPPORT_L1", "SUPPORT_L2", "BILLING", "AGENT"), users_controller_js_1.getAgentsHandler);
 // Admin / Permissions operations

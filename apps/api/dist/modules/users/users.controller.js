@@ -51,6 +51,7 @@ exports.inviteUserHandler = inviteUserHandler;
 exports.resendInviteUserHandler = resendInviteUserHandler;
 exports.sendResetPasswordLinkHandler = sendResetPasswordLinkHandler;
 exports.getCrmCustomersHandler = getCrmCustomersHandler;
+exports.getMyCrmDetailsHandler = getMyCrmDetailsHandler;
 const users_schemas_js_1 = require("./users.schemas.js");
 const UsersService = __importStar(require("./users.service.js"));
 const crmService = __importStar(require("../../services/crm.service.js"));
@@ -356,8 +357,33 @@ async function sendResetPasswordLinkHandler(req, res, next) {
 async function getCrmCustomersHandler(req, res, next) {
     try {
         const search = req.query.search || "";
-        const crmData = await crmService.getCustomers({ search, limit: 50 });
+        const limitQuery = req.query.limit ? parseInt(req.query.limit, 10) : 1000;
+        const crmData = await crmService.getCustomers({ search, limit: limitQuery });
         ok(res, crmData);
+    }
+    catch (err) {
+        next(err);
+    }
+}
+async function getMyCrmDetailsHandler(req, res, next) {
+    try {
+        const userId = req.user.id;
+        const user = await prisma_js_1.prisma.user.findUnique({
+            where: { id: userId },
+            select: { crmCustomerId: true },
+        });
+        if (!user || !user.crmCustomerId) {
+            ok(res, { customer: null, domains: [], subscriptions: [], services: [] });
+            return;
+        }
+        const crmCustomerId = user.crmCustomerId;
+        const [customer, domains, subscriptions, services] = await Promise.all([
+            prisma_js_1.prisma.crmCustomer.findUnique({ where: { crmCustomerId } }),
+            prisma_js_1.prisma.crmDomain.findMany({ where: { crmCustomerId } }),
+            prisma_js_1.prisma.crmSubscription.findMany({ where: { crmCustomerId } }),
+            prisma_js_1.prisma.crmService.findMany({ where: { crmCustomerId } }),
+        ]);
+        ok(res, { customer, domains, subscriptions, services });
     }
     catch (err) {
         next(err);
