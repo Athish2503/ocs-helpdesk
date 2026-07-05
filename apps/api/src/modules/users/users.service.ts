@@ -1,6 +1,7 @@
 import { prisma } from "../../config/prisma.js";
 import type { CreateUserInput, UpdateUserInput } from "./users.schemas.js";
 import { hashPassword } from "../../utils/password.js";
+import * as crmService from "../../services/crm.service.js";
 
 export async function listUsers(query: { search?: string; role?: string; isActive?: string }) {
   const where: any = {};
@@ -48,6 +49,9 @@ export async function listUsers(query: { search?: string; role?: string; isActiv
       },
       crmCustomer: {
         include: {
+          domains: { orderBy: { createdAt: "desc" } },
+          services: { orderBy: { createdAt: "desc" } },
+          subscriptions: { orderBy: { createdAt: "desc" } },
           invitations: {
             orderBy: { createdAt: "desc" },
             take: 1,
@@ -117,12 +121,38 @@ export async function getUserById(id: string) {
   return { ...user, auditLogs };
 }
 
+async function ensureCrmCustomerExists(crmCustomerId: string) {
+  if (!crmCustomerId) return;
+  const localCrmCust = await prisma.crmCustomer.findUnique({
+    where: { crmCustomerId }
+  });
+  if (!localCrmCust) {
+    try {
+      await crmService.syncCustomerData(crmCustomerId);
+      const verified = await prisma.crmCustomer.findUnique({
+        where: { crmCustomerId }
+      });
+      if (!verified) {
+        throw new Error(`CRM Customer with ID "${crmCustomerId}" could not be verified or does not exist in the CRM.`);
+      }
+    } catch (err: any) {
+      const error = new Error(`Failed to link CRM Customer: ${err.message || err}`) as Error & { statusCode: number };
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+}
+
 export async function createUser(input: CreateUserInput) {
   const existing = await prisma.user.findUnique({ where: { email: input.email } });
   if (existing) {
     const error = new Error("An account with this email already exists") as Error & { statusCode: number };
     error.statusCode = 409;
     throw error;
+  }
+
+  if (input.crmCustomerId) {
+    await ensureCrmCustomerExists(input.crmCustomerId);
   }
 
   const passwordHash = await hashPassword(input.password);
@@ -164,6 +194,10 @@ export async function createUser(input: CreateUserInput) {
 export async function updateUser(id: string, input: UpdateUserInput) {
   // Verify existence
   await getUserById(id);
+
+  if (input.crmCustomerId) {
+    await ensureCrmCustomerExists(input.crmCustomerId);
+  }
 
   const data: any = { ...input };
   if (input.password) {

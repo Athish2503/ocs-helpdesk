@@ -38,8 +38,8 @@ function toPublicUser(user: UserRow): UserPublic {
   };
 }
 
-function buildTokens(user: { id: string; email: string; role: Role }) {
-  const accessToken = signAccessToken({ sub: user.id, email: user.email, role: user.role });
+function buildTokens(user: { id: string; email: string; role: Role }, overrideEmail?: string) {
+  const accessToken = signAccessToken({ sub: user.id, email: overrideEmail || user.email, role: user.role });
   const refreshToken = signRefreshToken(user.id);
   return { accessToken, refreshToken };
 }
@@ -63,9 +63,28 @@ export async function login(input: LoginInput): Promise<AuthResponse> {
   const identifier = input.email.trim();
   const isEmail = identifier.includes("@");
   let user = null;
+  let loggedInWithSecondaryEmail = false;
+  let secondaryEmailValue = "";
 
   if (isEmail) {
     user = await prisma.user.findUnique({ where: { email: identifier.toLowerCase() } });
+    if (!user) {
+      // Find CRM Customer by secondary email (case-insensitive)
+      const crmCustomer = await prisma.crmCustomer.findFirst({
+        where: {
+          secondaryEmail: {
+            equals: identifier,
+            mode: "insensitive",
+          },
+        },
+        include: { user: true },
+      });
+      if (crmCustomer?.user) {
+        user = crmCustomer.user;
+        loggedInWithSecondaryEmail = true;
+        secondaryEmailValue = identifier.toLowerCase();
+      }
+    }
   } else {
     // Search by user's direct phone number
     user = await prisma.user.findFirst({
@@ -126,7 +145,7 @@ export async function login(input: LoginInput): Promise<AuthResponse> {
   });
 
   // 5. Issue tokens
-  const { accessToken, refreshToken } = buildTokens(user);
+  const { accessToken, refreshToken } = buildTokens(user, loggedInWithSecondaryEmail ? secondaryEmailValue : undefined);
 
   // 6. Persist refresh token
   await prisma.refreshToken.create({
@@ -219,7 +238,16 @@ export async function requestMagicLink(
   input: RequestMagicLinkInput
 ): Promise<{ message: string; magicLink?: string }> {
   // 1. Check if it's register vs login
-  const existingUser = await prisma.user.findUnique({ where: { email: input.email } });
+  let existingUser = await prisma.user.findUnique({ where: { email: input.email.toLowerCase() } });
+  if (!existingUser) {
+    const crmCustomer = await prisma.crmCustomer.findFirst({
+      where: { secondaryEmail: { equals: input.email, mode: "insensitive" } },
+      include: { user: true }
+    });
+    if (crmCustomer?.user) {
+      existingUser = crmCustomer.user;
+    }
+  }
 
   if (!existingUser) {
     const error = new Error("Account does not exist. Public self-registration is disabled.") as Error & { statusCode: number };
@@ -289,7 +317,21 @@ export async function magicLogin(token: string): Promise<AuthResponse> {
   await prisma.magicToken.delete({ where: { id: magicToken.id } });
 
   // 3. Find or create the user
-  let user = await prisma.user.findUnique({ where: { email: magicToken.email } });
+  let user = await prisma.user.findUnique({ where: { email: magicToken.email.toLowerCase() } });
+  let loggedInWithSecondaryEmail = false;
+  let secondaryEmailValue = "";
+
+  if (!user) {
+    const crmCustomer = await prisma.crmCustomer.findFirst({
+      where: { secondaryEmail: { equals: magicToken.email, mode: "insensitive" } },
+      include: { user: true }
+    });
+    if (crmCustomer?.user) {
+      user = crmCustomer.user;
+      loggedInWithSecondaryEmail = true;
+      secondaryEmailValue = magicToken.email.toLowerCase();
+    }
+  }
 
   if (!user) {
     // Must be registration flow. Name should be present, otherwise fallback
@@ -321,7 +363,7 @@ export async function magicLogin(token: string): Promise<AuthResponse> {
   }
 
   // 4. Issue tokens
-  const { accessToken, refreshToken } = buildTokens(user);
+  const { accessToken, refreshToken } = buildTokens(user, loggedInWithSecondaryEmail ? secondaryEmailValue : undefined);
 
   // 5. Persist refresh token
   await prisma.refreshToken.create({

@@ -181,7 +181,8 @@ exports.TicketScalarFieldEnum = {
     crmCustomerId: 'crmCustomerId',
     domainId: 'domainId',
     subscriptionId: 'subscriptionId',
-    serviceId: 'serviceId'
+    serviceId: 'serviceId',
+    createdBySecondaryEmail: 'createdBySecondaryEmail'
 };
 exports.TicketMessageScalarFieldEnum = {
     id: 'id',
@@ -383,6 +384,7 @@ exports.CrmCustomerScalarFieldEnum = {
     primaryPhone: 'primaryPhone',
     secondaryPhone: 'secondaryPhone',
     customerStatus: 'customerStatus',
+    crmUpdatedAt: 'crmUpdatedAt',
     lastSyncedAt: 'lastSyncedAt'
 };
 exports.CrmDomainScalarFieldEnum = {
@@ -398,6 +400,7 @@ exports.CrmServiceScalarFieldEnum = {
     name: 'name',
     status: 'status',
     crmCustomerId: 'crmCustomerId',
+    domainName: 'domainName',
     createdAt: 'createdAt'
 };
 exports.CrmSubscriptionScalarFieldEnum = {

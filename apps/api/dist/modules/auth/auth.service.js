@@ -33,8 +33,8 @@ function toPublicUser(user) {
         createdAt: user.createdAt,
     };
 }
-function buildTokens(user) {
-    const accessToken = (0, jwt_js_1.signAccessToken)({ sub: user.id, email: user.email, role: user.role });
+function buildTokens(user, overrideEmail) {
+    const accessToken = (0, jwt_js_1.signAccessToken)({ sub: user.id, email: overrideEmail || user.email, role: user.role });
     const refreshToken = (0, jwt_js_1.signRefreshToken)(user.id);
     return { accessToken, refreshToken };
 }
@@ -54,8 +54,27 @@ async function login(input) {
     const identifier = input.email.trim();
     const isEmail = identifier.includes("@");
     let user = null;
+    let loggedInWithSecondaryEmail = false;
+    let secondaryEmailValue = "";
     if (isEmail) {
         user = await prisma_js_1.prisma.user.findUnique({ where: { email: identifier.toLowerCase() } });
+        if (!user) {
+            // Find CRM Customer by secondary email (case-insensitive)
+            const crmCustomer = await prisma_js_1.prisma.crmCustomer.findFirst({
+                where: {
+                    secondaryEmail: {
+                        equals: identifier,
+                        mode: "insensitive",
+                    },
+                },
+                include: { user: true },
+            });
+            if (crmCustomer?.user) {
+                user = crmCustomer.user;
+                loggedInWithSecondaryEmail = true;
+                secondaryEmailValue = identifier.toLowerCase();
+            }
+        }
     }
     else {
         // Search by user's direct phone number
@@ -110,7 +129,7 @@ async function login(input) {
         data: { lastLoginAt: new Date() }
     });
     // 5. Issue tokens
-    const { accessToken, refreshToken } = buildTokens(user);
+    const { accessToken, refreshToken } = buildTokens(user, loggedInWithSecondaryEmail ? secondaryEmailValue : undefined);
     // 6. Persist refresh token
     await prisma_js_1.prisma.refreshToken.create({
         data: {
@@ -186,7 +205,16 @@ async function logoutAll(userId) {
 // ---------------------------------------------------------------------------
 async function requestMagicLink(input) {
     // 1. Check if it's register vs login
-    const existingUser = await prisma_js_1.prisma.user.findUnique({ where: { email: input.email } });
+    let existingUser = await prisma_js_1.prisma.user.findUnique({ where: { email: input.email.toLowerCase() } });
+    if (!existingUser) {
+        const crmCustomer = await prisma_js_1.prisma.crmCustomer.findFirst({
+            where: { secondaryEmail: { equals: input.email, mode: "insensitive" } },
+            include: { user: true }
+        });
+        if (crmCustomer?.user) {
+            existingUser = crmCustomer.user;
+        }
+    }
     if (!existingUser) {
         const error = new Error("Account does not exist. Public self-registration is disabled.");
         error.statusCode = 400;
@@ -244,7 +272,20 @@ async function magicLogin(token) {
     // Consume the token immediately (single-use constraint)
     await prisma_js_1.prisma.magicToken.delete({ where: { id: magicToken.id } });
     // 3. Find or create the user
-    let user = await prisma_js_1.prisma.user.findUnique({ where: { email: magicToken.email } });
+    let user = await prisma_js_1.prisma.user.findUnique({ where: { email: magicToken.email.toLowerCase() } });
+    let loggedInWithSecondaryEmail = false;
+    let secondaryEmailValue = "";
+    if (!user) {
+        const crmCustomer = await prisma_js_1.prisma.crmCustomer.findFirst({
+            where: { secondaryEmail: { equals: magicToken.email, mode: "insensitive" } },
+            include: { user: true }
+        });
+        if (crmCustomer?.user) {
+            user = crmCustomer.user;
+            loggedInWithSecondaryEmail = true;
+            secondaryEmailValue = magicToken.email.toLowerCase();
+        }
+    }
     if (!user) {
         // Must be registration flow. Name should be present, otherwise fallback
         const name = magicToken.name || magicToken.email.split("@")[0] || "User";
@@ -274,7 +315,7 @@ async function magicLogin(token) {
         }
     }
     // 4. Issue tokens
-    const { accessToken, refreshToken } = buildTokens(user);
+    const { accessToken, refreshToken } = buildTokens(user, loggedInWithSecondaryEmail ? secondaryEmailValue : undefined);
     // 5. Persist refresh token
     await prisma_js_1.prisma.refreshToken.create({
         data: {

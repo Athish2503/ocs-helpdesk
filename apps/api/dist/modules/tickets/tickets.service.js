@@ -9,7 +9,7 @@ const prisma_js_1 = require("../../config/prisma.js");
 /**
  * Create a new ticket for a customer.
  */
-async function createTicket(input, customerId, userRole) {
+async function createTicket(input, customerId, userRole, creatorEmail) {
     let categoryId = input.categoryId;
     if (!categoryId) {
         let generalCategory = await prisma_js_1.prisma.category.findFirst({
@@ -80,12 +80,25 @@ async function createTicket(input, customerId, userRole) {
     // Fetch customer's CRM Customer ID
     const customerUser = await prisma_js_1.prisma.user.findUnique({
         where: { id: customerId },
-        select: { crmCustomerId: true }
+        select: { crmCustomerId: true, email: true }
     });
+    let createdBySecondaryEmail = null;
+    let finalDescription = input.description;
+    if (creatorEmail && customerUser && creatorEmail.toLowerCase() !== customerUser.email.toLowerCase()) {
+        if (customerUser.crmCustomerId) {
+            const crmCust = await prisma_js_1.prisma.crmCustomer.findUnique({
+                where: { crmCustomerId: customerUser.crmCustomerId }
+            });
+            if (crmCust && crmCust.secondaryEmail && crmCust.secondaryEmail.toLowerCase() === creatorEmail.toLowerCase()) {
+                createdBySecondaryEmail = crmCust.secondaryEmail;
+                finalDescription = `${input.description}\n\n[Created via secondary email: ${crmCust.secondaryEmail}]`;
+            }
+        }
+    }
     const ticket = await prisma_js_1.prisma.ticket.create({
         data: {
             title: input.title,
-            description: input.description,
+            description: finalDescription,
             priority: priority || "MEDIUM",
             status: "OPEN",
             categoryId: categoryId,
@@ -98,6 +111,7 @@ async function createTicket(input, customerId, userRole) {
             domainId: input.domainId || null,
             subscriptionId: input.subscriptionId || null,
             serviceId: input.serviceId || null,
+            createdBySecondaryEmail,
         },
         include: {
             category: true,

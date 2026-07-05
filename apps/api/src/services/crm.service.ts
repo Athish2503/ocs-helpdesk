@@ -82,7 +82,20 @@ export async function syncCustomerData(customerId: string): Promise<void> {
       return;
     }
 
-    const { customer, domains, subscriptions, services } = response.summary;
+    const { customer, domains, subscriptions } = response.summary;
+
+    // Extract services from nested subscriptions to map them to the proper domain
+    const extractedServices: any[] = [];
+    for (const sub of subscriptions || []) {
+      for (const s of sub.services || []) {
+        extractedServices.push({
+          serviceId: s.serviceId,
+          serviceName: s.serviceName,
+          SKU: s.SKU,
+          domainName: sub.domainName || null,
+        });
+      }
+    }
 
     const payload = {
       crmCustomerId: customer.customerId,
@@ -93,14 +106,16 @@ export async function syncCustomerData(customerId: string): Promise<void> {
       primaryPhone: customer.primaryPhone || null,
       secondaryPhone: customer.secondaryPhone || null,
       customerStatus: customer.status || "ACTIVE",
+      crmUpdatedAt: customer.updatedAt || null,
       domains: (domains || []).map((d: any) => ({
         crmDomainId: d.domainId ? String(d.domainId) : "",
         domainName: d.domainName,
       })),
-      services: (services || []).map((s: any) => ({
+      services: extractedServices.map((s: any) => ({
         crmServiceId: s.serviceId ? String(s.serviceId) : "",
         name: s.serviceName,
         status: "ACTIVE", // Default fallback required by DB schema
+        domainName: s.domainName || null,
       })),
       subscriptions: (subscriptions || []).map((sub: any) => ({
         crmSubscriptionId: sub.subscriptionId ? String(sub.subscriptionId) : "",

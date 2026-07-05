@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.listUsers = listUsers;
 exports.getUserById = getUserById;
@@ -8,6 +41,7 @@ exports.getAgents = getAgents;
 exports.updateProfile = updateProfile;
 const prisma_js_1 = require("../../config/prisma.js");
 const password_js_1 = require("../../utils/password.js");
+const crmService = __importStar(require("../../services/crm.service.js"));
 async function listUsers(query) {
     const where = {};
     if (query.search) {
@@ -50,6 +84,9 @@ async function listUsers(query) {
             },
             crmCustomer: {
                 include: {
+                    domains: { orderBy: { createdAt: "desc" } },
+                    services: { orderBy: { createdAt: "desc" } },
+                    subscriptions: { orderBy: { createdAt: "desc" } },
                     invitations: {
                         orderBy: { createdAt: "desc" },
                         take: 1,
@@ -114,12 +151,38 @@ async function getUserById(id) {
     });
     return { ...user, auditLogs };
 }
+async function ensureCrmCustomerExists(crmCustomerId) {
+    if (!crmCustomerId)
+        return;
+    const localCrmCust = await prisma_js_1.prisma.crmCustomer.findUnique({
+        where: { crmCustomerId }
+    });
+    if (!localCrmCust) {
+        try {
+            await crmService.syncCustomerData(crmCustomerId);
+            const verified = await prisma_js_1.prisma.crmCustomer.findUnique({
+                where: { crmCustomerId }
+            });
+            if (!verified) {
+                throw new Error(`CRM Customer with ID "${crmCustomerId}" could not be verified or does not exist in the CRM.`);
+            }
+        }
+        catch (err) {
+            const error = new Error(`Failed to link CRM Customer: ${err.message || err}`);
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+}
 async function createUser(input) {
     const existing = await prisma_js_1.prisma.user.findUnique({ where: { email: input.email } });
     if (existing) {
         const error = new Error("An account with this email already exists");
         error.statusCode = 409;
         throw error;
+    }
+    if (input.crmCustomerId) {
+        await ensureCrmCustomerExists(input.crmCustomerId);
     }
     const passwordHash = await (0, password_js_1.hashPassword)(input.password);
     return prisma_js_1.prisma.user.create({
@@ -158,6 +221,9 @@ async function createUser(input) {
 async function updateUser(id, input) {
     // Verify existence
     await getUserById(id);
+    if (input.crmCustomerId) {
+        await ensureCrmCustomerExists(input.crmCustomerId);
+    }
     const data = { ...input };
     if (input.password) {
         data.passwordHash = await (0, password_js_1.hashPassword)(input.password);

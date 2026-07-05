@@ -157,6 +157,7 @@ model Ticket {
   domainId        String?        @map("domain_id")
   subscriptionId  String?        @map("subscription_id")
   serviceId       String?        @map("service_id")
+  createdBySecondaryEmail String?        @map("created_by_secondary_email")
 
   crmCustomer     CrmCustomer?   @relation("CustomerCrmTickets", fields: [crmCustomerId], references: [crmCustomerId], onDelete: SetNull)
   domain          CrmDomain?     @relation(fields: [domainId], references: [crmDomainId], onDelete: SetNull)
@@ -462,6 +463,7 @@ model CrmCustomer {
   primaryPhone   String?  @map("primary_phone")
   secondaryPhone String?  @map("secondary_phone")
   customerStatus String   @default("ACTIVE") @map("customer_status")
+  crmUpdatedAt   DateTime? @map("crm_updated_at")
   lastSyncedAt   DateTime @default(now()) @map("last_synced_at")
 
   user           User?    @relation("UserCrmCustomer")
@@ -492,6 +494,7 @@ model CrmService {
   name          String
   status        String
   crmCustomerId String      @map("crm_customer_id")
+  domainName    String?     @map("domain_name")
   crmCustomer   CrmCustomer @relation(fields: [crmCustomerId], references: [crmCustomerId], onDelete: Cascade)
   createdAt     DateTime    @default(now()) @map("created_at")
   tickets       Ticket[]

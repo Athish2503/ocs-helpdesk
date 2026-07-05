@@ -10,7 +10,7 @@ export async function createTicketHandler(req: Request, res: Response, next: Nex
   try {
     const input = createTicketSchema.parse(req.body);
     // req.user is populated by requireAuth middleware
-    const ticket = await TicketsService.createTicket(input, req.user!.id, req.user!.role);
+    const ticket = await TicketsService.createTicket(input, req.user!.id, req.user!.role, req.user!.email);
     ok(res, { ticket }, 201);
   } catch (err) {
     next(err);

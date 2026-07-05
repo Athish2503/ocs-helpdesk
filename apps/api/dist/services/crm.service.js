@@ -116,7 +116,19 @@ async function syncCustomerData(customerId) {
             console.error(`[CRM Sync] Failed to get customer summary for ${customerId}`, response);
             return;
         }
-        const { customer, domains, subscriptions, services } = response.summary;
+        const { customer, domains, subscriptions } = response.summary;
+        // Extract services from nested subscriptions to map them to the proper domain
+        const extractedServices = [];
+        for (const sub of subscriptions || []) {
+            for (const s of sub.services || []) {
+                extractedServices.push({
+                    serviceId: s.serviceId,
+                    serviceName: s.serviceName,
+                    SKU: s.SKU,
+                    domainName: sub.domainName || null,
+                });
+            }
+        }
         const payload = {
             crmCustomerId: customer.customerId,
             companyName: customer.companyName || null,
@@ -126,14 +138,16 @@ async function syncCustomerData(customerId) {
             primaryPhone: customer.primaryPhone || null,
             secondaryPhone: customer.secondaryPhone || null,
             customerStatus: customer.status || "ACTIVE",
+            crmUpdatedAt: customer.updatedAt || null,
             domains: (domains || []).map((d) => ({
                 crmDomainId: d.domainId ? String(d.domainId) : "",
                 domainName: d.domainName,
             })),
-            services: (services || []).map((s) => ({
+            services: extractedServices.map((s) => ({
                 crmServiceId: s.serviceId ? String(s.serviceId) : "",
                 name: s.serviceName,
                 status: "ACTIVE", // Default fallback required by DB schema
+                domainName: s.domainName || null,
             })),
             subscriptions: (subscriptions || []).map((sub) => ({
                 crmSubscriptionId: sub.subscriptionId ? String(sub.subscriptionId) : "",

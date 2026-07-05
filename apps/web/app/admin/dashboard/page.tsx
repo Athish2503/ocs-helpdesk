@@ -46,6 +46,7 @@ import {
   CreditCard,
   FileText,
   ShieldAlert,
+  RotateCw,
   Lock,
 } from "lucide-react";
 import { useDialog } from "../../../context/DialogContext";
@@ -120,6 +121,7 @@ interface TicketData {
   ttrHours?: number | null;
   statusHistory?: StatusHistoryItem[];
   creditTransactions?: CreditTransactionItem[];
+  createdBySecondaryEmail?: string | null;
 }
 interface KBArticle {
   id: string; title: string; slug: string; content: string;
@@ -1379,6 +1381,12 @@ export default function AdminDashboard() {
                       </p>
                       <div className={`p-4 rounded-xl border leading-relaxed text-xs whitespace-pre-wrap ${isDark ? "bg-[#111827] border-white/[0.04] text-slate-350" : "bg-white border-slate-200 text-slate-650"}`}>
                         {selectedTicket.description}
+                        {selectedTicket.createdBySecondaryEmail && (
+                          <div className="flex items-center gap-1.5 mt-3 text-[11px] text-[#38b1f7] bg-[#38b1f7]/10 border border-[#38b1f7]/25 px-2.5 py-1 rounded-lg w-fit font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#38b1f7] animate-pulse" />
+                            <span>Created via secondary email: {selectedTicket.createdBySecondaryEmail}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -4024,25 +4032,26 @@ function UserModal({
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
 
+  const fetchAllCrmCustomers = async () => {
+    if (formRole !== "CUSTOMER" || showStatusToggle) return;
+    setSearchingCrm(true);
+    try {
+      const res = await fetchWithAuth("/users/crm-customers?limit=1000");
+      if (res.ok) {
+        const payload = await res.json();
+        const list = payload.data?.customers || [];
+        setAllCrmCustomers(list);
+        setCrmResults(list);
+      }
+    } catch (err) {
+      console.error("Error fetching CRM customers:", err);
+    } finally {
+      setSearchingCrm(false);
+    }
+  };
+
   // Load all CRM customers once
   useEffect(() => {
-    if (formRole !== "CUSTOMER" || showStatusToggle) return;
-    const fetchAllCrmCustomers = async () => {
-      setSearchingCrm(true);
-      try {
-        const res = await fetchWithAuth("/users/crm-customers?limit=1000");
-        if (res.ok) {
-          const payload = await res.json();
-          const list = payload.data?.customers || [];
-          setAllCrmCustomers(list);
-          setCrmResults(list);
-        }
-      } catch (err) {
-        console.error("Error fetching CRM customers:", err);
-      } finally {
-        setSearchingCrm(false);
-      }
-    };
     fetchAllCrmCustomers();
   }, [formRole, showStatusToggle]);
 
@@ -4163,9 +4172,20 @@ function UserModal({
                   /* SEARCH & LINK STATE */
                   <div className="space-y-4 flex-1 flex flex-col justify-start">
                     <div>
-                      <label className={`text-xs font-bold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"} mb-1.5 block`}>
-                        CRM Integration
-                      </label>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className={`text-xs font-bold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"} block`}>
+                          CRM Integration
+                        </label>
+                        <button
+                          type="button"
+                          onClick={fetchAllCrmCustomers}
+                          disabled={searchingCrm}
+                          className={`p-1 rounded transition-all hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-650 dark:hover:text-white ${searchingCrm ? "animate-spin" : ""}`}
+                          title="Refresh CRM Records"
+                        >
+                          <RotateCw className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                       <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-normal mb-3">
                         Search to link an external customer profile and auto-fill details.
                       </p>

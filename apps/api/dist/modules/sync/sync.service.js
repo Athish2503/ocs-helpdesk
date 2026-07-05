@@ -6,31 +6,49 @@ exports.handleCustomerDeactivated = handleCustomerDeactivated;
 const prisma_js_1 = require("../../config/prisma.js");
 async function handleCustomerCreated(data) {
     return prisma_js_1.prisma.$transaction(async (tx) => {
-        // 1. Upsert CrmCustomer record
-        const crmCustomer = await tx.crmCustomer.upsert({
-            where: { crmCustomerId: data.crmCustomerId },
-            create: {
-                crmCustomerId: data.crmCustomerId,
-                companyName: data.companyName,
-                displayName: data.displayName,
-                primaryEmail: data.primaryEmail,
-                secondaryEmail: data.secondaryEmail,
-                primaryPhone: data.primaryPhone,
-                secondaryPhone: data.secondaryPhone,
-                customerStatus: data.customerStatus || "ACTIVE",
-                lastSyncedAt: new Date(),
-            },
-            update: {
-                companyName: data.companyName,
-                displayName: data.displayName,
-                primaryEmail: data.primaryEmail,
-                secondaryEmail: data.secondaryEmail,
-                primaryPhone: data.primaryPhone,
-                secondaryPhone: data.secondaryPhone,
-                customerStatus: data.customerStatus || "ACTIVE",
-                lastSyncedAt: new Date(),
-            },
+        // 1. Upsert CrmCustomer record avoiding primaryEmail conflicts if crmCustomerId changes
+        const existing = await tx.crmCustomer.findFirst({
+            where: {
+                OR: [
+                    { crmCustomerId: data.crmCustomerId },
+                    { primaryEmail: data.primaryEmail }
+                ]
+            }
         });
+        let crmCustomer;
+        if (existing) {
+            crmCustomer = await tx.crmCustomer.update({
+                where: { id: existing.id },
+                data: {
+                    crmCustomerId: data.crmCustomerId,
+                    companyName: data.companyName,
+                    displayName: data.displayName,
+                    primaryEmail: data.primaryEmail,
+                    secondaryEmail: data.secondaryEmail,
+                    primaryPhone: data.primaryPhone,
+                    secondaryPhone: data.secondaryPhone,
+                    customerStatus: data.customerStatus || "ACTIVE",
+                    crmUpdatedAt: data.crmUpdatedAt ? new Date(data.crmUpdatedAt) : null,
+                    lastSyncedAt: new Date(),
+                }
+            });
+        }
+        else {
+            crmCustomer = await tx.crmCustomer.create({
+                data: {
+                    crmCustomerId: data.crmCustomerId,
+                    companyName: data.companyName,
+                    displayName: data.displayName,
+                    primaryEmail: data.primaryEmail,
+                    secondaryEmail: data.secondaryEmail,
+                    primaryPhone: data.primaryPhone,
+                    secondaryPhone: data.secondaryPhone,
+                    customerStatus: data.customerStatus || "ACTIVE",
+                    crmUpdatedAt: data.crmUpdatedAt ? new Date(data.crmUpdatedAt) : null,
+                    lastSyncedAt: new Date(),
+                }
+            });
+        }
         // 2. Sync Domains
         const syncedDomainIds = (data.domains || []).map((d) => d.crmDomainId);
         await tx.crmDomain.deleteMany({
@@ -53,14 +71,30 @@ async function handleCustomerCreated(data) {
             });
         }
         // 3. Sync Services
-        const syncedServiceIds = (data.services || []).map((s) => s.crmServiceId);
+        // 3. Sync Services (aggregating mapped domains per service)
+        const servicesInput = data.services || [];
+        const uniqueServiceMap = new Map();
+        const serviceDomainMap = new Map();
+        for (const s of servicesInput) {
+            uniqueServiceMap.set(s.crmServiceId, s);
+            if (s.domainName) {
+                if (!serviceDomainMap.has(s.crmServiceId)) {
+                    serviceDomainMap.set(s.crmServiceId, new Set());
+                }
+                serviceDomainMap.get(s.crmServiceId).add(s.domainName);
+            }
+        }
+        const uniqueServices = Array.from(uniqueServiceMap.values());
+        const syncedServiceIds = uniqueServices.map((s) => s.crmServiceId);
         await tx.crmService.deleteMany({
             where: {
                 crmCustomerId: data.crmCustomerId,
                 crmServiceId: { notIn: syncedServiceIds },
             },
         });
-        for (const s of data.services || []) {
+        for (const s of uniqueServices) {
+            const domainsSet = serviceDomainMap.get(s.crmServiceId);
+            const joinedDomains = domainsSet ? Array.from(domainsSet).join(",") : null;
             await tx.crmService.upsert({
                 where: { crmServiceId: s.crmServiceId },
                 create: {
@@ -68,10 +102,12 @@ async function handleCustomerCreated(data) {
                     name: s.name,
                     status: s.status,
                     crmCustomerId: data.crmCustomerId,
+                    domainName: joinedDomains,
                 },
                 update: {
                     name: s.name,
                     status: s.status,
+                    domainName: joinedDomains,
                 },
             });
         }
@@ -118,8 +154,8 @@ async function handleCustomerCreated(data) {
                 },
             });
         }
-        else if (!user.crmCustomerId) {
-            // Link existing user to CRM Customer if email matched
+        else if (user.crmCustomerId !== data.crmCustomerId) {
+            // Link or update existing user to the CRM Customer ID if changed
             user = await tx.user.update({
                 where: { id: user.id },
                 data: {

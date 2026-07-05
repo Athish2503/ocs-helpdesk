@@ -20,7 +20,8 @@ export async function createTicket(
     serviceId?: string | null;
   },
   customerId: string,
-  userRole: Role
+  userRole: Role,
+  creatorEmail?: string
 ) {
   let categoryId = input.categoryId;
 
@@ -105,13 +106,28 @@ export async function createTicket(
   // Fetch customer's CRM Customer ID
   const customerUser = await prisma.user.findUnique({
     where: { id: customerId },
-    select: { crmCustomerId: true }
+    select: { crmCustomerId: true, email: true }
   });
+
+  let createdBySecondaryEmail: string | null = null;
+  let finalDescription = input.description;
+
+  if (creatorEmail && customerUser && creatorEmail.toLowerCase() !== customerUser.email.toLowerCase()) {
+    if (customerUser.crmCustomerId) {
+      const crmCust = await prisma.crmCustomer.findUnique({
+        where: { crmCustomerId: customerUser.crmCustomerId }
+      });
+      if (crmCust && crmCust.secondaryEmail && crmCust.secondaryEmail.toLowerCase() === creatorEmail.toLowerCase()) {
+        createdBySecondaryEmail = crmCust.secondaryEmail;
+        finalDescription = `${input.description}\n\n[Created via secondary email: ${crmCust.secondaryEmail}]`;
+      }
+    }
+  }
 
   const ticket = await prisma.ticket.create({
     data: {
       title: input.title,
-      description: input.description,
+      description: finalDescription,
       priority: priority || "MEDIUM",
       status: "OPEN",
       categoryId: categoryId,
@@ -124,6 +140,7 @@ export async function createTicket(
       domainId: input.domainId || null,
       subscriptionId: input.subscriptionId || null,
       serviceId: input.serviceId || null,
+      createdBySecondaryEmail,
     },
     include: {
       category: true,

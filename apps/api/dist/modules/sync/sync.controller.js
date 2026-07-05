@@ -37,6 +37,7 @@ exports.crmWebhookHandler = crmWebhookHandler;
 exports.bulkImportCustomersHandler = bulkImportCustomersHandler;
 const SyncService = __importStar(require("./sync.service.js"));
 const crmService = __importStar(require("../../services/crm.service.js"));
+const prisma_js_1 = require("../../config/prisma.js");
 async function crmWebhookHandler(req, res, next) {
     try {
         const { event, data } = req.body;
@@ -77,6 +78,7 @@ async function bulkImportCustomersHandler(req, res, next) {
         let total = 0;
         let imported = 0;
         let failed = 0;
+        let skipped = 0;
         const errors = [];
         console.log("[Bulk Import] Starting full CRM customer import...");
         while (hasMore) {
@@ -111,6 +113,25 @@ async function bulkImportCustomersHandler(req, res, next) {
                     errors.push({ customerId: "unknown", error: "Missing customerId in CRM record" });
                     continue;
                 }
+                // Optimization: skip sync if customer exists and has not been updated in CRM
+                try {
+                    const existingLocal = await prisma_js_1.prisma.crmCustomer.findUnique({
+                        where: { crmCustomerId: customerId },
+                        select: { crmUpdatedAt: true },
+                    });
+                    if (existingLocal && customer.updatedAt) {
+                        const localTime = existingLocal.crmUpdatedAt ? new Date(existingLocal.crmUpdatedAt).getTime() : 0;
+                        const crmTime = new Date(customer.updatedAt).getTime();
+                        if (localTime === crmTime) {
+                            console.log(`[Bulk Import] Skipping customer ${customerId} (no updates)`);
+                            skipped++;
+                            continue;
+                        }
+                    }
+                }
+                catch (dbErr) {
+                    console.warn(`[Bulk Import] Failed checking existing customer ${customerId} in DB:`, dbErr.message);
+                }
                 try {
                     await crmService.syncCustomerData(customerId);
                     imported++;
@@ -134,13 +155,13 @@ async function bulkImportCustomersHandler(req, res, next) {
         }
         // Use actual count if total wasn't in response
         if (total === 0) {
-            total = imported + failed;
+            total = imported + skipped + failed;
         }
-        console.log(`[Bulk Import] Complete. Total: ${total}, Imported: ${imported}, Failed: ${failed}`);
+        console.log(`[Bulk Import] Complete. Total: ${total}, Imported: ${imported}, Skipped: ${skipped}, Failed: ${failed}`);
         res.status(200).json({
             success: true,
-            message: `Bulk import complete. ${imported} customers synced${failed > 0 ? `, ${failed} failed` : ""}.`,
-            data: { total, imported, failed, errors: errors.slice(0, 20) }, // cap errors in response
+            message: `Bulk import complete. ${imported} customers synced, ${skipped} skipped${failed > 0 ? `, ${failed} failed` : ""}.`,
+            data: { total, imported, skipped, failed, errors: errors.slice(0, 20) }, // cap errors in response
         });
     }
     catch (err) {

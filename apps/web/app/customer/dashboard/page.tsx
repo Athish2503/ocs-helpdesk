@@ -82,6 +82,7 @@ interface Ticket {
   } | null;
   createdAt: string;
   updatedAt: string;
+  createdBySecondaryEmail?: string | null;
   messages?: TicketMessage[];
 }
 
@@ -296,7 +297,7 @@ export default function CustomerDashboard() {
     } | null;
     domains: Array<{ id: string; crmDomainId: string; domainName: string }>;
     subscriptions: Array<{ id: string; crmSubscriptionId: string; planName: string; status: string; startDate: string; endDate?: string | null }>;
-    services: Array<{ id: string; crmServiceId: string; name: string; status: string }>;
+    services: Array<{ id: string; crmServiceId: string; name: string; status: string; domainName?: string | null }>;
   }>({ customer: null, domains: [], subscriptions: [], services: [] });
   const [loadingCrm, setLoadingCrm] = useState(false);
   const [selectedDomainId, setSelectedDomainId] = useState<string>("");
@@ -1916,6 +1917,12 @@ export default function CustomerDashboard() {
                             <p className={`text-xs leading-relaxed whitespace-pre-wrap ${
                               isDark ? 'text-slate-200' : 'text-slate-700'
                             }`}>{detailedTicket.description}</p>
+                            {detailedTicket.createdBySecondaryEmail && (
+                              <div className="flex items-center gap-1.5 mt-3 text-[11px] text-[#38b1f7] bg-[#38b1f7]/10 border border-[#38b1f7]/25 px-2.5 py-1 rounded-lg w-fit font-medium">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#38b1f7] animate-pulse" />
+                                <span>Created via secondary email: {detailedTicket.createdBySecondaryEmail}</span>
+                              </div>
+                            )}
                           </div>
 
                           {/* Message Loop */}
@@ -2553,8 +2560,13 @@ export default function CustomerDashboard() {
             {/* ── STEP 2: SELECT SERVICE ───────────────────────────────────────── */}
             {wizardStep === "select-service" && (() => {
               const filteredServices = crmDetails.services.filter(s => {
-                const lowerName = s.name.toLowerCase();
                 const domain = createForm.affectedDomain.trim().toLowerCase();
+                if (s.domainName) {
+                  const domainsList = s.domainName.split(",").map(d => d.trim().toLowerCase());
+                  return domainsList.includes(domain);
+                }
+                // Fallback for services without domainName mapped
+                const lowerName = s.name.toLowerCase();
                 if (lowerName.includes("domain")) {
                   const match = lowerName.match(/\.([a-z0-9.]+)\s+domain/);
                   if (match) {

@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import * as SyncService from "./sync.service.js";
 import * as crmService from "../../services/crm.service.js";
+import { prisma } from "../../config/prisma.js";
 
 export async function crmWebhookHandler(req: Request, res: Response, next: NextFunction) {
   try {
@@ -44,6 +45,7 @@ export async function bulkImportCustomersHandler(req: Request, res: Response, ne
     let total = 0;
     let imported = 0;
     let failed = 0;
+    let skipped = 0;
     const errors: { customerId: string; error: string }[] = [];
 
     console.log("[Bulk Import] Starting full CRM customer import...");
@@ -84,6 +86,26 @@ export async function bulkImportCustomersHandler(req: Request, res: Response, ne
           continue;
         }
 
+        // Optimization: skip sync if customer exists and has not been updated in CRM
+        try {
+          const existingLocal = await prisma.crmCustomer.findUnique({
+            where: { crmCustomerId: customerId },
+            select: { crmUpdatedAt: true },
+          });
+
+          if (existingLocal && customer.updatedAt) {
+            const localTime = existingLocal.crmUpdatedAt ? new Date(existingLocal.crmUpdatedAt).getTime() : 0;
+            const crmTime = new Date(customer.updatedAt).getTime();
+            if (localTime === crmTime) {
+              console.log(`[Bulk Import] Skipping customer ${customerId} (no updates)`);
+              skipped++;
+              continue;
+            }
+          }
+        } catch (dbErr: any) {
+          console.warn(`[Bulk Import] Failed checking existing customer ${customerId} in DB:`, dbErr.message);
+        }
+
         try {
           await crmService.syncCustomerData(customerId);
           imported++;
@@ -106,15 +128,15 @@ export async function bulkImportCustomersHandler(req: Request, res: Response, ne
 
     // Use actual count if total wasn't in response
     if (total === 0) {
-      total = imported + failed;
+      total = imported + skipped + failed;
     }
 
-    console.log(`[Bulk Import] Complete. Total: ${total}, Imported: ${imported}, Failed: ${failed}`);
+    console.log(`[Bulk Import] Complete. Total: ${total}, Imported: ${imported}, Skipped: ${skipped}, Failed: ${failed}`);
 
     res.status(200).json({
       success: true,
-      message: `Bulk import complete. ${imported} customers synced${failed > 0 ? `, ${failed} failed` : ""}.`,
-      data: { total, imported, failed, errors: errors.slice(0, 20) }, // cap errors in response
+      message: `Bulk import complete. ${imported} customers synced, ${skipped} skipped${failed > 0 ? `, ${failed} failed` : ""}.`,
+      data: { total, imported, skipped, failed, errors: errors.slice(0, 20) }, // cap errors in response
     });
   } catch (err) {
     next(err);
