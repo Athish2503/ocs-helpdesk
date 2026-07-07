@@ -24,6 +24,7 @@ import {
   MinusCircle,
   ArrowUpCircle,
   ArrowUp,
+  Upload,
   Minus,
   ChevronDown,
   MessageSquare,
@@ -517,12 +518,35 @@ export default function AdminDashboard() {
     } catch { toast.error("Failed to send reply."); }
   };
 
-  const handleResolveSubmit = async (e: React.FormEvent) => {
+  const handleResolveSubmit = async (e: React.FormEvent, files: File[]) => {
     e.preventDefault();
     if (!selectedTicket || !pendingStatusChange) return;
-    await updateTicketDetails({ status: pendingStatusChange }, resolveTicketHours, resolveTicketNotes);
-    setShowResolveModal(false);
-    setPendingStatusChange(null);
+
+    try {
+      if (files && files.length > 0) {
+        for (const file of files) {
+          const formData = new FormData();
+          formData.append("file", file);
+
+          const uploadRes = await fetchWithAuth(`/tickets/${selectedTicket.id}/attachments`, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!uploadRes.ok) {
+            const errBody = await uploadRes.json();
+            throw new Error(errBody.error?.message || `Failed to upload screenshot: ${file.name}`);
+          }
+        }
+      }
+
+      await updateTicketDetails({ status: pendingStatusChange }, resolveTicketHours, resolveTicketNotes);
+      setShowResolveModal(false);
+      setPendingStatusChange(null);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to resolve ticket.");
+    }
   };
 
   // ── Team Actions ─────────────────────────────────────────────────
@@ -4992,12 +5016,33 @@ interface ResolveTicketModalProps {
   onClose: () => void;
   onHoursChange: (v: number) => void;
   onNotesChange: (v: string) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (e: React.FormEvent, files: File[]) => void;
 }
 
 function ResolveTicketModal({
   ticket, customerUser, hours, notes, isDark, onClose, onHoursChange, onNotesChange, onSubmit
 }: ResolveTicketModalProps) {
+  const [screenshots, setScreenshots] = React.useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = React.useState<string[]>([]);
+  const [lightboxUrl, setLightboxUrl] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (screenshots.length === 0) {
+      setPreviewUrls([]);
+      return;
+    }
+    const urls = screenshots.map(file => URL.createObjectURL(file));
+    setPreviewUrls(urls);
+    return () => {
+      urls.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [screenshots]);
+
+  const removeScreenshot = (index: number) => {
+    setScreenshots(prev => prev.filter((_, idx) => idx !== index));
+  };
+
   const credits = customerUser?.customerCredits;
   const currentAllocated = credits?.allocatedHours ?? 20;
   const currentUsed = credits?.usedHours ?? 0;
@@ -5021,7 +5066,7 @@ function ResolveTicketModal({
             <X className="w-4 h-4" />
           </button>
         </div>
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={e => onSubmit(e, screenshots)} className="space-y-4">
           <div className="space-y-2">
             <h4 className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Client Credits Preview</h4>
             <div className="grid grid-cols-3 gap-2 p-3 rounded-xl border text-xs bg-slate-50 dark:bg-white/[0.01] border-slate-200 dark:border-white/[0.05]">
@@ -5063,6 +5108,95 @@ function ResolveTicketModal({
             />
           </div>
 
+          <div className="admin-form-group space-y-2">
+            <label className={`admin-form-label ${isDark ? "admin-dark" : ""} font-semibold`}>
+              Resolution Screenshot Proofs (Optional)
+            </label>
+            
+            <input 
+              type="file" 
+              ref={fileInputRef}
+              accept="image/*"
+              multiple
+              onChange={e => {
+                const selectedFiles = Array.from(e.target.files || []);
+                setScreenshots(prev => [...prev, ...selectedFiles]);
+              }} 
+              className="hidden" 
+            />
+
+            <div 
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer transition-all duration-200 ${
+                isDark 
+                  ? 'border-slate-800 hover:border-sky-500/50 bg-slate-950/20 hover:bg-slate-900/10' 
+                  : 'border-slate-200 hover:border-sky-500 bg-slate-50/50 hover:bg-slate-50'
+              }`}
+            >
+              <Upload className={`w-8 h-8 mb-2 ${isDark ? 'text-slate-500' : 'text-slate-400'}`} />
+              <span className={`text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                Upload resolution screenshots
+              </span>
+              <span className={`text-[10px] mt-1 ${isDark ? 'text-slate-550' : 'text-slate-400'}`}>
+                Click to select screenshots (multiple images supported)
+              </span>
+            </div>
+
+            {screenshots.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                {screenshots.map((file, idx) => {
+                  const previewUrl = previewUrls[idx];
+                  return (
+                    <div 
+                      key={`${file.name}-${idx}`}
+                      className={`p-2.5 rounded-xl border flex items-center justify-between gap-2.5 ${
+                        isDark ? 'border-slate-800 bg-slate-950/20' : 'border-slate-200 bg-slate-50/30'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {previewUrl && (
+                          <div 
+                            onClick={() => setLightboxUrl(previewUrl)}
+                            className="relative w-10 h-10 rounded-lg overflow-hidden border border-slate-200/50 dark:border-white/[0.04] bg-slate-100 dark:bg-slate-950 shrink-0 cursor-pointer group/thumb hover:scale-105 transition-all"
+                            title="Click to view full image"
+                          >
+                            <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/35 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center transition-opacity">
+                              <Eye className="w-3 h-3 text-white" />
+                            </div>
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className={`text-[11px] font-bold truncate ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                            {file.name}
+                          </p>
+                          <p className={`text-[9px] font-mono mt-0.5 ${isDark ? 'text-slate-550' : 'text-slate-455'}`}>
+                            {(file.size / (1024 * 1024)).toFixed(2)} MB
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeScreenshot(idx);
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                        title="Remove screenshot"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            
+            <p className={`text-[10px] ${isDark ? "text-slate-550" : "text-slate-400"}`}>
+              Provide optional visual screenshot proofs showing that the issue has been successfully fixed and verified.
+            </p>
+          </div>
+
           <div className="admin-form-group">
             <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Resolution Summary / Notes (Optional)</label>
             <textarea 
@@ -5083,6 +5217,29 @@ function ResolveTicketModal({
           </div>
         </form>
       </div>
+
+      {lightboxUrl && (
+        <div 
+          className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <div className="relative max-w-full max-h-full">
+            <button 
+              type="button"
+              className="absolute top-4 right-4 bg-black/60 hover:bg-black/80 text-white rounded-full p-2 hover:scale-105 transition-transform"
+              onClick={() => setLightboxUrl(null)}
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <img 
+              src={lightboxUrl} 
+              alt="Screenshot Preview" 
+              className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg border border-white/[0.08]" 
+              onClick={e => e.stopPropagation()} 
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

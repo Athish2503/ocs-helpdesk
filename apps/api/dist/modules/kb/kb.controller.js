@@ -162,7 +162,7 @@ async function deleteArticleHandler(req, res, next) {
 // --- CATEGORIES ---
 async function listCategoriesHandler(req, res, next) {
     try {
-        const categories = await KbService.listCategories();
+        const categories = await KbService.listCategories(req.user);
         ok(res, { categories });
     }
     catch (err) {

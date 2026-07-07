@@ -45,6 +45,10 @@ export async function listUsers(query: { search?: string; role?: string; isActiv
           usedHours: true,
           remainingHours: true,
           billableHours: true,
+          creditCategoryId: true,
+          creditCategory: {
+            select: { id: true, name: true, credits: true },
+          },
         },
       },
       crmCustomer: {
@@ -88,6 +92,10 @@ export async function getUserById(id: string) {
           usedHours: true,
           remainingHours: true,
           billableHours: true,
+          creditCategoryId: true,
+          creditCategory: {
+            select: { id: true, name: true, credits: true },
+          },
         },
       },
       crmCustomer: {

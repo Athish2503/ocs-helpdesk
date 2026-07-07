@@ -114,18 +114,16 @@ export async function deleteArticleHandler(req: Request, res: Response, next: Ne
     next(err);
   }
 }
-
 // --- CATEGORIES ---
 
 export async function listCategoriesHandler(req: Request, res: Response, next: NextFunction) {
   try {
-    const categories = await KbService.listCategories();
+    const categories = await KbService.listCategories(req.user);
     ok(res, { categories });
   } catch (err) {
     next(err);
   }
 }
-
 export async function createCategoryHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const input = createCategorySchema.parse(req.body);

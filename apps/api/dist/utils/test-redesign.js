@@ -18,6 +18,56 @@ async function runTests() {
     if (!emailCat) {
         throw new Error("❌ 'Email' category is missing.");
     }
+    // Update routing rules for test users
+    await prisma_js_1.prisma.routingRule.update({
+        where: { issueCategory: "Billing / Renewals" },
+        data: { assigneeId: billing.id }
+    });
+    await prisma_js_1.prisma.routingRule.update({
+        where: { issueCategory: "Critical Issues" },
+        data: {
+            assigneeId: l1.id,
+            secondaryAssigneeId: l2.id
+        }
+    });
+    // Link customer to a CrmCustomer and CrmDomain so it's treated as inside OCS
+    let crmCustomerId = customer.crmCustomerId;
+    if (!crmCustomerId) {
+        crmCustomerId = "test-customer-crm-id";
+        await prisma_js_1.prisma.crmCustomer.upsert({
+            where: { crmCustomerId },
+            update: {},
+            create: {
+                crmCustomerId,
+                displayName: "Test Customer Company",
+                primaryEmail: customer.email,
+            }
+        });
+        await prisma_js_1.prisma.user.update({
+            where: { id: customer.id },
+            data: { crmCustomerId }
+        });
+    }
+    else {
+        await prisma_js_1.prisma.crmCustomer.upsert({
+            where: { crmCustomerId },
+            update: {},
+            create: {
+                crmCustomerId,
+                displayName: "Test Customer Company",
+                primaryEmail: customer.email,
+            }
+        });
+    }
+    await prisma_js_1.prisma.crmDomain.upsert({
+        where: { crmDomainId: "test-domain-id" },
+        update: {},
+        create: {
+            crmDomainId: "test-domain-id",
+            domainName: "company.com",
+            crmCustomerId,
+        }
+    });
     console.log("✅ Seeded users and categories loaded.");
     // Clean up existing test tickets if any
     await prisma_js_1.prisma.ticket.deleteMany({
@@ -70,6 +120,7 @@ async function runTests() {
         categoryId: emailCat.id,
         priority: "LOW",
         issueCategory: "Technical Support",
+        affectedDomain: "company.com",
     }, customer.id, customer.role);
     console.log(`Technical ticket created. Assigned Agent: ${techTicket.agentId}, Assigned Team: ${techTicket.teamId}`);
     // Technical Support category should route to Support Team
@@ -94,6 +145,15 @@ async function runTests() {
         throw new Error(`❌ firstResponseAt was not updated upon staff reply.`);
     }
     console.log(`✅ firstResponseAt updated: ${updatedTechTicket.firstResponseAt.toISOString()}`);
+    // Create a dummy attachment to pass backend screenshot validation
+    await prisma_js_1.prisma.ticketAttachment.create({
+        data: {
+            ticketId: techTicket.id,
+            filename: "test-resolution-proof.png",
+            filePath: "/uploads/kb/images/test-resolution-proof.png",
+            mimeType: "image/png"
+        }
+    });
     // Update Status to RESOLVED, prompt resolution hours consumed
     console.log("Resolving ticket...");
     await (0, tickets_service_js_1.updateTicket)(techTicket.id, { status: "RESOLVED", hoursConsumed: 2.0 }, adminCtx);
@@ -135,7 +195,17 @@ async function runTests() {
         categoryId: emailCat.id,
         priority: "MEDIUM",
         issueCategory: "Technical Support",
+        affectedDomain: "company.com",
     }, customer.id, customer.role);
+    // Create a dummy attachment to pass backend screenshot validation
+    await prisma_js_1.prisma.ticketAttachment.create({
+        data: {
+            ticketId: overTicket.id,
+            filename: "test-resolution-proof.png",
+            filePath: "/uploads/kb/images/test-resolution-proof.png",
+            mimeType: "image/png"
+        }
+    });
     console.log("Resolving ticket with 6.0 consumed hours...");
     await (0, tickets_service_js_1.updateTicket)(overTicket.id, { status: "RESOLVED", hoursConsumed: 6.0 }, adminCtx);
     const finalCredits = await prisma_js_1.prisma.customerCredits.findUnique({

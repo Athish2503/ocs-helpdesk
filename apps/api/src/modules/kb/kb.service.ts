@@ -59,8 +59,73 @@ export async function listArticles(
     }
   }
 
+  // Filter by user's subscribed services if customer
+  let allowedCategoryIds: string[] | null = null;
+  if (user && user.role === "CUSTOMER") {
+    const customerUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { crmCustomerId: true }
+    });
+    if (customerUser?.crmCustomerId) {
+      const activeServices = await prisma.crmService.findMany({
+        where: { crmCustomerId: customerUser.crmCustomerId }
+      });
+      const serviceNames = activeServices
+        .filter(s => s.status.toUpperCase() === "ACTIVE")
+        .map(s => s.name.toLowerCase());
+
+      // Fetch all categories to traverse parents
+      const allCategories = await prisma.category.findMany({
+        select: { id: true, name: true, parentId: true }
+      });
+
+      const getCategoryAncestors = (catId: string): string[] => {
+        const ancestors: string[] = [];
+        let current = allCategories.find(c => c.id === catId);
+        while (current && current.parentId) {
+          const parentId = current.parentId;
+          const parent = allCategories.find(c => c.id === parentId);
+          if (parent) {
+            ancestors.push(parent.name.toLowerCase());
+            current = parent;
+          } else {
+            break;
+          }
+        }
+        return ancestors;
+      };
+
+      const matchedCategories = allCategories.filter(cat => {
+        const catNameLower = cat.name.toLowerCase();
+        // Match substring/inclusion on name
+        const matchesName = serviceNames.some(s => s.includes(catNameLower) || catNameLower.includes(s));
+        if (matchesName) return true;
+
+        // Check if any ancestor matches
+        const ancestors = getCategoryAncestors(cat.id);
+        const matchesAncestor = ancestors.some(ancestor => serviceNames.some(s => s.includes(ancestor) || ancestor.includes(s)));
+        return matchesAncestor;
+      });
+
+      allowedCategoryIds = matchedCategories.map(c => c.id);
+    } else {
+      allowedCategoryIds = [];
+    }
+  }
+
   if (query?.categoryId) {
-    where.categoryId = query.categoryId;
+    if (allowedCategoryIds !== null) {
+      if (allowedCategoryIds.includes(query.categoryId)) {
+        where.categoryId = query.categoryId;
+      } else {
+        // Not allowed to see this category
+        where.categoryId = "non-existent-id";
+      }
+    } else {
+      where.categoryId = query.categoryId;
+    }
+  } else if (allowedCategoryIds !== null) {
+    where.categoryId = { in: allowedCategoryIds };
   }
 
   if (query?.authorId) {
@@ -308,7 +373,7 @@ export async function deleteArticle(id: string) {
 
 // --- CATEGORIES ---
 
-export async function listCategories() {
+export async function listCategories(user?: { id: string; role: Role }) {
   const categories = await prisma.category.findMany({
     include: {
       _count: {
@@ -318,10 +383,55 @@ export async function listCategories() {
     orderBy: { name: "asc" },
   });
 
-  return categories.map((cat) => ({
+  let filtered = categories.map((cat) => ({
     ...cat,
     article_count: cat._count.kbArticles,
   }));
+
+  if (user && user.role === "CUSTOMER") {
+    const customerUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { crmCustomerId: true }
+    });
+    if (customerUser?.crmCustomerId) {
+      const activeServices = await prisma.crmService.findMany({
+        where: { crmCustomerId: customerUser.crmCustomerId }
+      });
+      const serviceNames = activeServices
+        .filter(s => s.status.toUpperCase() === "ACTIVE")
+        .map(s => s.name.toLowerCase());
+
+      const getCategoryAncestors = (catId: string): string[] => {
+        const ancestors: string[] = [];
+        let current = categories.find(c => c.id === catId);
+        while (current && current.parentId) {
+          const parentId = current.parentId;
+          const parent = categories.find(c => c.id === parentId);
+          if (parent) {
+            ancestors.push(parent.name.toLowerCase());
+            current = parent;
+          } else {
+            break;
+          }
+        }
+        return ancestors;
+      };
+
+      filtered = filtered.filter(cat => {
+        const catNameLower = cat.name.toLowerCase();
+        const matchesName = serviceNames.some(s => s.includes(catNameLower) || catNameLower.includes(s));
+        if (matchesName) return true;
+
+        const ancestors = getCategoryAncestors(cat.id);
+        const matchesAncestor = ancestors.some(ancestor => serviceNames.some(s => s.includes(ancestor) || ancestor.includes(s)));
+        return matchesAncestor;
+      });
+    } else {
+      filtered = [];
+    }
+  }
+
+  return filtered;
 }
 
 export async function createCategory(input: CreateCategoryInput) {

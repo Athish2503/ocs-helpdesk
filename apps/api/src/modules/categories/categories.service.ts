@@ -86,6 +86,7 @@ export async function createCategory(input: CreateCategoryInput) {
       description: input.description || null,
       isActive: input.isActive ?? true,
       parentId: input.parentId || null,
+      credits: input.credits ?? 0.0,
     },
   });
 }

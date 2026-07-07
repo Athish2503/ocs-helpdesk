@@ -187,6 +187,7 @@ exports.CategoryScalarFieldEnum = {
     description: 'description',
     isActive: 'isActive',
     parentId: 'parentId',
+    credits: 'credits',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
 };
@@ -384,6 +385,7 @@ exports.CustomerCreditsScalarFieldEnum = {
     usedHours: 'usedHours',
     remainingHours: 'remainingHours',
     billableHours: 'billableHours',
+    creditCategoryId: 'creditCategoryId',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
 };

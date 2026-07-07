@@ -51,6 +51,7 @@ router.post("/routing-rules", requirePermission("manage_categories_rules"), crea
 router.patch("/routing-rules/:id", requirePermission("manage_categories_rules"), updateRoutingRuleHandler);
 router.delete("/routing-rules/:id", requirePermission("manage_categories_rules"), deleteRoutingRuleHandler);
 
+
 // Credits adjustments
 router.patch("/:id/credits", requirePermission("adjust_credits"), updateCustomerCreditsHandler);
 

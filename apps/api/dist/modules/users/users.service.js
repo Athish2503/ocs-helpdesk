@@ -80,6 +80,10 @@ async function listUsers(query) {
                     usedHours: true,
                     remainingHours: true,
                     billableHours: true,
+                    creditCategoryId: true,
+                    creditCategory: {
+                        select: { id: true, name: true, credits: true },
+                    },
                 },
             },
             crmCustomer: {
@@ -122,6 +126,10 @@ async function getUserById(id) {
                     usedHours: true,
                     remainingHours: true,
                     billableHours: true,
+                    creditCategoryId: true,
+                    creditCategory: {
+                        select: { id: true, name: true, credits: true },
+                    },
                 },
             },
             crmCustomer: {

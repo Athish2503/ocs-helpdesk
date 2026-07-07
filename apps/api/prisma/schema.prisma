@@ -111,18 +111,20 @@ enum TicketPriority {
 }
 
 model Category {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  slug        String?  @unique
-  description String?
-  isActive    Boolean  @default(true)
-  parentId    String?  @map("parent_id")
-  parent      Category?  @relation("CategoryParent", fields: [parentId], references: [id])
-  children    Category[] @relation("CategoryParent")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  tickets     Ticket[]
-  kbArticles  KnowledgeBaseArticle[]
+  id              String                 @id @default(uuid())
+  name            String                 @unique
+  slug            String?                @unique
+  description     String?
+  isActive        Boolean                @default(true)
+  parentId        String?                @map("parent_id")
+  credits         Float                  @default(0.0)
+  parent          Category?              @relation("CategoryParent", fields: [parentId], references: [id])
+  children        Category[]             @relation("CategoryParent")
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  tickets         Ticket[]
+  kbArticles      KnowledgeBaseArticle[]
+  customerCredits CustomerCredits[]
 
   @@map("categories")
 }
@@ -414,15 +416,17 @@ model RoutingRule {
 }
 
 model CustomerCredits {
-  id             String   @id @default(uuid())
-  customerId     String   @unique @map("customer_id")
-  customer       User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  allocatedHours Float    @default(0.0) @map("allocated_hours")
-  usedHours      Float    @default(0.0) @map("used_hours")
-  remainingHours Float    @default(0.0) @map("remaining_hours")
-  billableHours  Float    @default(0.0) @map("billable_hours")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id               String          @id @default(uuid())
+  customerId       String          @unique @map("customer_id")
+  customer         User            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  allocatedHours   Float           @default(0.0) @map("allocated_hours")
+  usedHours        Float           @default(0.0) @map("used_hours")
+  remainingHours   Float           @default(0.0) @map("remaining_hours")
+  billableHours    Float           @default(0.0) @map("billable_hours")
+  creditCategoryId String?         @map("credit_category_id")
+  creditCategory   Category?       @relation(fields: [creditCategoryId], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
 
   transactions CreditTransaction[]
 

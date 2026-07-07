@@ -86,6 +86,7 @@ async function createCategory(input) {
             description: input.description || null,
             isActive: input.isActive ?? true,
             parentId: input.parentId || null,
+            credits: input.credits ?? 0.0,
         },
     });
 }

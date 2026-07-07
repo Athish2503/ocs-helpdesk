@@ -906,7 +906,7 @@ export default function RichTextEditor({
         onInput={handleInput}
         onKeyUp={detectActiveStyles}
         onMouseUp={detectActiveStyles}
-        placeholder={placeholder}
+        {...{ placeholder }}
         className="w-full min-h-[380px] max-h-[600px] overflow-y-auto px-5 py-4 bg-slate-50/20 dark:bg-slate-950/20 focus:outline-none transition-all text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-blue-500/10 leading-relaxed font-sans prose dark:prose-invert"
         style={{ outline: "none" }}
       />

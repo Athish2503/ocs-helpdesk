@@ -161,26 +161,49 @@ async function getMyCreditsHandler(req, res, next) {
 async function updateCustomerCreditsHandler(req, res, next) {
     try {
         const id = req.params.id; // customer user ID
-        const { allocatedHours, usedHours, remainingHours, billableHours, description } = req.body;
+        const { allocatedHours, usedHours, remainingHours, billableHours, description, creditCategoryId } = req.body;
+        let resolvedAllocatedHours = allocatedHours;
+        if (creditCategoryId && allocatedHours === undefined) {
+            const getCategoryCredits = async (catId) => {
+                const cat = await prisma_js_1.prisma.category.findUnique({
+                    where: { id: catId },
+                    select: { credits: true, parentId: true }
+                });
+                if (!cat)
+                    return 0;
+                if (cat.credits > 0)
+                    return cat.credits;
+                if (cat.parentId) {
+                    return getCategoryCredits(cat.parentId);
+                }
+                return cat.credits;
+            };
+            const catCredits = await getCategoryCredits(creditCategoryId);
+            if (catCredits > 0) {
+                resolvedAllocatedHours = catCredits;
+            }
+        }
         const currentCredits = await prisma_js_1.prisma.customerCredits.findUnique({
             where: { customerId: id },
         });
         const oldAllocated = currentCredits?.allocatedHours ?? 0;
-        const diff = (allocatedHours ?? oldAllocated) - oldAllocated;
+        const diff = (resolvedAllocatedHours ?? oldAllocated) - oldAllocated;
         const credits = await prisma_js_1.prisma.customerCredits.upsert({
             where: { customerId: id },
             update: {
-                ...(allocatedHours !== undefined ? { allocatedHours } : {}),
+                ...(resolvedAllocatedHours !== undefined ? { allocatedHours: resolvedAllocatedHours } : {}),
                 ...(usedHours !== undefined ? { usedHours } : {}),
                 ...(remainingHours !== undefined ? { remainingHours } : {}),
                 ...(billableHours !== undefined ? { billableHours } : {}),
+                ...(creditCategoryId !== undefined ? { creditCategoryId } : {}),
             },
             create: {
                 customerId: id,
-                allocatedHours: allocatedHours ?? 20.0,
+                allocatedHours: resolvedAllocatedHours ?? 20.0,
                 usedHours: usedHours ?? 0.0,
-                remainingHours: remainingHours ?? 20.0,
+                remainingHours: remainingHours ?? resolvedAllocatedHours ?? 20.0,
                 billableHours: billableHours ?? 0.0,
+                creditCategoryId: creditCategoryId ?? null,
             },
         });
         if (diff !== 0) {

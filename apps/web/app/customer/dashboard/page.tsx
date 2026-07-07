@@ -3,7 +3,7 @@
 import { useAuth } from "../../../context/AuthContext";
 import Loader from "../../../components/Loader";
 import { useToast } from "../../../context/ToastContext";
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { fetchWithAuth } from "../../../lib/api";
 import {
   Plus,
@@ -34,6 +34,7 @@ import {
   Globe,
   Server,
   FileText,
+  Folder,
   LogOut,
   User,
   Building,
@@ -61,6 +62,15 @@ interface TicketMessage {
   };
 }
 
+interface TicketAttachment {
+  id: string;
+  ticketId: string;
+  filename: string;
+  filePath: string;
+  mimeType: string;
+  createdAt: string;
+}
+
 interface Ticket {
   id: string;
   title: string;
@@ -84,6 +94,7 @@ interface Ticket {
   updatedAt: string;
   createdBySecondaryEmail?: string | null;
   messages?: TicketMessage[];
+  attachments?: TicketAttachment[];
 }
 
 interface KbArticle {
@@ -101,6 +112,7 @@ interface KbCategory {
   id: string;
   name: string;
   article_count?: number;
+  parentId?: string | null;
 }
 
 interface CustomerNavItemProps {
@@ -814,7 +826,7 @@ export default function CustomerDashboard() {
       }`}></div>
 
       {/* 1. Sidebar Navigation */}
-      <aside className={`admin-sidebar border-r flex flex-col justify-between hidden md:flex shrink-0 z-30 relative ${
+      <aside className={`admin-sidebar border-r flex flex-col justify-between hidden md:flex shrink-0 z-40 relative ${
         isSidebarCollapsed ? "w-[68px]" : "w-[240px]"
       } ${
         isDark 
@@ -1528,6 +1540,14 @@ export default function CustomerDashboard() {
                       <div>Remaining: <span className="font-bold text-emerald-500">{credits?.remainingHours ?? 0} hrs</span></div>
                       <div>Billable: <span className="font-bold text-amber-500">{credits?.billableHours ?? 0} hrs</span></div>
                     </div>
+                    {(!crmDetails?.domains || crmDetails.domains.length === 0) && (
+                      <div className={`mt-2.5 pt-2.5 border-t text-[9px] flex items-center gap-1.5 ${
+                        isDark ? 'border-white/[0.03] text-amber-400/90' : 'border-slate-100 text-amber-600'
+                      }`}>
+                        <AlertTriangle className="w-3 h-3 shrink-0 text-amber-500" />
+                        <span className="font-medium">Min billing 1/2 hour applies for external domains</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Card 3: Ticket Metrics */}
@@ -1923,6 +1943,35 @@ export default function CustomerDashboard() {
                                 <span>Created via secondary email: {detailedTicket.createdBySecondaryEmail}</span>
                               </div>
                             )}
+                            {detailedTicket.attachments && detailedTicket.attachments.length > 0 && (
+                              <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/[0.04] space-y-2">
+                                <p className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                  Attachments / Screenshot Proofs
+                                </p>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                  {detailedTicket.attachments.map((att: any) => {
+                                    const isImage = att.mimeType?.startsWith("image/") || att.filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                                    const fileUrl = `${process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:4000"}${att.filePath}`;
+                                    return (
+                                      <div key={att.id} className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-white/[0.05] p-2 bg-slate-50/50 dark:bg-white/[0.01] flex flex-col justify-between h-[105px]">
+                                        {isImage ? (
+                                          <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="block w-full h-[65px] overflow-hidden rounded bg-slate-100 dark:bg-slate-950 flex items-center justify-center border dark:border-white/5 border-slate-200">
+                                            <img src={fileUrl} alt={att.filename} className="max-h-full max-w-full object-contain" />
+                                          </a>
+                                        ) : (
+                                          <div className="w-full h-[65px] rounded bg-slate-100 dark:bg-slate-950 flex items-center justify-center">
+                                            <FileText className="w-6 h-6 text-slate-400" />
+                                          </div>
+                                        )}
+                                        <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold text-sky-500 hover:underline truncate block mt-1.5" title={att.filename}>
+                                          {att.filename}
+                                        </a>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
 
                           {/* Message Loop */}
@@ -2086,24 +2135,55 @@ export default function CustomerDashboard() {
                         >
                           All Categories
                         </button>
-                        {kbCategories.map((cat) => (
-                          <button
-                            key={cat.id}
-                            onClick={() => setSelectedKbCategory(cat.id)}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-between ${
-                              selectedKbCategory === cat.id
-                                ? isDark
-                                  ? "bg-[#38b1f7]/15 text-[#38b1f7] border border-[#38b1f7]/25"
-                                  : "bg-[#38b1f7]/8 text-[#0d7fc0] border border-[#38b1f7]/20"
-                                : isDark 
-                                  ? "text-slate-300 hover:bg-white/[0.03]" 
-                                  : "text-slate-655 hover:bg-slate-50"
-                            }`}
-                          >
-                            <span>{cat.name}</span>
-                            <span className="text-[10px] opacity-60 font-mono">({cat.article_count || 0})</span>
-                          </button>
-                        ))}
+                        {(() => {
+                          const map: Record<string, any> = {};
+                          const roots: any[] = [];
+                          kbCategories.forEach(c => {
+                            map[c.id] = { ...c, children: [] };
+                          });
+                          kbCategories.forEach(c => {
+                            const node = map[c.id];
+                            if (c.parentId && map[c.parentId]) {
+                              map[c.parentId].children.push(node);
+                            } else {
+                              roots.push(node);
+                            }
+                          });
+
+                          const renderNode = (node: any, depth = 0): React.ReactNode => {
+                            const hasChildren = node.children.length > 0;
+                            const isSelected = selectedKbCategory === node.id;
+                            return (
+                              <React.Fragment key={node.id}>
+                                <button
+                                  onClick={() => setSelectedKbCategory(node.id)}
+                                  className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-between mt-1 ${
+                                    isSelected
+                                      ? isDark
+                                        ? "bg-[#38b1f7]/15 text-[#38b1f7] border border-[#38b1f7]/25"
+                                        : "bg-[#38b1f7]/8 text-[#0d7fc0] border border-[#38b1f7]/20"
+                                      : isDark 
+                                        ? "text-slate-300 hover:bg-white/[0.03]" 
+                                        : "text-slate-655 hover:bg-slate-50"
+                                  }`}
+                                  style={{ paddingLeft: `${12 + depth * 12}px` }}
+                                >
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className="opacity-60 text-[10px] shrink-0">
+                                      {depth > 0 ? "└─" : ""}
+                                    </span>
+                                    <Folder className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-sky-400/80' : 'text-[#0d7fc0]/80'}`} />
+                                    <span className="truncate">{node.name}</span>
+                                  </div>
+                                  <span className="text-[10px] opacity-60 font-mono shrink-0">({node.article_count || 0})</span>
+                                </button>
+                                {hasChildren && node.children.map((c: any) => renderNode(c, depth + 1))}
+                              </React.Fragment>
+                            );
+                          };
+
+                          return roots.map(root => renderNode(root, 0));
+                        })()}
                       </div>
                     </div>
 
@@ -3462,16 +3542,26 @@ export default function CustomerDashboard() {
 
                     {/* Credit impact note */}
                     {credits && (
-                      <div className={`p-3 rounded-xl border flex items-center gap-3 ${
+                      <div className={`p-3 rounded-xl border flex flex-col gap-2 ${
                         isDark ? 'bg-slate-900/40 border-white/[0.05]' : 'bg-slate-50 border-slate-200'
                       }`}>
-                        <CreditCard className={`w-4 h-4 shrink-0 ${isDark ? 'text-slate-500' : 'text-slate-400'}`} />
-                        <p className={`text-[11px] leading-relaxed ${
-                          isDark ? 'text-slate-400' : 'text-slate-500'
-                        }`}>
-                          You have <strong className={credits.remainingHours > 0 ? 'text-emerald-500' : 'text-red-400'}>{credits.remainingHours} credit hours</strong> remaining. Support hours are deducted when the ticket is resolved.
-                          {credits.remainingHours === 0 && " Overage hours will be billed."}
-                        </p>
+                        <div className="flex items-center gap-3">
+                          <CreditCard className={`w-4 h-4 shrink-0 ${isDark ? 'text-slate-500' : 'text-slate-400'}`} />
+                          <p className={`text-[11px] leading-relaxed ${
+                            isDark ? 'text-slate-400' : 'text-slate-500'
+                          }`}>
+                            You have <strong className={credits.remainingHours > 0 ? 'text-emerald-500' : 'text-red-400'}>{credits.remainingHours} credit hours</strong> remaining. Support hours are deducted when the ticket is resolved.
+                            {credits.remainingHours === 0 && " Overage hours will be billed."}
+                          </p>
+                        </div>
+                        {(!crmDetails?.domains || crmDetails.domains.length === 0) && (
+                          <div className={`mt-1.5 pt-1.5 border-t flex items-center gap-2 ${
+                            isDark ? 'border-amber-500/15 text-amber-400' : 'border-amber-200 text-amber-600'
+                          }`}>
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                            <span className="text-[10px] font-semibold">Min billing 1/2 hour (for domains outside of OCS)</span>
+                          </div>
+                        )}
                       </div>
                     )}
 

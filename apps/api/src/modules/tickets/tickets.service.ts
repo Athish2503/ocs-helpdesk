@@ -495,21 +495,59 @@ export async function updateTicket(
     });
 
     if (input.status === "RESOLVED" || input.status === "CLOSED") {
+      // Validate that at least one resolution proof/screenshot attachment is present
+      const attachmentsCount = await prisma.ticketAttachment.count({
+        where: { ticketId: id }
+      });
+      if (attachmentsCount === 0) {
+        const error = new Error("Cannot resolve ticket: A resolution screenshot/attachment is required.") as Error & { statusCode: number };
+        error.statusCode = 400;
+        throw error;
+      }
+
       resolvedAt = new Date();
       const creationTime = new Date(ticket.createdAt).getTime();
       ttrHours = (resolvedAt.getTime() - creationTime) / (1000 * 60 * 60); // In hours
 
       // Deduct support credit hours
       if (input.hoursConsumed && input.hoursConsumed > 0) {
-        const hours = input.hoursConsumed;
+        let hours = input.hoursConsumed;
+        let txDescription = `Consumed ${hours} hours resolving ticket: ${ticket.title}`;
+        let txType = "USAGE";
+
+        // Check if customer has any domains registered with OCS
+        const customerDomains = ticket.customer?.crmCustomer?.domains ?? [];
+        const hasAnyDomainsWithUs = customerDomains.length > 0;
+
+        // Check if the ticket's domain is outside of OCS (not in our CrmDomain database)
+        let isDomainOutsideOcs = true;
+        if (ticket.affectedDomain) {
+          const domainInDb = await prisma.crmDomain.findFirst({
+            where: { domainName: { equals: ticket.affectedDomain, mode: "insensitive" } }
+          });
+          if (domainInDb) {
+            isDomainOutsideOcs = false;
+          }
+        }
+
+        // Apply special hourly rate if customer has no domains with us and ticket domain is outside OCS
+        if (!hasAnyDomainsWithUs && isDomainOutsideOcs) {
+          const rawHours = hours;
+          if (hours < 0.5) {
+            hours = 0.5; // Min billing 1/2 hour
+          }
+          hours = hours * 750; // Charge Per hour(750) Credits
+          txDescription = `Consumed ${hours} credits resolving ticket: ${ticket.title} (Charged at 750 credits/hr rate for domain outside of OCS. Raw hours: ${rawHours}, min billing 1/2 hr applied)`;
+        }
+
         const credits = await prisma.customerCredits.findUnique({
           where: { customerId: ticket.customerId },
         });
+
         if (credits) {
           let remaining = credits.remainingHours - hours;
           let used = credits.usedHours + hours;
           let billable = credits.billableHours;
-          let txType = "USAGE";
 
           if (remaining < 0) {
             billable += Math.abs(remaining);
@@ -532,7 +570,7 @@ export async function updateTicket(
               ticketId: id,
               hours,
               type: txType,
-              description: `Consumed ${hours} hours resolving ticket: ${ticket.title}`,
+              description: txDescription,
             },
           });
         }

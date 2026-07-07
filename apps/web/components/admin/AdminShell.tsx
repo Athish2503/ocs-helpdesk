@@ -62,7 +62,7 @@ export default function AdminShell({
       />
 
       {/* Main workspace */}
-      <div className="flex-1 flex flex-col overflow-hidden z-40 min-w-0">
+      <div className="flex-1 flex flex-col overflow-hidden z-10 min-w-0">
         <AdminHeader
           title={headerTitle}
           description={headerDescription}

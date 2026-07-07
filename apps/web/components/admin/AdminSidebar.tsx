@@ -94,7 +94,7 @@ export default function AdminSidebar({
   return (
     <aside
       className={`
-        admin-sidebar flex flex-col border-r shrink-0 z-30 relative
+        admin-sidebar flex flex-col border-r shrink-0 z-40 relative
         hidden md:flex
         ${isCollapsed ? "w-[68px]" : "w-[240px]"}
         ${isDark

@@ -5,6 +5,7 @@ export const createCategorySchema = z.object({
   description: z.string().max(500, "Description must be at most 500 characters").optional().nullable(),
   parentId: z.string().uuid("Invalid parent category ID").optional().nullable(),
   isActive: z.boolean().optional().default(true),
+  credits: z.number().nonnegative().optional().default(0.0),
 });
 
 export const updateCategorySchema = createCategorySchema.partial();
