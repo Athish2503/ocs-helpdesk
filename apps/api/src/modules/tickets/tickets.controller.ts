@@ -83,6 +83,7 @@ export async function uploadTicketAttachmentHandler(req: Request, res: Response,
         filename: req.file.filename,
         filePath: `/uploads/kb/images/${req.file.filename}`, // Reuse standard static uploads directory path
         mimeType: req.file.mimetype,
+        uploadedById: req.user!.id,
       },
     });
 

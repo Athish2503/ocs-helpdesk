@@ -330,7 +330,8 @@ exports.TicketAttachmentScalarFieldEnum = {
     filename: 'filename',
     filePath: 'filePath',
     mimeType: 'mimeType',
-    createdAt: 'createdAt'
+    createdAt: 'createdAt',
+    uploadedById: 'uploadedById'
 };
 exports.TicketStatusHistoryScalarFieldEnum = {
     id: 'id',

@@ -4,7 +4,7 @@ import * as UsersService from "./users.service.js";
 import * as crmService from "../../services/crm.service.js";
 import * as AuthService from "../auth/auth.service.js";
 import { DEFAULT_PERMISSIONS } from "../../middleware/role.middleware.js";
-import { Role } from "../../generated/prisma/enums.js";
+import type { Role } from "../../types/role.js";
 
 
 function ok(res: Response, data: unknown) {
@@ -269,8 +269,10 @@ export async function deleteRoutingRuleHandler(req: Request, res: Response, next
 export async function listRolePermissionsHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const dbPermissions = await prisma.rolePermission.findMany();
-    const rolesList = Object.values(Role);
-    const permissions = rolesList.map(role => {
+    const systemRoles = ["ADMIN", "CUSTOMER", "AGENT", "SUPERVISOR", "SUPPORT_L1", "SUPPORT_L2", "BILLING"];
+    // Get unique list of all roles in DB + system roles
+    const allRoles = Array.from(new Set([...systemRoles, ...dbPermissions.map(p => p.role)]));
+    const permissions = allRoles.map(role => {
       const dbRecord = dbPermissions.find(p => p.role === role);
       return {
         role,
@@ -287,7 +289,7 @@ export async function listRolePermissionsHandler(req: Request, res: Response, ne
 export async function updateRolePermissionsHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const { role, permissions } = req.body;
-    if (!role || !Object.values(Role).includes(role)) {
+    if (!role || typeof role !== "string" || role.trim() === "") {
       res.status(400).json({ success: false, error: { message: "Invalid role specified" } });
       return;
     }
@@ -296,13 +298,46 @@ export async function updateRolePermissionsHandler(req: Request, res: Response, 
       return;
     }
 
+    const trimmedRole = role.trim();
+
     const record = await prisma.rolePermission.upsert({
-      where: { role },
+      where: { role: trimmedRole },
       update: { permissions },
-      create: { role, permissions },
+      create: { role: trimmedRole, permissions },
     });
 
     ok(res, { record });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function deleteRolePermissionHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const role = req.params.role as string;
+    if (!role) {
+      res.status(400).json({ success: false, error: { message: "Role is required" } });
+      return;
+    }
+
+    const systemRoles = ["ADMIN", "CUSTOMER", "AGENT", "SUPERVISOR", "SUPPORT_L1", "SUPPORT_L2", "BILLING"];
+    if (systemRoles.includes(role)) {
+      res.status(400).json({ success: false, error: { message: "Cannot delete system roles" } });
+      return;
+    }
+
+    // Delete role permission record
+    await prisma.rolePermission.delete({
+      where: { role },
+    });
+
+    // Fall back all users with this role to 'AGENT'
+    await prisma.user.updateMany({
+      where: { role },
+      data: { role: "AGENT" },
+    });
+
+    ok(res, { message: `Role ${role} deleted successfully. Affected staff fell back to AGENT.` });
   } catch (err) {
     next(err);
   }

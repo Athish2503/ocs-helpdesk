@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import type { Role } from "../generated/prisma/enums.js";
+import type { Role } from "../types/role.js";
 
 // ---------------------------------------------------------------------------
 // Types

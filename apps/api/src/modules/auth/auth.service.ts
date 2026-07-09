@@ -7,7 +7,7 @@ import {
   verifyRefreshToken,
   refreshTokenExpiresAt,
 } from "../../utils/jwt.js";
-import type { Role } from "../../generated/prisma/enums.js";
+import type { Role } from "../../types/role.js";
 import type { AuthResponse, UserPublic } from "./auth.types.js";
 import type { RegisterInput, LoginInput, RequestMagicLinkInput, ForgotPasswordInput, ResetPasswordInput } from "./auth.schemas.js";
 import { sendMagicLinkEmail, sendPasswordResetEmail, sendInvitationEmail } from "../../services/email.service.js";

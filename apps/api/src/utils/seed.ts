@@ -1,5 +1,6 @@
 import { prisma } from "../config/prisma.js";
 import { hashPassword } from "./password.js";
+import { DEFAULT_PERMISSIONS } from "../middleware/role.middleware.js";
 
 export async function seedInitialData() {
   console.log("🌱  Seeding initial admin user...");
@@ -19,5 +20,14 @@ export async function seedInitialData() {
     },
   });
 
-  console.log("✅  Initial admin user seeded successfully!");
+  console.log("🌱  Seeding default role permissions...");
+  for (const [role, permissions] of Object.entries(DEFAULT_PERMISSIONS)) {
+    await prisma.rolePermission.upsert({
+      where: { role },
+      update: {},
+      create: { role, permissions },
+    });
+  }
+
+  console.log("✅  Initial seed completed successfully!");
 }

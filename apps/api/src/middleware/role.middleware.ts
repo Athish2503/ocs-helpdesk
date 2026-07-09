@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
-import type { Role } from "../generated/prisma/enums.js";
 import { prisma } from "../config/prisma.js";
+import type { Role } from "../types/role.js";
 
 /**
  * requireRole — authorisation middleware factory.
@@ -41,7 +41,7 @@ export function requireRole(...roles: Role[]) {
   };
 }
 
-export const DEFAULT_PERMISSIONS: Record<Role, string[]> = {
+export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   ADMIN: [
     "view_tickets",
     "reply_tickets",

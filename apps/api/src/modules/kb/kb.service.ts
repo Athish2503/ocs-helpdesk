@@ -6,7 +6,7 @@ import type {
   UpdateCategoryInput,
   UpdateArticleSEOInput,
 } from "./kb.schemas.js";
-import type { Role } from "../../generated/prisma/enums.js";
+import type { Role } from "../../types/role.js";
 import crypto from "crypto";
 import { extractKeywords } from "../../utils/seoHelper.js";
 

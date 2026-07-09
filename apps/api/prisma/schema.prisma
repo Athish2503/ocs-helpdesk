@@ -14,15 +14,8 @@ datasource db {
 // Enums
 // ---------------------------------------------------------------------------
 
-enum Role {
-  CUSTOMER
-  AGENT
-  SUPERVISOR
-  SUPPORT_L1
-  SUPPORT_L2
-  BILLING
-  ADMIN
-}
+// Role definitions are now stored dynamically in the role_permissions database table.
+// The hardcoded Role enum has been removed.
 
 // ---------------------------------------------------------------------------
 // Models
@@ -35,7 +28,7 @@ model User {
   passwordHash   String?
   phoneNumber    String?        @map("phone_number")
   crmCustomerId  String?        @unique @map("crm_customer_id")
-  role           Role           @default(CUSTOMER)
+  role           String         @default("CUSTOMER")
   isActive       Boolean        @default(true)
   emailVerified  Boolean        @default(false)
   lastLoginAt    DateTime?      @map("last_login_at")
@@ -58,6 +51,7 @@ model User {
 
   crmCustomer    CrmCustomer?   @relation("UserCrmCustomer", fields: [crmCustomerId], references: [crmCustomerId], onDelete: SetNull)
   sentInvitations Invitation[]  @relation("SentInvitations")
+  uploadedAttachments TicketAttachment[] @relation("UserUploadedAttachments")
 
   @@map("users")
 }
@@ -382,6 +376,8 @@ model TicketAttachment {
   filePath  String   @map("file_path")
   mimeType  String   @map("mime_type")
   createdAt DateTime @default(now()) @map("created_at")
+  uploadedById String?           @map("uploaded_by_id")
+  uploadedBy   User?             @relation("UserUploadedAttachments", fields: [uploadedById], references: [id], onDelete: SetNull)
 
   @@map("ticket_attachments")
 }
@@ -449,7 +445,7 @@ model CreditTransaction {
 
 model RolePermission {
   id          String   @id @default(uuid())
-  role        Role     @unique
+  role        String     @unique
   permissions String[]
   createdAt   DateTime @default(now())   @map("created_at")
   updatedAt   DateTime @updatedAt        @map("updated_at")

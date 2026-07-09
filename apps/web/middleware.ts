@@ -86,7 +86,7 @@ export async function middleware(request: NextRequest) {
   const isAuthRoute = pathname === "/login" || pathname === "/register";
 
   const isStaffRole = (role: string | null) =>
-    role === "ADMIN" || role === "SUPPORT_L1" || role === "SUPPORT_L2" || role === "BILLING" || role === "AGENT";
+    role !== null && role !== "CUSTOMER";
 
   // 4. Implement redirection guards
   if (isAdminRoute || isCustomerRoute) {

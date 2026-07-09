@@ -20,4 +20,4 @@ async function startServer() {
   });
 }
 
-startServer(); // Trigger watch reload for env changes
+startServer(); // Trigger watch reload for env changes.

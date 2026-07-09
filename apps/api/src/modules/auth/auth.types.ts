@@ -1,4 +1,4 @@
-import type { Role } from "../../generated/prisma/enums.js";
+import type { Role } from "../../types/role.js";
 
 // ---------------------------------------------------------------------------
 // Request bodies (raw — validated by Zod in auth.schemas.ts)

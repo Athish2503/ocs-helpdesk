@@ -451,6 +451,14 @@ export default function CustomerDashboard() {
       loadCategories();
       loadCredits();
       loadCrmDetails();
+
+      // Check for redirect ticketId query parameter
+      if (typeof window !== "undefined") {
+        const ticketIdParam = new URLSearchParams(window.location.search).get("ticketId");
+        if (ticketIdParam) {
+          setSelectedTicketId(ticketIdParam);
+        }
+      }
     }
   }, [user, loadTickets, loadCategories, loadCredits, loadCrmDetails]);
 
@@ -1953,7 +1961,7 @@ export default function CustomerDashboard() {
                                     const isImage = att.mimeType?.startsWith("image/") || att.filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
                                     const fileUrl = `${process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:4000"}${att.filePath}`;
                                     return (
-                                      <div key={att.id} className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-white/[0.05] p-2 bg-slate-50/50 dark:bg-white/[0.01] flex flex-col justify-between h-[105px]">
+                                      <div key={att.id} className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-white/[0.05] p-2 bg-slate-50/50 dark:bg-white/[0.01] flex flex-col justify-between h-[125px]">
                                         {isImage ? (
                                           <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="block w-full h-[65px] overflow-hidden rounded bg-slate-100 dark:bg-slate-950 flex items-center justify-center border dark:border-white/5 border-slate-200">
                                             <img src={fileUrl} alt={att.filename} className="max-h-full max-w-full object-contain" />
@@ -1963,9 +1971,24 @@ export default function CustomerDashboard() {
                                             <FileText className="w-6 h-6 text-slate-400" />
                                           </div>
                                         )}
-                                        <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold text-sky-500 hover:underline truncate block mt-1.5" title={att.filename}>
-                                          {att.filename}
-                                        </a>
+                                        <div className="flex flex-col min-w-0 mt-1.5">
+                                          <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold text-sky-500 hover:underline truncate block" title={att.filename}>
+                                            {att.filename}
+                                          </a>
+                                          {att.uploadedBy ? (
+                                            <span className={`text-[9px] font-semibold truncate mt-0.5 ${
+                                              att.uploadedBy.role === "CUSTOMER" 
+                                                ? "text-blue-500 dark:text-blue-450" 
+                                                : "text-amber-500 dark:text-amber-450"
+                                            }`}>
+                                              By: {att.uploadedBy.name} ({att.uploadedBy.role === "CUSTOMER" ? "Client" : "Agent"})
+                                            </span>
+                                          ) : (
+                                            <span className="text-[9px] font-semibold text-slate-400 dark:text-slate-500 mt-0.5">
+                                              By: Client
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                     );
                                   })}

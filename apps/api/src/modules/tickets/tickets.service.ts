@@ -1,5 +1,5 @@
 import { prisma } from "../../config/prisma.js";
-import type { Role } from "../../generated/prisma/enums.js";
+import type { Role } from "../../types/role.js";
 import type { CreateTicketInput, AddMessageInput, UpdateTicketInput } from "./tickets.schemas.js";
 
 interface UserContext {
@@ -342,7 +342,17 @@ export async function getTicketById(id: string, user: UserContext) {
           createdAt: "asc",
         },
       },
-      attachments: true,
+      attachments: {
+        include: {
+          uploadedBy: {
+            select: {
+              id: true,
+              name: true,
+              role: true,
+            },
+          },
+        },
+      },
       statusHistory: {
         include: {
           changedBy: {

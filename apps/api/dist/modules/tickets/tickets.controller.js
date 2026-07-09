@@ -117,6 +117,7 @@ async function uploadTicketAttachmentHandler(req, res, next) {
                 filename: req.file.filename,
                 filePath: `/uploads/kb/images/${req.file.filename}`, // Reuse standard static uploads directory path
                 mimeType: req.file.mimetype,
+                uploadedById: req.user.id,
             },
         });
         res.status(201).json({ success: true, data: { attachment } });

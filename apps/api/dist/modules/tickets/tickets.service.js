@@ -302,7 +302,17 @@ async function getTicketById(id, user) {
                     createdAt: "asc",
                 },
             },
-            attachments: true,
+            attachments: {
+                include: {
+                    uploadedBy: {
+                        select: {
+                            id: true,
+                            name: true,
+                            role: true,
+                        },
+                    },
+                },
+            },
             statusHistory: {
                 include: {
                     changedBy: {

@@ -14,6 +14,7 @@ import {
   deleteRoutingRuleHandler,
   listRolePermissionsHandler,
   updateRolePermissionsHandler,
+  deleteRolePermissionHandler,
   inviteUserHandler,
   resendInviteUserHandler,
   sendResetPasswordLinkHandler,
@@ -44,6 +45,7 @@ router.get("/agents", requireRole("ADMIN", "SUPPORT_L1", "SUPPORT_L2", "BILLING"
 // Admin / Permissions operations
 router.get("/role-permissions", requirePermission("manage_permissions"), listRolePermissionsHandler);
 router.patch("/role-permissions", requirePermission("manage_permissions"), updateRolePermissionsHandler);
+router.delete("/role-permissions/:role", requirePermission("manage_permissions"), deleteRolePermissionHandler);
 
 // Routing rules operations
 router.get("/routing-rules", requirePermission("manage_categories_rules"), listRoutingRulesHandler);

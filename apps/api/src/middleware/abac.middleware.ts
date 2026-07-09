@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../config/prisma.js";
-import type { Role } from "../generated/prisma/enums.js";
+import type { Role } from "../types/role.js";
 
 /**
  * Checks if a user has access to a specific ticket based on RBAC and ABAC rules.

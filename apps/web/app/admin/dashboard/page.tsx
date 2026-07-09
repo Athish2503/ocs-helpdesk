@@ -105,6 +105,15 @@ interface CreditTransactionItem {
   description: string | null;
   createdAt: string;
 }
+interface TicketAttachment {
+  id: string;
+  filename: string;
+  filePath: string;
+  mimeType: string;
+  createdAt: string;
+  uploadedBy?: { id: string; name: string; role: string } | null;
+}
+
 interface TicketData {
   id: string; title: string; description: string;
   status: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
@@ -123,6 +132,7 @@ interface TicketData {
   statusHistory?: StatusHistoryItem[];
   creditTransactions?: CreditTransactionItem[];
   createdBySecondaryEmail?: string | null;
+  attachments?: TicketAttachment[];
 }
 interface KBArticle {
   id: string; title: string; slug: string; content: string;
@@ -884,6 +894,49 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleCreateCustomRole = async (roleName: string) => {
+    const roleNameUpper = roleName.toUpperCase().replace(/[^A-Z0-9_]/g, "_");
+    if (rolePermissions.some(rp => rp.role === roleNameUpper)) {
+      toast.error("Role already exists.");
+      return;
+    }
+
+    try {
+      const res = await fetchWithAuth("/users/role-permissions", {
+        method: "PATCH",
+        body: JSON.stringify({ role: roleNameUpper, permissions: [] }),
+      });
+      if (res.ok) {
+        toast.success(`Role ${roleNameUpper} created successfully.`);
+        refreshAllData();
+      } else {
+        toast.error("Failed to create role.");
+      }
+    } catch {
+      toast.error("Error creating role.");
+    }
+  };
+
+  const handleDeleteCustomRole = async (role: string) => {
+    if (!confirm(`Are you sure you want to delete the role "${role}"? Any users currently assigned to this role will automatically fall back to AGENT.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetchWithAuth(`/users/role-permissions/${role}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        toast.success(`Role ${role} deleted successfully.`);
+        refreshAllData();
+      } else {
+        toast.error("Failed to delete role.");
+      }
+    } catch {
+      toast.error("Error deleting role.");
+    }
+  };
+
   // ── Loading skeleton ─────────────────────────────────────────────
   if (authLoading || !user) {
     const isDarkTheme = typeof window !== "undefined" && localStorage.getItem("theme") === "dark";
@@ -1412,6 +1465,51 @@ export default function AdminDashboard() {
                           </div>
                         )}
                       </div>
+
+                      {selectedTicket.attachments && selectedTicket.attachments.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/[0.04] space-y-2">
+                          <p className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                            Attachments / Screenshot Proofs
+                          </p>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {selectedTicket.attachments.map((att) => {
+                              const isImage = att.mimeType?.startsWith("image/") || att.filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                              const fileUrl = `${process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:4000"}${att.filePath}`;
+                              return (
+                                <div key={att.id} className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-white/[0.05] p-2 bg-slate-50/50 dark:bg-white/[0.01] flex flex-col justify-between h-[125px]">
+                                  {isImage ? (
+                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="block w-full h-[65px] overflow-hidden rounded bg-slate-100 dark:bg-slate-950 flex items-center justify-center border dark:border-white/5 border-slate-200">
+                                      <img src={fileUrl} alt={att.filename} className="max-h-full max-w-full object-contain" />
+                                    </a>
+                                  ) : (
+                                    <div className="w-full h-[65px] rounded bg-slate-100 dark:bg-slate-950 flex items-center justify-center">
+                                      <FileText className="w-6 h-6 text-slate-400" />
+                                    </div>
+                                  )}
+                                  <div className="flex flex-col min-w-0 mt-1.5">
+                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold text-sky-500 hover:underline truncate block" title={att.filename}>
+                                      {att.filename}
+                                    </a>
+                                    {att.uploadedBy ? (
+                                      <span className={`text-[9px] font-semibold truncate mt-0.5 ${
+                                        att.uploadedBy.role === "CUSTOMER" 
+                                          ? "text-blue-500 dark:text-blue-450" 
+                                          : "text-amber-500 dark:text-amber-450"
+                                      }`}>
+                                        By: {att.uploadedBy.name} ({att.uploadedBy.role === "CUSTOMER" ? "Client" : "Agent"})
+                                      </span>
+                                    ) : (
+                                      <span className="text-[9px] font-semibold text-slate-400 dark:text-slate-500 mt-0.5">
+                                        By: Client
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* SLA Progress Bar Panel */}
@@ -2957,9 +3055,9 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {users.filter(u => u.role === "AGENT" || u.role === "ADMIN").filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).length === 0 ? (
+                    {users.filter(u => u.role !== "CUSTOMER").filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).length === 0 ? (
                       <tr><td colSpan={7} className="text-center py-8"><span className={isDark ? "text-slate-500" : "text-slate-400"}>No staff found.</span></td></tr>
-                    ) : users.filter(u => u.role === "AGENT" || u.role === "ADMIN").filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).map(u => (
+                    ) : users.filter(u => u.role !== "CUSTOMER").filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).map(u => (
                       <tr key={u.id}>
                         <td><span className={`font-medium text-sm ${isDark ? "text-slate-100" : "text-slate-900"}`}>{u.name}</span></td>
                         <td><span className={`text-sm ${isDark ? "text-slate-400" : "text-slate-600"}`}>{u.email}</span></td>
@@ -2994,7 +3092,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Create Staff Modal */}
-            {showCreateUser && (userFormRole === "AGENT" || userFormRole === "ADMIN") && (
+            {showCreateUser && userFormRole !== "CUSTOMER" && (
               <UserModal
                 title="Create Staff Account"
                 subtitle="New agent or administrator profile"
@@ -3015,11 +3113,12 @@ export default function AdminDashboard() {
                 onClose={() => setShowCreateUser(false)}
                 onSubmit={handleCreateUser}
                 submitLabel="Create Staff"
+                roles={rolePermissions.map(rp => rp.role)}
               />
             )}
 
             {/* Edit Staff Modal */}
-            {showEditUser && selectedUser && (selectedUser.role === "AGENT" || selectedUser.role === "ADMIN") && (
+            {showEditUser && selectedUser && selectedUser.role !== "CUSTOMER" && (
               <UserModal
                 title="Edit Staff Profile"
                 subtitle={`ID: ${selectedUser.id.slice(0, 12)}...`}
@@ -3041,6 +3140,7 @@ export default function AdminDashboard() {
                 onClose={() => { setShowEditUser(false); setSelectedUser(null); }}
                 onSubmit={handleSaveEditUser}
                 submitLabel="Save Changes"
+                roles={rolePermissions.map(rp => rp.role)}
               />
             )}
           </div>
@@ -3532,11 +3632,45 @@ export default function AdminDashboard() {
         ══════════════════════════════════════════════════════════ */}
         {activeTab === "permissions" && user.role === "ADMIN" && (
           <div className="space-y-6">
-            <div>
-              <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Role Permissions</h2>
-              <p className={`text-sm mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>
-                Configure access control matrix for system roles. Changes are saved dynamically.
-              </p>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+              <div>
+                <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Role Permissions</h2>
+                <p className={`text-sm mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                  Configure access control matrix for system and custom roles. Changes are saved dynamically.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="text" 
+                  placeholder="New custom role..." 
+                  id="new-role-input"
+                  className={`admin-input ${isDark ? "admin-dark" : ""} w-48 text-sm`} 
+                  style={{ height: 40 }}
+                  onKeyDown={async (e) => {
+                    if (e.key === "Enter") {
+                      const val = (e.target as HTMLInputElement).value.trim();
+                      if (!val) return;
+                      await handleCreateCustomRole(val);
+                      (e.target as HTMLInputElement).value = "";
+                    }
+                  }}
+                />
+                <button
+                  onClick={async () => {
+                    const input = document.getElementById("new-role-input") as HTMLInputElement;
+                    const val = input?.value.trim();
+                    if (val) {
+                      await handleCreateCustomRole(val);
+                      input.value = "";
+                    }
+                  }}
+                  className="admin-btn admin-btn-primary"
+                  style={{ height: 40 }}
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Role
+                </button>
+              </div>
             </div>
 
             <div className={`admin-card overflow-hidden ${isDark ? "admin-dark" : ""}`}>
@@ -3545,15 +3679,29 @@ export default function AdminDashboard() {
                   <thead>
                     <tr>
                       <th className="w-[280px]">Permission Action</th>
-                      {rolePermissions.map(rp => (
-                        <th key={rp.role} className="text-center min-w-[120px]">
-                          <span className={`admin-badge uppercase ${
-                            rp.role === "ADMIN" ? "admin-badge-admin" : "admin-badge-agent"
-                          }`}>
-                            {rp.role}
-                          </span>
-                        </th>
-                      ))}
+                      {rolePermissions.map(rp => {
+                        const isSystemRole = ["ADMIN", "CUSTOMER", "AGENT", "SUPERVISOR", "SUPPORT_L1", "SUPPORT_L2", "BILLING"].includes(rp.role);
+                        return (
+                          <th key={rp.role} className="text-center min-w-[120px] group">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span className={`admin-badge uppercase ${
+                                rp.role === "ADMIN" ? "admin-badge-admin" : "admin-badge-agent"
+                              }`}>
+                                {rp.role}
+                              </span>
+                              {!isSystemRole && (
+                                <button
+                                  onClick={() => handleDeleteCustomRole(rp.role)}
+                                  className="text-red-500 hover:text-red-700 hover:scale-110 active:scale-95 transition-all p-0.5 rounded cursor-pointer"
+                                  title={`Delete role ${rp.role}`}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>
@@ -4027,7 +4175,7 @@ interface UserModalProps {
   formName: string; setFormName: (v: string) => void;
   formEmail: string; setFormEmail: (v: string) => void;
   formPassword: string; setFormPassword: (v: string) => void;
-  formRole: "CUSTOMER" | "ADMIN" | "AGENT" | "SUPPORT_L1" | "SUPPORT_L2" | "BILLING"; setFormRole: (v: any) => void;
+  formRole: string; setFormRole: (v: any) => void;
   formIsActive: boolean; setFormIsActive: (v: boolean) => void;
   formTeams: string[]; setFormTeams: (v: string[]) => void;
   formPhone: string; setFormPhone: (v: string) => void;
@@ -4037,6 +4185,7 @@ interface UserModalProps {
   editingUserId?: string;
   onClose: () => void; onSubmit: (e: React.FormEvent) => void;
   submitLabel: string;
+  roles?: string[];
 }
 
 function UserModal({
@@ -4044,7 +4193,8 @@ function UserModal({
   formName, setFormName, formEmail, setFormEmail, formPassword, setFormPassword,
   formRole, setFormRole, formIsActive, setFormIsActive, formTeams, setFormTeams,
   formPhone, setFormPhone, formCrmId, setFormCrmId,
-  teams, users = [], editingUserId, onClose, onSubmit, submitLabel
+  teams, users = [], editingUserId, onClose, onSubmit, submitLabel,
+  roles = []
 }: UserModalProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [crmSearch, setCrmSearch] = useState("");
@@ -4569,8 +4719,18 @@ function UserModal({
                         onChange={e => setFormRole(e.target.value)}
                         className={`admin-select ${isDark ? "admin-dark" : ""} h-11 text-sm rounded-lg border-slate-200 dark:border-slate-800`}
                       >
-                        <option value="AGENT">Agent — Support Representative</option>
-                        <option value="ADMIN">Admin — Full Access</option>
+                        {roles && roles.length > 0 ? (
+                          roles.filter(r => r !== "CUSTOMER").map(r => (
+                            <option key={r} value={r}>
+                              {r}
+                            </option>
+                          ))
+                        ) : (
+                          <>
+                            <option value="AGENT">Agent — Support Representative</option>
+                            <option value="ADMIN">Admin — Full Access</option>
+                          </>
+                        )}
                       </select>
                     </div>
                   )
