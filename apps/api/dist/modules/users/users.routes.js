@@ -18,6 +18,7 @@ router.get("/agents", (0, role_middleware_js_1.requireRole)("ADMIN", "SUPPORT_L1
 // Admin / Permissions operations
 router.get("/role-permissions", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.listRolePermissionsHandler);
 router.patch("/role-permissions", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.updateRolePermissionsHandler);
+router.delete("/role-permissions/:role", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.deleteRolePermissionHandler);
 // Routing rules operations
 router.get("/routing-rules", (0, role_middleware_js_1.requirePermission)("manage_categories_rules"), users_controller_js_1.listRoutingRulesHandler);
 router.post("/routing-rules", (0, role_middleware_js_1.requirePermission)("manage_categories_rules"), users_controller_js_1.createRoutingRuleHandler);

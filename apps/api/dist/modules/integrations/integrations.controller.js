@@ -37,6 +37,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleCrmWebhook = handleCrmWebhook;
+exports.handleCrmEventsWebhook = handleCrmEventsWebhook;
 const crypto_1 = __importDefault(require("crypto"));
 const crmService = __importStar(require("../../services/crm.service.js"));
 /**
@@ -108,4 +109,38 @@ async function handleCrmWebhook(req, res, next) {
         success: true,
         message: "Webhook received and scheduled for synchronization",
     });
+}
+/**
+ * Handle new real-time CRM events consumer webhook.
+ * Endpoint: POST /api/integrations/crm/events
+ */
+const crm_queue_service_js_1 = require("../../services/crm-queue.service.js");
+async function handleCrmEventsWebhook(req, res, next) {
+    try {
+        const { eventId, event, data } = req.body;
+        if (!eventId || !event || !data) {
+            res.status(400).json({
+                success: false,
+                error: { code: "BAD_REQUEST", message: "Missing eventId, event, or data in webhook payload" }
+            });
+            return;
+        }
+        // Enqueue event asynchronously (checks idempotency and logs to crm_sync_logs/crm_event_queue)
+        // We do NOT await the actual processing. We just await the enqueue step.
+        const enqueued = await (0, crm_queue_service_js_1.enqueueEvent)(eventId, event, data);
+        res.status(200).json({
+            success: true,
+            message: enqueued ? "Event queued successfully" : "Event received (ignored or duplicate)",
+            eventId
+        });
+    }
+    catch (err) {
+        // Never fail API because webhook processing fails. Just log error and return 200.
+        console.error(`[CRM Webhook Error] Failed to handle CRM event:`, err);
+        res.status(200).json({
+            success: true,
+            message: "Webhook received with internal processing exception",
+            error: String(err),
+        });
+    }
 }

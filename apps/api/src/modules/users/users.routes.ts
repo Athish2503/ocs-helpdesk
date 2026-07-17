@@ -1,4 +1,6 @@
 import { Router } from "express";
+import type { Request, Response, NextFunction } from "express";
+import crypto from "crypto";
 import {
   createUserHandler,
   listUsersHandler,
@@ -23,6 +25,8 @@ import {
 } from "./users.controller.js";
 import { requireAuth } from "../../middleware/auth.middleware.js";
 import { requireRole, requirePermission } from "../../middleware/role.middleware.js";
+import { sseManager } from "../../services/sse.service.js";
+import { prisma } from "../../config/prisma.js";
 
 const router = Router();
 
@@ -37,6 +41,27 @@ router.get("/me/credits", getMyCreditsHandler);
 
 // CRM details for current user (domains, subscriptions, services)
 router.get("/me/crm-details", getMyCrmDetailsHandler);
+
+// ── SSE: Real-time CRM sync stream ─────────────────────────────────────────
+// GET /api/users/me/events — establishes a persistent SSE connection.
+// The server will push 'crm.sync' events whenever CRM data for this customer changes.
+router.get("/me/events", async (req: Request, res: Response, _next: NextFunction) => {
+  const userId = req.user!.id;
+
+  // Resolve crmCustomerId for targeted broadcast routing
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { crmCustomerId: true },
+  }).catch(() => null);
+
+  const crmCustomerId = user?.crmCustomerId ?? null;
+
+  // Generate a unique connection ID so the same user can open multiple tabs
+  const connectionId = crypto.randomUUID();
+
+  // Register and start streaming — sseManager handles headers, ping, and cleanup
+  sseManager.addClient(connectionId, userId, crmCustomerId, res);
+});
 
 
 // Agents listing can be accessed by both admins and agents (or anyone with staff view access)

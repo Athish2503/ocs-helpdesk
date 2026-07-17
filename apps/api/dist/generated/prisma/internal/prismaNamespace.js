@@ -48,8 +48,8 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SortOrder = exports.AuditLogScalarFieldEnum = exports.InvitationScalarFieldEnum = exports.CrmSubscriptionScalarFieldEnum = exports.CrmServiceScalarFieldEnum = exports.CrmDomainScalarFieldEnum = exports.CrmCustomerScalarFieldEnum = exports.RolePermissionScalarFieldEnum = exports.CreditTransactionScalarFieldEnum = exports.CustomerCreditsScalarFieldEnum = exports.RoutingRuleScalarFieldEnum = exports.TicketStatusHistoryScalarFieldEnum = exports.TicketAttachmentScalarFieldEnum = exports.KnowledgeBaseArticleAttachmentScalarFieldEnum = exports.KnowledgeBaseSecurityEventScalarFieldEnum = exports.KnowledgeBaseIPBlacklistScalarFieldEnum = exports.KnowledgeBaseRateLimitScalarFieldEnum = exports.KnowledgeBaseArticleAccessLogScalarFieldEnum = exports.KnowledgeBaseArticleReadScalarFieldEnum = exports.KnowledgeBaseSourceScalarFieldEnum = exports.KnowledgeBaseArticleVersionScalarFieldEnum = exports.TagScalarFieldEnum = exports.KnowledgeBaseArticleScalarFieldEnum = exports.TeamScalarFieldEnum = exports.TicketMessageScalarFieldEnum = exports.TicketScalarFieldEnum = exports.CategoryScalarFieldEnum = exports.PasswordResetTokenScalarFieldEnum = exports.MagicTokenScalarFieldEnum = exports.RefreshTokenScalarFieldEnum = exports.UserScalarFieldEnum = exports.TransactionIsolationLevel = exports.ModelName = exports.AnyNull = exports.JsonNull = exports.DbNull = exports.NullTypes = exports.prismaVersion = exports.getExtensionContext = exports.Decimal = exports.Sql = exports.raw = exports.join = exports.empty = exports.sql = exports.PrismaClientValidationError = exports.PrismaClientInitializationError = exports.PrismaClientRustPanicError = exports.PrismaClientUnknownRequestError = exports.PrismaClientKnownRequestError = void 0;
-exports.defineExtension = exports.NullsOrder = exports.QueryMode = void 0;
+exports.CrmSyncLogScalarFieldEnum = exports.AuditLogScalarFieldEnum = exports.InvitationScalarFieldEnum = exports.CrmSubscriptionScalarFieldEnum = exports.CrmServiceScalarFieldEnum = exports.CrmDomainScalarFieldEnum = exports.CrmCustomerScalarFieldEnum = exports.RolePermissionScalarFieldEnum = exports.CreditTransactionScalarFieldEnum = exports.CustomerCreditsScalarFieldEnum = exports.RoutingRuleScalarFieldEnum = exports.TicketStatusHistoryScalarFieldEnum = exports.TicketAttachmentScalarFieldEnum = exports.KnowledgeBaseArticleAttachmentScalarFieldEnum = exports.KnowledgeBaseSecurityEventScalarFieldEnum = exports.KnowledgeBaseIPBlacklistScalarFieldEnum = exports.KnowledgeBaseRateLimitScalarFieldEnum = exports.KnowledgeBaseArticleAccessLogScalarFieldEnum = exports.KnowledgeBaseArticleReadScalarFieldEnum = exports.KnowledgeBaseSourceScalarFieldEnum = exports.KnowledgeBaseArticleVersionScalarFieldEnum = exports.TagScalarFieldEnum = exports.KnowledgeBaseArticleScalarFieldEnum = exports.TeamScalarFieldEnum = exports.TicketMessageScalarFieldEnum = exports.TicketScalarFieldEnum = exports.CategoryScalarFieldEnum = exports.PasswordResetTokenScalarFieldEnum = exports.MagicTokenScalarFieldEnum = exports.RefreshTokenScalarFieldEnum = exports.UserScalarFieldEnum = exports.TransactionIsolationLevel = exports.ModelName = exports.AnyNull = exports.JsonNull = exports.DbNull = exports.NullTypes = exports.prismaVersion = exports.getExtensionContext = exports.Decimal = exports.Sql = exports.raw = exports.join = exports.empty = exports.sql = exports.PrismaClientValidationError = exports.PrismaClientInitializationError = exports.PrismaClientRustPanicError = exports.PrismaClientUnknownRequestError = exports.PrismaClientKnownRequestError = void 0;
+exports.defineExtension = exports.NullsOrder = exports.QueryMode = exports.SortOrder = exports.CreditUsageScalarFieldEnum = exports.CrmEventQueueScalarFieldEnum = void 0;
 const runtime = __importStar(require("@prisma/client/runtime/client"));
 /**
  * Prisma Errors
@@ -133,7 +133,10 @@ exports.ModelName = {
     CrmService: 'CrmService',
     CrmSubscription: 'CrmSubscription',
     Invitation: 'Invitation',
-    AuditLog: 'AuditLog'
+    AuditLog: 'AuditLog',
+    CrmSyncLog: 'CrmSyncLog',
+    CrmEventQueue: 'CrmEventQueue',
+    CreditUsage: 'CreditUsage'
 };
 /**
  * Enums
@@ -423,6 +426,7 @@ exports.CrmDomainScalarFieldEnum = {
     id: 'id',
     crmDomainId: 'crmDomainId',
     domainName: 'domainName',
+    registeredWith: 'registeredWith',
     crmCustomerId: 'crmCustomerId',
     createdAt: 'createdAt'
 };
@@ -464,6 +468,36 @@ exports.AuditLogScalarFieldEnum = {
     payload: 'payload',
     actorId: 'actorId',
     actorEmail: 'actorEmail',
+    createdAt: 'createdAt'
+};
+exports.CrmSyncLogScalarFieldEnum = {
+    id: 'id',
+    eventId: 'eventId',
+    entity: 'entity',
+    entityId: 'entityId',
+    status: 'status',
+    receivedAt: 'receivedAt',
+    processedAt: 'processedAt',
+    errors: 'errors'
+};
+exports.CrmEventQueueScalarFieldEnum = {
+    id: 'id',
+    eventId: 'eventId',
+    event: 'event',
+    payload: 'payload',
+    status: 'status',
+    retryCount: 'retryCount',
+    lastError: 'lastError',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+};
+exports.CreditUsageScalarFieldEnum = {
+    id: 'id',
+    crmCustomerId: 'crmCustomerId',
+    ticketId: 'ticketId',
+    hoursConsumed: 'hoursConsumed',
+    adjustments: 'adjustments',
+    reason: 'reason',
     createdAt: 'createdAt'
 };
 exports.SortOrder = {

@@ -2,6 +2,7 @@ import { prisma } from "../../config/prisma.js";
 import type { CreateUserInput, UpdateUserInput } from "./users.schemas.js";
 import { hashPassword } from "../../utils/password.js";
 import * as crmService from "../../services/crm.service.js";
+import { getOrFetchDomains, getOrFetchServices, getOrFetchSubscriptions, syncUserCredits } from "../../services/crm-cache.service.js";
 
 export async function listUsers(query: { search?: string; role?: string; isActive?: string }) {
   const where: any = {};
@@ -68,6 +69,16 @@ export async function listUsers(query: { search?: string; role?: string; isActiv
 }
 
 export async function getUserById(id: string) {
+  const existing = await prisma.user.findUnique({
+    where: { id },
+    select: { crmCustomerId: true }
+  });
+  if (existing) {
+    await syncUserCredits(id, existing.crmCustomerId).catch(err => {
+      console.error(`[Users Service] Error syncing user credits for user ${id}:`, err);
+    });
+  }
+
   const user = await prisma.user.findUnique({
     where: { id },
     select: {
@@ -113,6 +124,35 @@ export async function getUserById(id: string) {
     const error = new Error("User not found") as Error & { statusCode: number };
     error.statusCode = 404;
     throw error;
+  }
+
+  // Populate live/cached CRM data for the customer details view
+  if (user.crmCustomerId) {
+    try {
+      const [domains, subscriptions, services] = await Promise.all([
+        getOrFetchDomains(user.crmCustomerId),
+        getOrFetchSubscriptions(user.crmCustomerId),
+        getOrFetchServices(user.crmCustomerId),
+      ]);
+      if (!user.crmCustomer) {
+        user.crmCustomer = {
+          crmCustomerId: user.crmCustomerId,
+          companyName: "",
+          displayName: user.name,
+          primaryEmail: user.email,
+          customerStatus: "ACTIVE",
+          domains: [],
+          services: [],
+          subscriptions: [],
+          invitations: [],
+        } as any;
+      }
+      user.crmCustomer!.domains = domains as any;
+      user.crmCustomer!.subscriptions = subscriptions as any;
+      user.crmCustomer!.services = services as any;
+    } catch (err) {
+      console.error(`[Users Service] Failed to load live CRM data for user ${user.crmCustomerId}:`, err);
+    }
   }
 
   // Fetch independent audit logs

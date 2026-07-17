@@ -2294,8 +2294,20 @@ export default function AdminDashboard() {
                 const utilPct = allocH > 0 ? Math.min(100, Math.round((usedH / allocH) * 100)) : 0;
                 const initials = cv.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
 
-                const activeSub = cv.crmCustomer?.subscriptions?.find((s: any) => s.status === "ACTIVE");
+                const activeSubsList = cv.crmCustomer?.subscriptions?.filter((s: any) => String(s.status || "").toUpperCase() === "ACTIVE") || [];
+                const activeSub = activeSubsList[0];
                 const supportPlan = activeSub ? activeSub.planName : "Standard Support";
+
+                const serviceCreditsMap: { [name: string]: number } = {};
+                activeSubsList.forEach((sub: any) => {
+                  sub.services?.forEach((svc: any) => {
+                    const credit = Number(svc.serviceCredit || svc.supportCreditHours || 0);
+                    if (credit > 0) {
+                      serviceCreditsMap[svc.serviceName] = (serviceCreditsMap[svc.serviceName] || 0) + credit;
+                    }
+                  });
+                });
+                const serviceCredits = Object.entries(serviceCreditsMap);
                 const latestInvitation = cv.crmCustomer?.invitations?.[0];
                 // Compute invitation state
                 const isAccountActivated = cv.emailVerified === true;
@@ -2694,7 +2706,7 @@ export default function AdminDashboard() {
                           ) : (
                             <div className={`border rounded-xl overflow-hidden ${isDark ? "border-white/[0.05] divide-y divide-white/[0.04]" : "border-slate-200 divide-y divide-slate-100"}`}>
                               {cv.crmCustomer.domains.map((dom: any) => (
-                                <div key={dom.id} className="flex justify-between items-center px-4 py-3 text-xs">
+                                <div key={dom.crmDomainId || dom.id} className="flex justify-between items-center px-4 py-3 text-xs">
                                   <span className={`font-semibold text-sm ${isDark ? "text-slate-200" : "text-slate-800"}`}>{dom.domainName}</span>
                                   <span className={`text-[10px] font-mono ${isDark ? "text-slate-500" : "text-slate-400"}`}>CRM Domain ID: {dom.crmDomainId}</span>
                                 </div>
@@ -2720,7 +2732,7 @@ export default function AdminDashboard() {
                           ) : (
                             <div className={`border rounded-xl overflow-hidden ${isDark ? "border-white/[0.05] divide-y divide-white/[0.04]" : "border-slate-200 divide-y divide-slate-100"}`}>
                               {cv.crmCustomer.services.map((srv: any) => (
-                                <div key={srv.id} className="flex justify-between items-center px-4 py-3 text-xs">
+                                <div key={srv.crmServiceId || srv.id} className="flex justify-between items-center px-4 py-3 text-xs">
                                   <div>
                                     <p className={`font-semibold text-sm ${isDark ? "text-slate-200" : "text-slate-800"}`}>{srv.name}</p>
                                     <p className={`text-[10px] mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>CRM Service ID: {srv.crmServiceId}</p>
@@ -2751,7 +2763,7 @@ export default function AdminDashboard() {
                           ) : (
                             <div className={`border rounded-xl overflow-hidden ${isDark ? "border-white/[0.05] divide-y divide-white/[0.04]" : "border-slate-200 divide-y divide-slate-100"}`}>
                               {cv.crmCustomer.subscriptions.map((sub: any) => (
-                                <div key={sub.id} className="px-4 py-3.5 space-y-2">
+                                <div key={sub.crmSubscriptionId || sub.id} className="px-4 py-3.5 space-y-2">
                                   <div className="flex justify-between items-start text-xs">
                                     <div>
                                       <p className={`font-bold text-sm ${isDark ? "text-slate-200" : "text-slate-800"}`}>{sub.planName}</p>
@@ -2762,11 +2774,32 @@ export default function AdminDashboard() {
                                     </span>
                                   </div>
                                   <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-500 pt-1">
-                                    <p>Start Date: <span className="font-semibold text-slate-600 dark:text-slate-350">{new Date(sub.startDate).toLocaleDateString()}</span></p>
+                                    <p>Start Date: <span className="font-semibold text-slate-600 dark:text-slate-355">{new Date(sub.startDate).toLocaleDateString()}</span></p>
                                     {sub.endDate && (
                                       <p>End Date: <span className="font-semibold text-slate-600 dark:text-slate-355">{new Date(sub.endDate).toLocaleDateString()}</span></p>
                                     )}
                                   </div>
+                                  {sub.services && sub.services.length > 0 && (
+                                    <div className="mt-2 pt-2 border-t border-slate-100 dark:border-white/[0.04] space-y-1">
+                                      <p className={`text-[9px] font-bold uppercase tracking-wider ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                                        Included Services
+                                      </p>
+                                      <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                        {sub.services.map((svc: any) => (
+                                          <span
+                                            key={svc.serviceId}
+                                            className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ${
+                                              isDark 
+                                                ? "bg-slate-800 text-slate-300 border border-white/[0.05]" 
+                                                : "bg-slate-100 text-slate-600 border border-slate-200"
+                                            }`}
+                                          >
+                                            {svc.serviceName}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -2879,6 +2912,66 @@ export default function AdminDashboard() {
                               <p className={`text-sm text-center py-2 ${isDark ? "text-slate-650" : "text-slate-400"}`}>
                                 No support credits allocated yet.
                               </p>
+                            )}
+                          </div>
+
+                          {/* Service-wise Credit Allocation Card */}
+                          <div className={`rounded-2xl border p-5 space-y-4 ${
+                            isDark ? "border-white/[0.06] bg-white/[0.02]" : "border-slate-200 bg-slate-50/50"
+                          }`}>
+                            <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                              <Layers className="w-3.5 h-3.5" />
+                              Service-wise Credit Allocation
+                            </h4>
+                            {serviceCredits.length === 0 ? (
+                              <p className={`text-xs text-center py-4 ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                                No services currently allocating credits.
+                              </p>
+                            ) : (
+                              <div className={`border rounded-xl overflow-hidden divide-y ${
+                                isDark ? "border-white/[0.05] divide-white/[0.04]" : "border-slate-200 divide-slate-100"
+                              }`}>
+                                {serviceCredits.map(([svcName, hrs]) => (
+                                  <div key={svcName} className="flex justify-between items-center px-4 py-2.5 text-xs">
+                                    <span className={`font-medium ${isDark ? "text-slate-300" : "text-slate-705"}`}>{svcName}</span>
+                                    <span className={`font-semibold ${isDark ? "text-slate-200" : "text-slate-800"}`}>{hrs} hrs</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Active Subscriptions Card */}
+                          <div className={`rounded-2xl border p-5 space-y-4 ${
+                            isDark ? "border-white/[0.06] bg-white/[0.02]" : "border-slate-200 bg-slate-50/50"
+                          }`}>
+                            <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              Active Subscriptions ({activeSubsList.length})
+                            </h4>
+                            {activeSubsList.length === 0 ? (
+                              <p className={`text-xs text-center py-4 ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                                No active subscriptions.
+                              </p>
+                            ) : (
+                              <div className="space-y-2">
+                                {activeSubsList.map((sub: any) => (
+                                  <div
+                                    key={sub.crmSubscriptionId || sub.id}
+                                    className={`flex items-center justify-between p-3 rounded-xl border text-xs ${
+                                      isDark ? "bg-white/[0.01] border-white/[0.04]" : "bg-white border-slate-150"
+                                    }`}
+                                  >
+                                    <div>
+                                      <p className={`font-bold ${isDark ? "text-slate-200" : "text-slate-800"}`}>{sub.planName}</p>
+                                      <p className={`text-[10px] mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                                        ID: {sub.crmSubscriptionId}
+                                      </p>
+                                    </div>
+                                    <span className="admin-badge admin-badge-active">ACTIVE</span>
+                                  </div>
+                                ))}
+                              </div>
                             )}
                           </div>
 

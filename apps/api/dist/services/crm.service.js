@@ -142,6 +142,7 @@ async function syncCustomerData(customerId) {
             domains: (domains || []).map((d) => ({
                 crmDomainId: d.domainId ? String(d.domainId) : "",
                 domainName: d.domainName,
+                registeredWith: d.registeredWith || d.registered_with || "Others",
             })),
             services: extractedServices.map((s) => ({
                 crmServiceId: s.serviceId ? String(s.serviceId) : "",

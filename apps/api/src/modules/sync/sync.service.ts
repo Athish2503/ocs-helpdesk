@@ -9,7 +9,7 @@ interface CrmCustomerPayload {
   primaryPhone?: string;
   secondaryPhone?: string;
   customerStatus?: string;
-  domains?: Array<{ crmDomainId: string; domainName: string }>;
+  domains?: Array<{ crmDomainId: string; domainName: string; registeredWith?: string }>;
   services?: Array<{ crmServiceId: string; name: string; status: string; domainName?: string | null }>;
   subscriptions?: Array<{
     crmSubscriptionId: string;
@@ -82,9 +82,11 @@ export async function handleCustomerCreated(data: CrmCustomerPayload) {
           crmDomainId: d.crmDomainId,
           domainName: d.domainName,
           crmCustomerId: data.crmCustomerId,
+          registeredWith: d.registeredWith || "Others",
         },
         update: {
           domainName: d.domainName,
+          registeredWith: d.registeredWith || "Others",
         },
       });
     }

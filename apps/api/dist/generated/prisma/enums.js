@@ -9,16 +9,7 @@
 * 🟢 You can import this file directly.
 */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TicketPriority = exports.TicketStatus = exports.Role = void 0;
-exports.Role = {
-    CUSTOMER: 'CUSTOMER',
-    AGENT: 'AGENT',
-    SUPERVISOR: 'SUPERVISOR',
-    SUPPORT_L1: 'SUPPORT_L1',
-    SUPPORT_L2: 'SUPPORT_L2',
-    BILLING: 'BILLING',
-    ADMIN: 'ADMIN'
-};
+exports.TicketPriority = exports.TicketStatus = void 0;
 exports.TicketStatus = {
     OPEN: 'OPEN',
     IN_PROGRESS: 'IN_PROGRESS',

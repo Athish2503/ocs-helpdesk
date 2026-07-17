@@ -5,6 +5,7 @@ import * as crmService from "../../services/crm.service.js";
 import * as AuthService from "../auth/auth.service.js";
 import { DEFAULT_PERMISSIONS } from "../../middleware/role.middleware.js";
 import type { Role } from "../../types/role.js";
+import { getOrFetchDomains, getOrFetchServices, getOrFetchSubscriptions, syncUserCredits } from "../../services/crm-cache.service.js";
 
 
 function ok(res: Response, data: unknown) {
@@ -81,7 +82,16 @@ import { prisma } from "../../config/prisma.js";
 export async function getMyCreditsHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const customerId = req.user!.id;
-    let credits = await prisma.customerCredits.findUnique({
+    const user = await prisma.user.findUnique({
+      where: { id: customerId },
+      select: { crmCustomerId: true }
+    });
+
+    await syncUserCredits(customerId, user?.crmCustomerId || null).catch(err => {
+      console.error(`[Users Controller] Error syncing user credits:`, err);
+    });
+
+    const credits = await prisma.customerCredits.findUnique({
       where: { customerId },
       include: {
         transactions: {
@@ -89,21 +99,6 @@ export async function getMyCreditsHandler(req: Request, res: Response, next: Nex
         },
       },
     });
-
-    if (!credits) {
-      credits = await prisma.customerCredits.create({
-        data: {
-          customerId,
-          allocatedHours: 20.0,
-          usedHours: 0.0,
-          remainingHours: 20.0,
-          billableHours: 0.0,
-        },
-        include: {
-          transactions: true,
-        },
-      });
-    }
 
     ok(res, { credits });
   } catch (err) {
@@ -114,57 +109,48 @@ export async function getMyCreditsHandler(req: Request, res: Response, next: Nex
 export async function updateCustomerCreditsHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const id = req.params.id as string; // customer user ID
-    const { allocatedHours, usedHours, remainingHours, billableHours, description, creditCategoryId } = req.body;
+    const { allocatedHours, description } = req.body;
 
-    let resolvedAllocatedHours = allocatedHours;
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { crmCustomerId: true }
+    });
 
-    if (creditCategoryId && allocatedHours === undefined) {
-      const getCategoryCredits = async (catId: string): Promise<number> => {
-        const cat = await prisma.category.findUnique({
-          where: { id: catId },
-          select: { credits: true, parentId: true }
-        });
-        if (!cat) return 0;
-        if (cat.credits > 0) return cat.credits;
-        if (cat.parentId) {
-          return getCategoryCredits(cat.parentId);
-        }
-        return cat.credits;
-      };
-      const catCredits = await getCategoryCredits(creditCategoryId);
-      if (catCredits > 0) {
-        resolvedAllocatedHours = catCredits;
-      }
+    if (!user) {
+      const error = new Error("User not found") as Error & { statusCode: number };
+      error.statusCode = 404;
+      throw error;
     }
 
-    const currentCredits = await prisma.customerCredits.findUnique({
-      where: { customerId: id },
-    });
+    const crmCustomerId = user.crmCustomerId;
+    if (!crmCustomerId) {
+      const error = new Error("User does not have a CRM customer ID") as Error & { statusCode: number };
+      error.statusCode = 400;
+      throw error;
+    }
 
-    const oldAllocated = currentCredits?.allocatedHours ?? 0;
-    const diff = (resolvedAllocatedHours ?? oldAllocated) - oldAllocated;
-
-    const credits = await prisma.customerCredits.upsert({
-      where: { customerId: id },
-      update: {
-        ...(resolvedAllocatedHours !== undefined ? { allocatedHours: resolvedAllocatedHours } : {}),
-        ...(usedHours !== undefined ? { usedHours } : {}),
-        ...(remainingHours !== undefined ? { remainingHours } : {}),
-        ...(billableHours !== undefined ? { billableHours } : {}),
-        ...(creditCategoryId !== undefined ? { creditCategoryId } : {}),
-      },
-      create: {
-        customerId: id,
-        allocatedHours: resolvedAllocatedHours ?? 20.0,
-        usedHours: usedHours ?? 0.0,
-        remainingHours: remainingHours ?? resolvedAllocatedHours ?? 20.0,
-        billableHours: billableHours ?? 0.0,
-        creditCategoryId: creditCategoryId ?? null,
-      },
-    });
+    // Sync first to get the most updated base allocated credits from CRM
+    const syncedCredits = await syncUserCredits(id, crmCustomerId);
+    const oldAllocated = syncedCredits.allocatedHours;
+    const diff = (allocatedHours ?? oldAllocated) - oldAllocated;
 
     if (diff !== 0) {
-      // Record transaction
+      // Retain manual adjustments as separate audit entries only
+      await prisma.creditUsage.create({
+        data: {
+          crmCustomerId,
+          hoursConsumed: 0.0,
+          adjustments: diff,
+          reason: description || `Credits adjusted by administrator. Change: ${diff > 0 ? "+" : ""}${diff} hours.`,
+        }
+      });
+    }
+
+    // Recalculate everything and sync to database
+    const credits = await syncUserCredits(id, crmCustomerId);
+
+    if (diff !== 0) {
+      // Record transaction for backward compatibility/history
       await prisma.creditTransaction.create({
         data: {
           customerCreditsId: credits.id,
@@ -175,7 +161,16 @@ export async function updateCustomerCreditsHandler(req: Request, res: Response, 
       });
     }
 
-    ok(res, { credits });
+    const updatedCredits = await prisma.customerCredits.findUnique({
+      where: { id: credits.id },
+      include: {
+        transactions: {
+          orderBy: { createdAt: "desc" }
+        }
+      }
+    });
+
+    ok(res, { credits: updatedCredits });
   } catch (err) {
     next(err);
   }
@@ -405,9 +400,9 @@ export async function getMyCrmDetailsHandler(req: Request, res: Response, next: 
 
     const [customer, domains, subscriptions, services] = await Promise.all([
       prisma.crmCustomer.findUnique({ where: { crmCustomerId } }),
-      prisma.crmDomain.findMany({ where: { crmCustomerId } }),
-      prisma.crmSubscription.findMany({ where: { crmCustomerId } }),
-      prisma.crmService.findMany({ where: { crmCustomerId } }),
+      getOrFetchDomains(crmCustomerId),
+      getOrFetchSubscriptions(crmCustomerId),
+      getOrFetchServices(crmCustomerId),
     ]);
 
     ok(res, { customer, domains, subscriptions, services });

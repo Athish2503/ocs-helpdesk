@@ -64,9 +64,11 @@ async function handleCustomerCreated(data) {
                     crmDomainId: d.crmDomainId,
                     domainName: d.domainName,
                     crmCustomerId: data.crmCustomerId,
+                    registeredWith: d.registeredWith || "Others",
                 },
                 update: {
                     domainName: d.domainName,
+                    registeredWith: d.registeredWith || "Others",
                 },
             });
         }

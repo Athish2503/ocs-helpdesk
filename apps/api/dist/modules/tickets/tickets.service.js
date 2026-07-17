@@ -6,6 +6,7 @@ exports.getTicketById = getTicketById;
 exports.addTicketMessage = addTicketMessage;
 exports.updateTicket = updateTicket;
 const prisma_js_1 = require("../../config/prisma.js");
+const crm_cache_service_js_1 = require("../../services/crm-cache.service.js");
 /**
  * Create a new ticket for a customer.
  */
@@ -479,26 +480,24 @@ async function updateTicket(id, input, user) {
                     hours = hours * 750; // Charge Per hour(750) Credits
                     txDescription = `Consumed ${hours} credits resolving ticket: ${ticket.title} (Charged at 750 credits/hr rate for domain outside of OCS. Raw hours: ${rawHours}, min billing 1/2 hr applied)`;
                 }
-                const credits = await prisma_js_1.prisma.customerCredits.findUnique({
-                    where: { customerId: ticket.customerId },
-                });
-                if (credits) {
-                    let remaining = credits.remainingHours - hours;
-                    let used = credits.usedHours + hours;
-                    let billable = credits.billableHours;
-                    if (remaining < 0) {
-                        billable += Math.abs(remaining);
-                        remaining = 0;
-                        txType = "BILLABLE_OVERAGE";
-                    }
-                    await prisma_js_1.prisma.customerCredits.update({
-                        where: { id: credits.id },
+                const crmCustId = ticket.customer?.crmCustomerId || (await prisma_js_1.prisma.user.findUnique({
+                    where: { id: ticket.customerId },
+                    select: { crmCustomerId: true }
+                }))?.crmCustomerId;
+                if (crmCustId) {
+                    // Write to CreditUsage table (consumption)
+                    await prisma_js_1.prisma.creditUsage.create({
                         data: {
-                            usedHours: used,
-                            remainingHours: remaining,
-                            billableHours: billable,
-                        },
+                            crmCustomerId: crmCustId,
+                            ticketId: id,
+                            hoursConsumed: hours,
+                            adjustments: 0.0,
+                            reason: txDescription,
+                        }
                     });
+                    // Recalculate balance dynamically and sync to customerCredits
+                    const credits = await (0, crm_cache_service_js_1.syncUserCredits)(ticket.customerId, crmCustId);
+                    // Write to CreditTransaction for backward compatibility/history
                     await prisma_js_1.prisma.creditTransaction.create({
                         data: {
                             customerCreditsId: credits.id,

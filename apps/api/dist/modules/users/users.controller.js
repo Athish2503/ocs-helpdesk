@@ -47,6 +47,7 @@ exports.createRoutingRuleHandler = createRoutingRuleHandler;
 exports.deleteRoutingRuleHandler = deleteRoutingRuleHandler;
 exports.listRolePermissionsHandler = listRolePermissionsHandler;
 exports.updateRolePermissionsHandler = updateRolePermissionsHandler;
+exports.deleteRolePermissionHandler = deleteRolePermissionHandler;
 exports.inviteUserHandler = inviteUserHandler;
 exports.resendInviteUserHandler = resendInviteUserHandler;
 exports.sendResetPasswordLinkHandler = sendResetPasswordLinkHandler;
@@ -57,7 +58,7 @@ const UsersService = __importStar(require("./users.service.js"));
 const crmService = __importStar(require("../../services/crm.service.js"));
 const AuthService = __importStar(require("../auth/auth.service.js"));
 const role_middleware_js_1 = require("../../middleware/role.middleware.js");
-const enums_js_1 = require("../../generated/prisma/enums.js");
+const crm_cache_service_js_1 = require("../../services/crm-cache.service.js");
 function ok(res, data) {
     res.status(200).json({ success: true, data });
 }
@@ -130,7 +131,14 @@ const prisma_js_1 = require("../../config/prisma.js");
 async function getMyCreditsHandler(req, res, next) {
     try {
         const customerId = req.user.id;
-        let credits = await prisma_js_1.prisma.customerCredits.findUnique({
+        const user = await prisma_js_1.prisma.user.findUnique({
+            where: { id: customerId },
+            select: { crmCustomerId: true }
+        });
+        await (0, crm_cache_service_js_1.syncUserCredits)(customerId, user?.crmCustomerId || null).catch(err => {
+            console.error(`[Users Controller] Error syncing user credits:`, err);
+        });
+        const credits = await prisma_js_1.prisma.customerCredits.findUnique({
             where: { customerId },
             include: {
                 transactions: {
@@ -138,20 +146,6 @@ async function getMyCreditsHandler(req, res, next) {
                 },
             },
         });
-        if (!credits) {
-            credits = await prisma_js_1.prisma.customerCredits.create({
-                data: {
-                    customerId,
-                    allocatedHours: 20.0,
-                    usedHours: 0.0,
-                    remainingHours: 20.0,
-                    billableHours: 0.0,
-                },
-                include: {
-                    transactions: true,
-                },
-            });
-        }
         ok(res, { credits });
     }
     catch (err) {
@@ -161,53 +155,41 @@ async function getMyCreditsHandler(req, res, next) {
 async function updateCustomerCreditsHandler(req, res, next) {
     try {
         const id = req.params.id; // customer user ID
-        const { allocatedHours, usedHours, remainingHours, billableHours, description, creditCategoryId } = req.body;
-        let resolvedAllocatedHours = allocatedHours;
-        if (creditCategoryId && allocatedHours === undefined) {
-            const getCategoryCredits = async (catId) => {
-                const cat = await prisma_js_1.prisma.category.findUnique({
-                    where: { id: catId },
-                    select: { credits: true, parentId: true }
-                });
-                if (!cat)
-                    return 0;
-                if (cat.credits > 0)
-                    return cat.credits;
-                if (cat.parentId) {
-                    return getCategoryCredits(cat.parentId);
-                }
-                return cat.credits;
-            };
-            const catCredits = await getCategoryCredits(creditCategoryId);
-            if (catCredits > 0) {
-                resolvedAllocatedHours = catCredits;
-            }
+        const { allocatedHours, description } = req.body;
+        const user = await prisma_js_1.prisma.user.findUnique({
+            where: { id },
+            select: { crmCustomerId: true }
+        });
+        if (!user) {
+            const error = new Error("User not found");
+            error.statusCode = 404;
+            throw error;
         }
-        const currentCredits = await prisma_js_1.prisma.customerCredits.findUnique({
-            where: { customerId: id },
-        });
-        const oldAllocated = currentCredits?.allocatedHours ?? 0;
-        const diff = (resolvedAllocatedHours ?? oldAllocated) - oldAllocated;
-        const credits = await prisma_js_1.prisma.customerCredits.upsert({
-            where: { customerId: id },
-            update: {
-                ...(resolvedAllocatedHours !== undefined ? { allocatedHours: resolvedAllocatedHours } : {}),
-                ...(usedHours !== undefined ? { usedHours } : {}),
-                ...(remainingHours !== undefined ? { remainingHours } : {}),
-                ...(billableHours !== undefined ? { billableHours } : {}),
-                ...(creditCategoryId !== undefined ? { creditCategoryId } : {}),
-            },
-            create: {
-                customerId: id,
-                allocatedHours: resolvedAllocatedHours ?? 20.0,
-                usedHours: usedHours ?? 0.0,
-                remainingHours: remainingHours ?? resolvedAllocatedHours ?? 20.0,
-                billableHours: billableHours ?? 0.0,
-                creditCategoryId: creditCategoryId ?? null,
-            },
-        });
+        const crmCustomerId = user.crmCustomerId;
+        if (!crmCustomerId) {
+            const error = new Error("User does not have a CRM customer ID");
+            error.statusCode = 400;
+            throw error;
+        }
+        // Sync first to get the most updated base allocated credits from CRM
+        const syncedCredits = await (0, crm_cache_service_js_1.syncUserCredits)(id, crmCustomerId);
+        const oldAllocated = syncedCredits.allocatedHours;
+        const diff = (allocatedHours ?? oldAllocated) - oldAllocated;
         if (diff !== 0) {
-            // Record transaction
+            // Retain manual adjustments as separate audit entries only
+            await prisma_js_1.prisma.creditUsage.create({
+                data: {
+                    crmCustomerId,
+                    hoursConsumed: 0.0,
+                    adjustments: diff,
+                    reason: description || `Credits adjusted by administrator. Change: ${diff > 0 ? "+" : ""}${diff} hours.`,
+                }
+            });
+        }
+        // Recalculate everything and sync to database
+        const credits = await (0, crm_cache_service_js_1.syncUserCredits)(id, crmCustomerId);
+        if (diff !== 0) {
+            // Record transaction for backward compatibility/history
             await prisma_js_1.prisma.creditTransaction.create({
                 data: {
                     customerCreditsId: credits.id,
@@ -217,7 +199,15 @@ async function updateCustomerCreditsHandler(req, res, next) {
                 },
             });
         }
-        ok(res, { credits });
+        const updatedCredits = await prisma_js_1.prisma.customerCredits.findUnique({
+            where: { id: credits.id },
+            include: {
+                transactions: {
+                    orderBy: { createdAt: "desc" }
+                }
+            }
+        });
+        ok(res, { credits: updatedCredits });
     }
     catch (err) {
         next(err);
@@ -307,8 +297,10 @@ async function deleteRoutingRuleHandler(req, res, next) {
 async function listRolePermissionsHandler(req, res, next) {
     try {
         const dbPermissions = await prisma_js_1.prisma.rolePermission.findMany();
-        const rolesList = Object.values(enums_js_1.Role);
-        const permissions = rolesList.map(role => {
+        const systemRoles = ["ADMIN", "CUSTOMER", "AGENT", "SUPERVISOR", "SUPPORT_L1", "SUPPORT_L2", "BILLING"];
+        // Get unique list of all roles in DB + system roles
+        const allRoles = Array.from(new Set([...systemRoles, ...dbPermissions.map(p => p.role)]));
+        const permissions = allRoles.map(role => {
             const dbRecord = dbPermissions.find(p => p.role === role);
             return {
                 role,
@@ -324,7 +316,7 @@ async function listRolePermissionsHandler(req, res, next) {
 async function updateRolePermissionsHandler(req, res, next) {
     try {
         const { role, permissions } = req.body;
-        if (!role || !Object.values(enums_js_1.Role).includes(role)) {
+        if (!role || typeof role !== "string" || role.trim() === "") {
             res.status(400).json({ success: false, error: { message: "Invalid role specified" } });
             return;
         }
@@ -332,12 +324,40 @@ async function updateRolePermissionsHandler(req, res, next) {
             res.status(400).json({ success: false, error: { message: "Permissions must be an array of strings" } });
             return;
         }
+        const trimmedRole = role.trim();
         const record = await prisma_js_1.prisma.rolePermission.upsert({
-            where: { role },
+            where: { role: trimmedRole },
             update: { permissions },
-            create: { role, permissions },
+            create: { role: trimmedRole, permissions },
         });
         ok(res, { record });
+    }
+    catch (err) {
+        next(err);
+    }
+}
+async function deleteRolePermissionHandler(req, res, next) {
+    try {
+        const role = req.params.role;
+        if (!role) {
+            res.status(400).json({ success: false, error: { message: "Role is required" } });
+            return;
+        }
+        const systemRoles = ["ADMIN", "CUSTOMER", "AGENT", "SUPERVISOR", "SUPPORT_L1", "SUPPORT_L2", "BILLING"];
+        if (systemRoles.includes(role)) {
+            res.status(400).json({ success: false, error: { message: "Cannot delete system roles" } });
+            return;
+        }
+        // Delete role permission record
+        await prisma_js_1.prisma.rolePermission.delete({
+            where: { role },
+        });
+        // Fall back all users with this role to 'AGENT'
+        await prisma_js_1.prisma.user.updateMany({
+            where: { role },
+            data: { role: "AGENT" },
+        });
+        ok(res, { message: `Role ${role} deleted successfully. Affected staff fell back to AGENT.` });
     }
     catch (err) {
         next(err);
@@ -402,9 +422,9 @@ async function getMyCrmDetailsHandler(req, res, next) {
         const crmCustomerId = user.crmCustomerId;
         const [customer, domains, subscriptions, services] = await Promise.all([
             prisma_js_1.prisma.crmCustomer.findUnique({ where: { crmCustomerId } }),
-            prisma_js_1.prisma.crmDomain.findMany({ where: { crmCustomerId } }),
-            prisma_js_1.prisma.crmSubscription.findMany({ where: { crmCustomerId } }),
-            prisma_js_1.prisma.crmService.findMany({ where: { crmCustomerId } }),
+            (0, crm_cache_service_js_1.getOrFetchDomains)(crmCustomerId),
+            (0, crm_cache_service_js_1.getOrFetchSubscriptions)(crmCustomerId),
+            (0, crm_cache_service_js_1.getOrFetchServices)(crmCustomerId),
         ]);
         ok(res, { customer, domains, subscriptions, services });
     }

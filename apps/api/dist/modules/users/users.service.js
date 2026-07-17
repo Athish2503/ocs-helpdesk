@@ -42,6 +42,7 @@ exports.updateProfile = updateProfile;
 const prisma_js_1 = require("../../config/prisma.js");
 const password_js_1 = require("../../utils/password.js");
 const crmService = __importStar(require("../../services/crm.service.js"));
+const crm_cache_service_js_1 = require("../../services/crm-cache.service.js");
 async function listUsers(query) {
     const where = {};
     if (query.search) {
@@ -102,6 +103,15 @@ async function listUsers(query) {
     });
 }
 async function getUserById(id) {
+    const existing = await prisma_js_1.prisma.user.findUnique({
+        where: { id },
+        select: { crmCustomerId: true }
+    });
+    if (existing) {
+        await (0, crm_cache_service_js_1.syncUserCredits)(id, existing.crmCustomerId).catch(err => {
+            console.error(`[Users Service] Error syncing user credits for user ${id}:`, err);
+        });
+    }
     const user = await prisma_js_1.prisma.user.findUnique({
         where: { id },
         select: {
@@ -146,6 +156,35 @@ async function getUserById(id) {
         const error = new Error("User not found");
         error.statusCode = 404;
         throw error;
+    }
+    // Populate live/cached CRM data for the customer details view
+    if (user.crmCustomerId) {
+        try {
+            const [domains, subscriptions, services] = await Promise.all([
+                (0, crm_cache_service_js_1.getOrFetchDomains)(user.crmCustomerId),
+                (0, crm_cache_service_js_1.getOrFetchSubscriptions)(user.crmCustomerId),
+                (0, crm_cache_service_js_1.getOrFetchServices)(user.crmCustomerId),
+            ]);
+            if (!user.crmCustomer) {
+                user.crmCustomer = {
+                    crmCustomerId: user.crmCustomerId,
+                    companyName: "",
+                    displayName: user.name,
+                    primaryEmail: user.email,
+                    customerStatus: "ACTIVE",
+                    domains: [],
+                    services: [],
+                    subscriptions: [],
+                    invitations: [],
+                };
+            }
+            user.crmCustomer.domains = domains;
+            user.crmCustomer.subscriptions = subscriptions;
+            user.crmCustomer.services = services;
+        }
+        catch (err) {
+            console.error(`[Users Service] Failed to load live CRM data for user ${user.crmCustomerId}:`, err);
+        }
     }
     // Fetch independent audit logs
     const auditLogs = await prisma_js_1.prisma.auditLog.findMany({

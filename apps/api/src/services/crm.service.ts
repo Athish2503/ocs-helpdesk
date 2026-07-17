@@ -110,6 +110,7 @@ export async function syncCustomerData(customerId: string): Promise<void> {
       domains: (domains || []).map((d: any) => ({
         crmDomainId: d.domainId ? String(d.domainId) : "",
         domainName: d.domainName,
+        registeredWith: d.registeredWith || d.registered_with || "Others",
       })),
       services: extractedServices.map((s: any) => ({
         crmServiceId: s.serviceId ? String(s.serviceId) : "",

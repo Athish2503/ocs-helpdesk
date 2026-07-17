@@ -8,6 +8,7 @@ const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 const app_js_1 = __importDefault(require("./app.js"));
 const seed_js_1 = require("./utils/seed.js");
+const crm_queue_service_js_1 = require("./services/crm-queue.service.js");
 const PORT = process.env["PORT"] ?? 4000;
 async function startServer() {
     try {
@@ -17,8 +18,10 @@ async function startServer() {
     catch (err) {
         console.error("❌ Database seeding failed:", err);
     }
+    // Start background CRM event queue scheduler
+    (0, crm_queue_service_js_1.startQueueScheduler)();
     app_js_1.default.listen(PORT, () => {
         console.log(`✅  API running on http://localhost:${PORT}`);
     });
 }
-startServer(); // Trigger watch reload for env changes
+startServer(); // Trigger watch reload for env changes.

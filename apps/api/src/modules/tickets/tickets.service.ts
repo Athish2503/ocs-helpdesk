@@ -1,4 +1,5 @@
 import { prisma } from "../../config/prisma.js";
+import { syncUserCredits } from "../../services/crm-cache.service.js";
 import type { Role } from "../../types/role.js";
 import type { CreateTicketInput, AddMessageInput, UpdateTicketInput } from "./tickets.schemas.js";
 
@@ -550,30 +551,27 @@ export async function updateTicket(
           txDescription = `Consumed ${hours} credits resolving ticket: ${ticket.title} (Charged at 750 credits/hr rate for domain outside of OCS. Raw hours: ${rawHours}, min billing 1/2 hr applied)`;
         }
 
-        const credits = await prisma.customerCredits.findUnique({
-          where: { customerId: ticket.customerId },
-        });
+        const crmCustId = ticket.customer?.crmCustomerId || (await prisma.user.findUnique({
+          where: { id: ticket.customerId },
+          select: { crmCustomerId: true }
+        }))?.crmCustomerId;
 
-        if (credits) {
-          let remaining = credits.remainingHours - hours;
-          let used = credits.usedHours + hours;
-          let billable = credits.billableHours;
-
-          if (remaining < 0) {
-            billable += Math.abs(remaining);
-            remaining = 0;
-            txType = "BILLABLE_OVERAGE";
-          }
-
-          await prisma.customerCredits.update({
-            where: { id: credits.id },
+        if (crmCustId) {
+          // Write to CreditUsage table (consumption)
+          await prisma.creditUsage.create({
             data: {
-              usedHours: used,
-              remainingHours: remaining,
-              billableHours: billable,
-            },
+              crmCustomerId: crmCustId,
+              ticketId: id,
+              hoursConsumed: hours,
+              adjustments: 0.0,
+              reason: txDescription,
+            }
           });
 
+          // Recalculate balance dynamically and sync to customerCredits
+          const credits = await syncUserCredits(ticket.customerId, crmCustId);
+
+          // Write to CreditTransaction for backward compatibility/history
           await prisma.creditTransaction.create({
             data: {
               customerCreditsId: credits.id,

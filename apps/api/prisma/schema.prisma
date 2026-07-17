@@ -163,6 +163,7 @@ model Ticket {
   attachments        TicketAttachment[]
   statusHistory      TicketStatusHistory[]
   creditTransactions CreditTransaction[]
+  usages             CreditUsage[]
 
   @@map("tickets")
 }
@@ -472,6 +473,7 @@ model CrmCustomer {
   services       CrmService[]
   subscriptions  CrmSubscription[]
   invitations    Invitation[]
+  usages         CreditUsage[]
 
   @@map("crm_customers")
 }
@@ -480,6 +482,7 @@ model CrmDomain {
   id            String      @id @default(uuid())
   crmDomainId   String      @unique @map("crm_domain_id")
   domainName    String      @map("domain_name")
+  registeredWith String     @default("Others") @map("registered_with")
   crmCustomerId String      @map("crm_customer_id")
   crmCustomer   CrmCustomer @relation(fields: [crmCustomerId], references: [crmCustomerId], onDelete: Cascade)
   createdAt     DateTime    @default(now()) @map("created_at")
@@ -545,6 +548,49 @@ model AuditLog {
 
   @@map("audit_logs")
 }
+
+model CrmSyncLog {
+  id          String    @id @default(uuid())
+  eventId     String    @unique @map("event_id")
+  entity      String    // e.g. "customer", "domain", "service", "subscription"
+  entityId    String    @map("entity_id")
+  status      String    // e.g. "PROCESSED", "FAILED"
+  receivedAt  DateTime  @default(now()) @map("received_at")
+  processedAt DateTime? @map("processed_at")
+  errors      String?   @map("errors")
+
+  @@map("crm_sync_logs")
+}
+
+model CrmEventQueue {
+  id          String   @id @default(uuid())
+  eventId     String   @unique @map("event_id")
+  event       String   // e.g. "customer.updated", "domain.created"
+  payload     String   // JSON string of request body
+  status      String   @default("PENDING") // PENDING, PROCESSING, FAILED
+  retryCount  Int      @default(0) @map("retry_count")
+  lastError   String?  @map("last_error")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("crm_event_queue")
+}
+
+model CreditUsage {
+  id             String      @id @default(uuid())
+  crmCustomerId  String      @map("crm_customer_id")
+  ticketId       String?     @map("ticket_id")
+  hoursConsumed  Float       @default(0.0) @map("hours_consumed")
+  adjustments    Float       @default(0.0) @map("adjustments")
+  reason         String?
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  crmCustomer    CrmCustomer @relation(fields: [crmCustomerId], references: [crmCustomerId], onDelete: Cascade)
+  ticket         Ticket?     @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@map("credit_usages")
+}
+
 
 
 
