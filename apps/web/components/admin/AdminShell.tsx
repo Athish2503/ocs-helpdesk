@@ -6,7 +6,7 @@ import AdminHeader from "./AdminHeader";
 import { useToast } from "../../context/ToastContext";
 
 interface AdminShellProps {
-  user: { name: string; role: string };
+  user: { name: string; role: string; permissions?: string[] };
   onLogout: () => void;
   activeTab?: string;
   onTabChange?: (tab: string) => void;

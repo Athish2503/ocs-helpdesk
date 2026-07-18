@@ -14,7 +14,11 @@ require("../modules/auth/auth.types.js"); // ensure Express.Request augmentation
  */
 function requireAuth(req, res, next) {
     const authHeader = req.headers["authorization"];
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    // SSE connections (EventSource) cannot set custom headers.
+    // Allow token via query parameter ?t= exclusively for SSE streaming endpoints.
+    // This is safe because SSE is a GET endpoint and the token is short-lived (15 min).
+    const queryToken = req.query.t || null;
+    if (!authHeader?.startsWith("Bearer ") && !queryToken) {
         res.status(401).json({
             success: false,
             error: {
@@ -24,7 +28,7 @@ function requireAuth(req, res, next) {
         });
         return;
     }
-    const token = authHeader.slice(7); // strip "Bearer "
+    const token = queryToken || authHeader.slice(7); // strip "Bearer " or use query token
     try {
         const payload = (0, jwt_js_1.verifyAccessToken)(token);
         req.user = {

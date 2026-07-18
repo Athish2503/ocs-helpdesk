@@ -22,7 +22,15 @@ const prisma_js_1 = require("../../config/prisma.js");
 const password_js_1 = require("../../utils/password.js");
 const jwt_js_1 = require("../../utils/jwt.js");
 const email_service_js_1 = require("../../services/email.service.js");
-function toPublicUser(user) {
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+const role_middleware_js_1 = require("../../middleware/role.middleware.js");
+async function toPublicUser(user) {
+    const rolePerm = await prisma_js_1.prisma.rolePermission.findUnique({
+        where: { role: user.role },
+    });
+    const permissions = rolePerm?.permissions ?? role_middleware_js_1.DEFAULT_PERMISSIONS[user.role] ?? [];
     return {
         id: user.id,
         name: user.name,
@@ -31,6 +39,7 @@ function toPublicUser(user) {
         isActive: user.isActive,
         emailVerified: user.emailVerified,
         createdAt: user.createdAt,
+        permissions,
     };
 }
 function buildTokens(user, overrideEmail) {
@@ -139,7 +148,7 @@ async function login(input) {
         },
     });
     return {
-        user: toPublicUser(user),
+        user: await toPublicUser(user),
         tokens: { accessToken, refreshToken },
     };
 }
@@ -185,7 +194,7 @@ async function getMe(userId) {
         err.statusCode = 404;
         throw err;
     }
-    return toPublicUser(user);
+    return await toPublicUser(user);
 }
 // ---------------------------------------------------------------------------
 // Logout
@@ -325,7 +334,7 @@ async function magicLogin(token) {
         },
     });
     return {
-        user: toPublicUser(user),
+        user: await toPublicUser(user),
         tokens: { accessToken, refreshToken },
     };
 }

@@ -44,6 +44,9 @@ import {
   History,
   Activity,
   Shield,
+  Check,
+  ChevronDown,
+  ArrowUpCircle,
 } from "lucide-react";
 
 interface Category {
@@ -97,7 +100,10 @@ interface Ticket {
   createdBySecondaryEmail?: string | null;
   messages?: TicketMessage[];
   attachments?: TicketAttachment[];
-}
+  isEscalated?: boolean;
+  escalatedAt?: string | null;
+  escalatedById?: string | null;
+  escalationReason?: string | null;}
 
 interface KbArticle {
   id: string;
@@ -347,8 +353,9 @@ export default function CustomerDashboard() {
     affectedDomain: "",
     issueType: "" as "" | "billing" | "technical" | "critical" | "other",
   });
+  const [isIssueTypeOpen, setIsIssueTypeOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [wizardStep, setWizardStep] = useState<"select-domain" | "select-subscription" | "select-service" | "self-help" | "intake" | "routing">("select-domain");
+  const [wizardStep, setWizardStep] = useState<"select-domain" | "select-subscription" | "self-help" | "intake" | "routing">("select-domain");
   const [suggestedArticles, setSuggestedArticles] = useState<any[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState<boolean>(false);
   const [submittingCreate, setSubmittingCreate] = useState(false);
@@ -543,6 +550,17 @@ export default function CustomerDashboard() {
           }
         } catch (err) {
           console.error("[SSE] Failed to parse crm.sync event:", err);
+        }
+      });
+
+      // Listen for ticket updates to synchronize the view in real-time
+      eventSource.addEventListener("ticket.update", (e: MessageEvent) => {
+        try {
+          const payload = JSON.parse(e.data) as { ticketId: string; action: string };
+          console.log(`[SSE] Customer Dashboard received ticket.update: ${payload.ticketId}, action: ${payload.action}`);
+          loadTickets(false); // Refresh ticket list without full loading spinner
+        } catch (err) {
+          console.error("[SSE] Failed to parse ticket.update event:", err);
         }
       });
 
@@ -1942,9 +1960,17 @@ export default function CustomerDashboard() {
                                 ? isDark ? "text-[#38b1f7]" : "text-[#0d7fc0]"
                                 : isDark ? "text-slate-100 hover:text-[#38b1f7]" : "text-slate-800 hover:text-[#0d7fc0]"
                             }`}>{t.title}</h4>
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold border shrink-0 ${getStatusStyle(t.status)}`}>
-                              {t.status}
-                            </span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {t.isEscalated && (
+                                <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-red-500 text-white flex items-center gap-0.5 border border-red-600 shadow-[0_0_10px_rgba(239,68,68,0.1)]">
+                                  <ArrowUpCircle className="w-2.5 h-2.5" />
+                                  ESCALATED
+                                </span>
+                              )}
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${getStatusStyle(t.status)}`}>
+                                {t.status}
+                              </span>
+                            </div>
                           </div>
                           
                           <p className={`text-xs line-clamp-2 mb-4 leading-relaxed transition-colors ${
@@ -1999,6 +2025,12 @@ export default function CustomerDashboard() {
                           <div className="space-y-1">
                             <div className="flex items-center space-x-2">
                               <h3 className={`font-bold text-md tracking-tight ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>{detailedTicket.title}</h3>
+                              {detailedTicket.isEscalated && (
+                                <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-red-500 text-white flex items-center gap-0.5 border border-red-600 shadow-[0_0_10px_rgba(239,68,68,0.1)]">
+                                  <ArrowUpCircle className="w-2.5 h-2.5" />
+                                  ESCALATED
+                                </span>
+                              )}
                               <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${getStatusStyle(detailedTicket.status)}`}>
                                 {detailedTicket.status}
                               </span>
@@ -2521,7 +2553,7 @@ export default function CustomerDashboard() {
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
           <div className={`w-full overflow-hidden shadow-2xl border transition-all duration-500 rounded-2xl my-8 ${
-            ["select-domain", "select-subscription", "select-service", "self-help"].includes(wizardStep) ? "max-w-2xl" : "max-w-xl"
+            ["select-domain", "select-subscription", "self-help"].includes(wizardStep) ? "max-w-2xl" : "max-w-xl"
           } ${
             isDark ? 'glass-card border-white/[0.08]' : 'bg-white border-slate-200 shadow-2xl'
           }`}>
@@ -2536,8 +2568,7 @@ export default function CustomerDashboard() {
                     isDark ? 'text-[#F8FAFC]' : 'text-slate-900'
                   }`}>
                     {wizardStep === "select-domain" && "Select Affected Domain"}
-                    {wizardStep === "select-subscription" && "Select Affected Subscription"}
-                    {wizardStep === "select-service" && "Select Affected Service"}
+                    {wizardStep === "select-subscription" && "Select Affected Subscription & Service"}
                     {wizardStep === "self-help" && "💡 Search & Read Help Articles"}
                     {wizardStep === "intake" && "New Support Request"}
                     {wizardStep === "routing" && "Review & Submit"}
@@ -2546,8 +2577,7 @@ export default function CustomerDashboard() {
                     isDark ? 'text-slate-400' : 'text-slate-550'
                   }`}>
                     {wizardStep === "select-domain" && "Choose which domain is experiencing issues"}
-                    {wizardStep === "select-subscription" && "Select the subscription plan linked to this domain"}
-                    {wizardStep === "select-service" && "Select the subscribed service under that domain"}
+                    {wizardStep === "select-subscription" && "Select the subscription plan and service linked to this domain"}
                     {wizardStep === "self-help" && "Search for solutions instantly or read suggested articles"}
                     {wizardStep === "intake" && "Tell us what's happening and we'll route it to the right team"}
                     {wizardStep === "routing" && "Confirm your ticket details before sending"}
@@ -2591,7 +2621,7 @@ export default function CustomerDashboard() {
                   const isOcs = reg === "OCS" || reg === "OCS (RC)" || reg === "WINS" || reg === "WINDS";
 
                   const steps = isOcs
-                    ? (["select-domain", "select-subscription", "select-service", "self-help", "intake", "routing"] as const)
+                    ? (["select-domain", "select-subscription", "self-help", "intake", "routing"] as const)
                     : (["select-domain", "intake", "routing"] as const);
 
                   const stepIndex = steps.indexOf(wizardStep as any);
@@ -2880,7 +2910,7 @@ export default function CustomerDashboard() {
               );
             })()}
 
-            {/* ── STEP 1.5: SELECT SUBSCRIPTION ───────────────────────────────────── */}
+            {/* ── STEP 1.5: SELECT SUBSCRIPTION & SERVICE ───────────────────────────── */}
             {wizardStep === "select-subscription" && (() => {
               const domainName = createForm.affectedDomain.trim().toLowerCase();
               const activeSubsForDomain = crmDetails.subscriptions.filter(s => 
@@ -2893,7 +2923,7 @@ export default function CustomerDashboard() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h4 className={`text-sm font-bold ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>
-                        Select Subscription
+                        Select Subscribed Service
                       </h4>
                       <span className={`text-[10px] px-2 py-0.5 rounded bg-[#38b1f7]/10 text-[#38b1f7] font-semibold`}>
                         {createForm.affectedDomain}
@@ -2901,45 +2931,79 @@ export default function CustomerDashboard() {
                     </div>
 
                     <div className="space-y-4">
-                      <div className="grid grid-cols-1 gap-3 max-h-[280px] overflow-y-auto pr-1">
+                      <div className="grid grid-cols-1 gap-4 max-h-[300px] overflow-y-auto pr-1">
                         {activeSubsForDomain.length > 0 ? (
                           activeSubsForDomain.map((sub) => {
-                            const isSelected = selectedSubscriptionId === sub.crmSubscriptionId;
+                            const hasSelectedServiceInSub = selectedSubscriptionId === sub.crmSubscriptionId && selectedServiceId !== "";
                             return (
                               <div
                                 key={sub.id || sub.crmSubscriptionId}
-                                onClick={() => {
-                                  setSelectedSubscriptionId(sub.crmSubscriptionId);
-                                }}
-                                className={`p-4 rounded-xl border cursor-pointer text-left transition-all flex items-center justify-between ${
-                                  isSelected
+                                className={`p-4 rounded-xl border transition-all text-left space-y-3.5 ${
+                                  hasSelectedServiceInSub
                                     ? isDark
-                                      ? "bg-sky-950/40 border-[#38b1f7]/60 shadow-[0_0_12px_rgba(56,177,247,0.1)]"
-                                      : "bg-sky-50 border-[#38b1f7] shadow-sm"
+                                      ? "bg-slate-900/50 border-[#38b1f7]/40 shadow-[0_0_12px_rgba(56,177,247,0.05)]"
+                                      : "bg-sky-50/30 border-[#38b1f7]/50"
                                     : isDark
-                                      ? "bg-slate-900/40 border-white/[0.04] hover:bg-slate-800/50 hover:border-white/[0.08]"
-                                      : "bg-white border-slate-200 hover:bg-slate-55 hover:border-slate-350"
+                                      ? "bg-slate-900/40 border-white/[0.04]"
+                                      : "bg-white border-slate-200"
                                 }`}
                               >
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                    isSelected ? "bg-[#38b1f7]/20 text-[#38b1f7]" : "bg-slate-100 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500"
-                                  }`}>
+                                <div className="flex items-center gap-3 pb-2.5 border-b border-dashed border-slate-250 dark:border-white/[0.06]">
+                                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-[#38b1f7]/10 text-[#38b1f7]`}>
                                     <CreditCard className="w-4 h-4" />
                                   </div>
                                   <div>
                                     <p className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                                       {sub.planName}
                                     </p>
-                                    <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                                      Started: {new Date(sub.startDate).toLocaleDateString()}
+                                    <p className={`text-[9px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                                      Subscription Plan — Started: {new Date(sub.startDate).toLocaleDateString()}
                                     </p>
                                   </div>
                                 </div>
-                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
-                                  isSelected ? 'border-[#38b1f7] bg-[#38b1f7]/10' : 'border-slate-400'
-                                }`}>
-                                  {isSelected && <div className="w-2 h-2 rounded-full bg-[#38b1f7]" />}
+
+                                <div className="space-y-2">
+                                  <p className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-450'}`}>
+                                    Select Service Under This Plan:
+                                  </p>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {sub.services && sub.services.length > 0 ? (
+                                      sub.services.map((service: any) => {
+                                        const isSelected = selectedSubscriptionId === sub.crmSubscriptionId && selectedServiceId === service.serviceId;
+                                        return (
+                                          <div
+                                            key={service.serviceId}
+                                            onClick={() => {
+                                              setSelectedSubscriptionId(sub.crmSubscriptionId);
+                                              setSelectedServiceId(service.serviceId);
+                                              setSelectedServiceName(service.serviceName);
+                                            }}
+                                            className={`p-3 rounded-lg border cursor-pointer text-left transition-all flex items-center justify-between group ${
+                                              isSelected
+                                                ? isDark
+                                                  ? "bg-[#38b1f7]/15 border-[#38b1f7] text-white"
+                                                  : "bg-sky-100/70 border-[#38b1f7] text-[#0c7fc0] font-semibold"
+                                                : isDark
+                                                  ? "bg-slate-955/20 border-white/[0.04] hover:bg-slate-800/40 text-slate-350"
+                                                  : "bg-white border-slate-200 hover:bg-slate-55 text-slate-700"
+                                            }`}
+                                          >
+                                            <div className="flex items-center gap-2 min-w-0">
+                                              <Server className={`w-3.5 h-3.5 transition-colors ${isSelected ? 'text-[#38b1f7]' : 'text-slate-400 group-hover:text-slate-300'}`} />
+                                              <span className="text-xs truncate">{service.serviceName}</span>
+                                            </div>
+                                            <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-all shrink-0 ${
+                                              isSelected ? 'border-[#38b1f7] bg-[#38b1f7]/10' : 'border-slate-400'
+                                            }`}>
+                                              {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[#38b1f7]" />}
+                                            </div>
+                                          </div>
+                                        );
+                                      })
+                                    ) : (
+                                      <p className="text-[10px] italic text-slate-400 col-span-2">No active services under this plan.</p>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             );
@@ -2950,22 +3014,49 @@ export default function CustomerDashboard() {
                               No active subscriptions found for this OCS domain.
                             </p>
                             <p className={`text-[11px] mb-4 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                              You can proceed to ticket creation directly without a subscription.
+                              You can proceed to ticket creation directly with General Support.
                             </p>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedSubscriptionId("");
-                                setSelectedServiceId("");
-                                setWizardStep("intake");
-                              }}
-                              className="btn-cyber h-8 px-4 text-[10px] inline-flex items-center gap-1.5"
-                            >
-                              <span>Proceed to Ticket Creation</span>
-                              <ArrowRight className="w-3 h-3" />
-                            </button>
                           </div>
                         )}
+
+                        {/* General Query Fallback Option */}
+                        <div
+                          onClick={() => {
+                            setSelectedSubscriptionId("");
+                            setSelectedServiceId("");
+                            setSelectedServiceName("General Support");
+                          }}
+                          className={`p-4 rounded-xl border cursor-pointer text-left transition-all flex items-center justify-between ${
+                            selectedServiceId === "" && selectedSubscriptionId === ""
+                              ? isDark
+                                ? "bg-sky-955/40 border-[#38b1f7]/60 shadow-[0_0_12px_rgba(56,177,247,0.1)]"
+                                : "bg-sky-50 border-[#38b1f7] shadow-sm"
+                              : isDark
+                                ? "bg-slate-900/40 border-white/[0.04] hover:bg-slate-800/50 hover:border-white/[0.08]"
+                                : "bg-white border-slate-200 hover:bg-slate-55 hover:border-slate-350"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                              selectedServiceId === "" && selectedSubscriptionId === "" ? "bg-[#38b1f7]/20 text-[#38b1f7]" : "bg-slate-100 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500"
+                            }`}>
+                              <HelpCircle className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                General Support / Other Issues
+                              </p>
+                              <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                                Choose this if your issue is not related to a specific active subscription package
+                              </p>
+                            </div>
+                          </div>
+                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
+                            selectedServiceId === "" && selectedSubscriptionId === "" ? 'border-[#38b1f7] bg-[#38b1f7]/10' : 'border-slate-400'
+                          }`}>
+                            {selectedServiceId === "" && selectedSubscriptionId === "" && <div className="w-2 h-2 rounded-full bg-[#38b1f7]" />}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2985,159 +3076,14 @@ export default function CustomerDashboard() {
                     </button>
                     <button
                       type="button"
-                      disabled={!selectedSubscriptionId}
-                      onClick={() => {
-                        setSelectedServiceId("");
-                        setWizardStep("select-service");
-                      }}
-                      className="btn-cyber h-9 px-5 text-xs flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none"
-                    >
-                      <span>Next: Select Service</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* ── STEP 2: SELECT SERVICE ───────────────────────────────────────── */}
-            {wizardStep === "select-service" && (() => {
-              const selectedSub = crmDetails.subscriptions.find(s => s.crmSubscriptionId === selectedSubscriptionId);
-              const filteredServices = (selectedSub?.services || []).map((s: any) => ({
-                id: s.serviceId,
-                crmServiceId: s.serviceId,
-                name: s.serviceName,
-                status: "ACTIVE"
-              }));
-
-              return (
-                <div className="p-6 space-y-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className={`text-sm font-bold ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>
-                        Select Affected Service
-                      </h4>
-                      <span className={`text-[10px] px-2 py-0.5 rounded bg-[#38b1f7]/10 text-[#38b1f7] font-semibold`}>
-                        {createForm.affectedDomain}
-                      </span>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 gap-3 max-h-[280px] overflow-y-auto pr-1">
-                        {filteredServices.length > 0 ? (
-                          filteredServices.map((s) => {
-                            const isSelected = selectedServiceId === s.crmServiceId;
-                            return (
-                              <div
-                                key={s.id || s.crmServiceId}
-                                onClick={() => {
-                                  setSelectedServiceId(s.crmServiceId);
-                                  setSelectedServiceName(s.name);
-                                }}
-                                className={`p-4 rounded-xl border cursor-pointer text-left transition-all flex items-center justify-between ${
-                                  isSelected
-                                    ? isDark
-                                      ? "bg-sky-950/40 border-[#38b1f7]/60 shadow-[0_0_12px_rgba(56,177,247,0.1)]"
-                                      : "bg-sky-50 border-[#38b1f7] shadow-sm"
-                                    : isDark
-                                      ? "bg-slate-900/40 border-white/[0.04] hover:bg-slate-800/50 hover:border-white/[0.08]"
-                                      : "bg-white border-slate-200 hover:bg-slate-55 hover:border-slate-350"
-                                }`}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                    isSelected ? "bg-[#38b1f7]/20 text-[#38b1f7]" : "bg-slate-100 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500"
-                                  }`}>
-                                    <Server className="w-4 h-4" />
-                                  </div>
-                                  <div>
-                                    <p className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                                      {s.name}
-                                    </p>
-                                    <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                                      Status: {s.status}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
-                                  isSelected ? 'border-[#38b1f7] bg-[#38b1f7]/10' : 'border-slate-400'
-                                }`}>
-                                  {isSelected && <div className="w-2 h-2 rounded-full bg-[#38b1f7]" />}
-                                </div>
-                              </div>
-                            );
-                          })
-                        ) : (
-                          <div className={`p-4 text-center rounded-xl border ${isDark ? 'bg-slate-900/40 border-white/[0.04]' : 'bg-slate-50 border-slate-200'}`}>
-                            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-550'}`}>
-                              No active services found under this subscription. Proceeding with General Support.
-                            </p>
-                          </div>
-                        )}
-
-                        {/* General Query Fallback Option */}
-                        <div
-                          onClick={() => {
-                            setSelectedServiceId("");
-                            setSelectedServiceName("General Support");
-                          }}
-                          className={`p-4 rounded-xl border cursor-pointer text-left transition-all flex items-center justify-between ${
-                            selectedServiceId === ""
-                              ? isDark
-                                ? "bg-sky-950/40 border-[#38b1f7]/60 shadow-[0_0_12px_rgba(56,177,247,0.1)]"
-                                : "bg-sky-50 border-[#38b1f7] shadow-sm"
-                              : isDark
-                                ? "bg-slate-900/40 border-white/[0.04] hover:bg-slate-800/50 hover:border-white/[0.08]"
-                                : "bg-white border-slate-200 hover:bg-slate-55 hover:border-slate-350"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                              selectedServiceId === "" ? "bg-[#38b1f7]/20 text-[#38b1f7]" : "bg-slate-100 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500"
-                            }`}>
-                              <HelpCircle className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <p className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                                General Support / Other Issues
-                              </p>
-                              <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                                Choose this if your issue is not related to a specific active subscription package
-                              </p>
-                            </div>
-                          </div>
-                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
-                            selectedServiceId === "" ? 'border-[#38b1f7] bg-[#38b1f7]/10' : 'border-slate-400'
-                          }`}>
-                            {selectedServiceId === "" && <div className="w-2 h-2 rounded-full bg-[#38b1f7]" />}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className={`px-6 py-4 border-t flex items-center justify-between -mx-6 -mb-6 ${
-                    isDark ? 'border-[#1E293B] bg-slate-900/20' : 'border-slate-100 bg-slate-50/50'
-                  }`}>
-                    <button
-                      type="button"
-                      onClick={() => setWizardStep("select-subscription")}
-                      className={`flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-lg transition-colors ${
-                        isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-                      }`}
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" />
-                      Back
-                    </button>
-                    <button
-                      type="button"
+                      disabled={!selectedSubscriptionId && selectedServiceName !== "General Support"}
                       onClick={() => {
                         const q = selectedServiceId === "" ? "general" : selectedServiceName;
                         setModalKbSearch(q);
                         searchModalKb(q);
                         setWizardStep("self-help");
                       }}
-                      className="btn-cyber h-9 px-5 text-xs flex items-center gap-1.5"
+                      className="btn-cyber h-9 px-5 text-xs flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none"
                     >
                       <span>Next: Suggested Solutions</span>
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -3241,91 +3187,144 @@ export default function CustomerDashboard() {
 
                   {/* Issue Type Selector */}
                   <div className="space-y-2">
-                    <label className={`text-[10px] font-bold uppercase tracking-wider ${
-                      isDark ? 'text-slate-400' : 'text-slate-500'
-                    }`}>Issue Type <span className="text-red-400">*</span></label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        {
-                          key: "billing" as const,
-                          icon: Receipt,
-                          label: "Billing / Renewals",
-                          desc: "Invoices, subscriptions, renewals",
-                          color: "text-violet-400",
-                          bg: isDark ? "bg-violet-950/30 border-violet-500/20 hover:border-violet-500/40" : "bg-violet-50 border-violet-200 hover:border-violet-400",
-                          activeBg: isDark ? "bg-violet-950/50 border-violet-400/60 shadow-[0_0_12px_rgba(167,139,250,0.12)]" : "bg-violet-100 border-violet-500",
-                        },
+                    {(() => {
+                      const issueTypeOptions = [
                         {
                           key: "technical" as const,
-                          icon: Cpu,
                           label: "Technical Support",
-                          desc: "Config, connectivity, software issues",
-                          color: "text-[#38b1f7]",
-                          bg: isDark ? "bg-sky-950/30 border-sky-500/20 hover:border-sky-500/40" : "bg-sky-50 border-sky-200 hover:border-sky-400",
-                          activeBg: isDark ? "bg-sky-950/50 border-[#38b1f7]/60 shadow-[0_0_12px_rgba(56,177,247,0.12)]" : "bg-sky-100 border-sky-500",
+                          desc: "Configuration, connectivity, and software issues",
+                          icon: Cpu,
+                          color: "text-[#38b1f7]"
+                        },
+                        {
+                          key: "billing" as const,
+                          label: "Billing / Renewals",
+                          desc: "Invoices, subscriptions, and payment queries",
+                          icon: Receipt,
+                          color: "text-violet-400"
                         },
                         {
                           key: "critical" as const,
-                          icon: ShieldAlert,
                           label: "Critical / Outage",
-                          desc: "Service down, business blocked",
-                          color: "text-red-400",
-                          bg: isDark ? "bg-red-950/30 border-red-500/20 hover:border-red-500/40" : "bg-red-50 border-red-200 hover:border-red-400",
-                          activeBg: isDark ? "bg-red-950/50 border-red-400/60 shadow-[0_0_12px_rgba(248,113,113,0.15)]" : "bg-red-100 border-red-500",
+                          desc: "Service down or business completely blocked",
+                          icon: ShieldAlert,
+                          color: "text-red-400"
                         },
                         {
                           key: "other" as const,
-                          icon: HelpCircle,
                           label: "General / Other",
-                          desc: "Account queries, other requests",
-                          color: isDark ? "text-slate-400" : "text-slate-500",
-                          bg: isDark ? "bg-slate-800/40 border-slate-700/30 hover:border-slate-600" : "bg-slate-50 border-slate-200 hover:border-slate-400",
-                          activeBg: isDark ? "bg-slate-800 border-slate-500 shadow-sm" : "bg-slate-200 border-slate-600",
-                        },
-                      ].map(({ key, icon: Icon, label, desc, color, bg, activeBg }) => {
-                        const isSelected = createForm.issueType === key;
-                        return (
+                          desc: "Account management and general inquiries",
+                          icon: HelpCircle,
+                          color: "text-slate-400"
+                        }
+                      ];
+
+                      return (
+                        <div className="relative mt-2" id="issue-type-dropdown-container">
+                          {/* Floating Label sitting on border */}
+                          <span className={`absolute left-3 -top-2 px-1.5 text-[10px] font-bold uppercase tracking-wider transition-all z-10 ${
+                            isDark 
+                              ? 'bg-[#0f172a] text-slate-400' 
+                              : 'bg-white text-slate-550'
+                          }`}>
+                            Issue Type <span className="text-red-400">*</span>
+                          </span>
+
+                          {/* Dropdown Trigger Button */}
                           <button
-                            key={key}
                             type="button"
-                            onClick={() => {
-                              // Auto-set priority for critical
-                              const newPriority = key === "critical" ? "HIGH" : createForm.priority;
-                              // Auto-set category for billing
-                              let catId = createForm.categoryId;
-                              if (key === "billing") {
-                                const billingCat = categories.find(
-                                  c => c.name.toLowerCase().includes("billing") || c.name.toLowerCase().includes("renew")
-                                );
-                                if (billingCat) catId = billingCat.id;
-                              }
-                              setCreateForm(prev => ({
-                                ...prev,
-                                issueType: key,
-                                priority: newPriority,
-                                categoryId: catId,
-                              }));
-                              setCreateError(null);
-                            }}
-                            className={`p-3 rounded-xl border text-left transition-all duration-200 ${
-                              isSelected ? activeBg : bg
+                            onClick={() => setIsIssueTypeOpen(!isIssueTypeOpen)}
+                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-left outline-none transition-all duration-200 min-h-[52px] ${
+                              isDark
+                                ? 'bg-slate-950/40 border-slate-700/60 hover:border-slate-500 text-white focus:border-[#38b1f7] focus:shadow-[0_0_0_1px_rgba(56,177,247,0.5)]'
+                                : 'bg-white border-slate-200 hover:border-slate-400 text-slate-900 focus:border-[#38b1f7] focus:shadow-[0_0_0_1px_rgba(56,177,247,0.5)]'
                             }`}
                           >
-                            <div className="flex items-center gap-2 mb-1">
-                              <Icon className={`w-3.5 h-3.5 shrink-0 ${color}`} />
-                              <span className={`text-xs font-bold ${
-                                isSelected
-                                  ? isDark ? 'text-white' : 'text-slate-900'
-                                  : isDark ? 'text-slate-200' : 'text-slate-700'
-                              }`}>{label}</span>
-                            </div>
-                            <p className={`text-[10px] leading-snug pl-5 ${
-                              isDark ? 'text-slate-500' : 'text-slate-400'
-                            }`}>{desc}</p>
+                            {(() => {
+                              const selectedOpt = issueTypeOptions.find(o => o.key === createForm.issueType);
+                              if (selectedOpt) {
+                                const Icon = selectedOpt.icon;
+                                return (
+                                  <div className="flex items-center gap-3">
+                                    <Icon className={`w-4 h-4 shrink-0 ${selectedOpt.color}`} />
+                                    <div className="leading-tight">
+                                      <p className="text-xs font-bold">{selectedOpt.label}</p>
+                                      <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{selectedOpt.desc}</p>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                                  Select issue type...
+                                </span>
+                              );
+                            })()}
+                            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isIssueTypeOpen ? 'rotate-180' : ''}`} />
                           </button>
-                        );
-                      })}
-                    </div>
+
+                          {/* Dropdown Menu Options */}
+                          {isIssueTypeOpen && (
+                            <div className={`absolute left-0 right-0 mt-1.5 rounded-xl border shadow-xl z-50 overflow-hidden max-h-[300px] overflow-y-auto ${
+                              isDark
+                                ? 'bg-slate-950 border-slate-800 text-slate-100'
+                                : 'bg-white border-slate-200 text-slate-800'
+                            }`}>
+                              <div className="p-1.5 space-y-1">
+                                {issueTypeOptions.map((opt) => {
+                                  const isSelected = createForm.issueType === opt.key;
+                                  const Icon = opt.icon;
+                                  return (
+                                    <button
+                                      key={opt.key}
+                                      type="button"
+                                      onClick={() => {
+                                        const newPriority = opt.key === "critical" ? "HIGH" : createForm.priority;
+                                        let catId = createForm.categoryId;
+                                        if (opt.key === "billing") {
+                                          const billingCat = categories.find(
+                                            c => c.name.toLowerCase().includes("billing") || c.name.toLowerCase().includes("renew")
+                                          );
+                                          if (billingCat) catId = billingCat.id;
+                                        }
+                                        setCreateForm(prev => ({
+                                          ...prev,
+                                          issueType: opt.key,
+                                          priority: newPriority,
+                                          categoryId: catId,
+                                        }));
+                                        setCreateError(null);
+                                        setIsIssueTypeOpen(false);
+                                      }}
+                                      className={`w-full flex items-center justify-between p-2.5 rounded-lg text-left transition-colors ${
+                                        isSelected
+                                          ? isDark
+                                            ? 'bg-[#38b1f7]/10 text-white'
+                                            : 'bg-sky-50 text-[#0c7fc0]'
+                                          : isDark
+                                            ? 'hover:bg-slate-900/60 text-slate-300'
+                                            : 'hover:bg-slate-50 text-slate-700'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <Icon className={`w-4 h-4 shrink-0 ${opt.color}`} />
+                                        <div className="leading-tight">
+                                          <p className={`text-xs font-bold ${isSelected ? 'text-[#38b1f7]' : ''}`}>{opt.label}</p>
+                                          <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-450'}`}>{opt.desc}</p>
+                                        </div>
+                                      </div>
+                                      {isSelected && (
+                                        <Check className={`w-4 h-4 text-[#38b1f7]`} />
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Title */}
@@ -3711,7 +3710,7 @@ export default function CustomerDashboard() {
                       <button
                         type="button"
                         onClick={() => {
-                          setWizardStep("select-service");
+                          setWizardStep("select-subscription");
                           setModalKbSearch("");
                           setModalKbArticles([]);
                         }}

@@ -25,6 +25,9 @@ export const updateTicketSchema = z.object({
   teamId: z.string().uuid().nullable().optional(),
   agentId: z.string().uuid().nullable().optional(),
   hoursConsumed: z.number().optional().nullable(),
+  isEscalated: z.boolean().optional(),
+  escalationReason: z.string().optional().nullable(),
+  updatedAt: z.string().optional().nullable(),
 });
 
 export type CreateTicketInput = z.infer<typeof createTicketSchema>;

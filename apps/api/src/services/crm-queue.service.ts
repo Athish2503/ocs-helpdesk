@@ -410,7 +410,6 @@ async function handleSubscriptionUpsert(crmCustomerId: string, data: any): Promi
       status: mappedStatus,
       startDate: data.startDate || data.start_date ? new Date(data.startDate || data.start_date) : new Date(),
       endDate: (data.endDate || data.end_date) ? new Date(data.endDate || data.end_date) : null,
-      domainName: data.domainName || data.domain_name || null,
       crmCustomerId,
     },
     update: {
@@ -418,7 +417,6 @@ async function handleSubscriptionUpsert(crmCustomerId: string, data: any): Promi
       status: mappedStatus,
       startDate: (data.startDate || data.start_date) ? new Date(data.startDate || data.start_date) : undefined,
       endDate: data.endDate !== undefined ? (data.endDate ? new Date(data.endDate) : null) : undefined,
-      domainName: data.domainName !== undefined ? (data.domainName || null) : undefined,
     },
   });
 

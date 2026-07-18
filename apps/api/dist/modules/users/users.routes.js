@@ -1,9 +1,15 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const crypto_1 = __importDefault(require("crypto"));
 const users_controller_js_1 = require("./users.controller.js");
 const auth_middleware_js_1 = require("../../middleware/auth.middleware.js");
 const role_middleware_js_1 = require("../../middleware/role.middleware.js");
+const sse_service_js_1 = require("../../services/sse.service.js");
+const prisma_js_1 = require("../../config/prisma.js");
 const router = (0, express_1.Router)();
 // Secure all user routes
 router.use(auth_middleware_js_1.requireAuth);
@@ -13,6 +19,22 @@ router.patch("/me/profile", users_controller_js_1.updateProfileHandler);
 router.get("/me/credits", users_controller_js_1.getMyCreditsHandler);
 // CRM details for current user (domains, subscriptions, services)
 router.get("/me/crm-details", users_controller_js_1.getMyCrmDetailsHandler);
+// ── SSE: Real-time CRM sync stream ─────────────────────────────────────────
+// GET /api/users/me/events — establishes a persistent SSE connection.
+// The server will push 'crm.sync' events whenever CRM data for this customer changes.
+router.get("/me/events", async (req, res, _next) => {
+    const userId = req.user.id;
+    // Resolve crmCustomerId for targeted broadcast routing
+    const user = await prisma_js_1.prisma.user.findUnique({
+        where: { id: userId },
+        select: { crmCustomerId: true },
+    }).catch(() => null);
+    const crmCustomerId = user?.crmCustomerId ?? null;
+    // Generate a unique connection ID so the same user can open multiple tabs
+    const connectionId = crypto_1.default.randomUUID();
+    // Register and start streaming — sseManager handles headers, ping, and cleanup
+    sse_service_js_1.sseManager.addClient(connectionId, userId, crmCustomerId, res);
+});
 // Agents listing can be accessed by both admins and agents (or anyone with staff view access)
 router.get("/agents", (0, role_middleware_js_1.requireRole)("ADMIN", "SUPPORT_L1", "SUPPORT_L2", "BILLING", "AGENT"), users_controller_js_1.getAgentsHandler);
 // Admin / Permissions operations

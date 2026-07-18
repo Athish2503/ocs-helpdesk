@@ -41,6 +41,7 @@ exports.updateTicketHandler = updateTicketHandler;
 exports.uploadTicketAttachmentHandler = uploadTicketAttachmentHandler;
 const tickets_schemas_js_1 = require("./tickets.schemas.js");
 const TicketsService = __importStar(require("./tickets.service.js"));
+const sse_service_js_1 = require("../../services/sse.service.js");
 function ok(res, data, statusCode = 200) {
     res.status(statusCode).json({ success: true, data });
 }
@@ -49,6 +50,7 @@ async function createTicketHandler(req, res, next) {
         const input = tickets_schemas_js_1.createTicketSchema.parse(req.body);
         // req.user is populated by requireAuth middleware
         const ticket = await TicketsService.createTicket(input, req.user.id, req.user.role, req.user.email);
+        sse_service_js_1.sseManager.broadcastToAll("ticket.update", { ticketId: ticket.id, action: "create" });
         ok(res, { ticket }, 201);
     }
     catch (err) {
@@ -79,6 +81,7 @@ async function addTicketMessageHandler(req, res, next) {
         const id = req.params["id"];
         const input = tickets_schemas_js_1.addMessageSchema.parse(req.body);
         const message = await TicketsService.addTicketMessage(id, input, req.user.id, req.user);
+        sse_service_js_1.sseManager.broadcastToAll("ticket.update", { ticketId: id, action: "message" });
         ok(res, { message }, 201);
     }
     catch (err) {
@@ -90,6 +93,7 @@ async function updateTicketHandler(req, res, next) {
         const id = req.params["id"];
         const input = tickets_schemas_js_1.updateTicketSchema.parse(req.body);
         const ticket = await TicketsService.updateTicket(id, input, req.user);
+        sse_service_js_1.sseManager.broadcastToAll("ticket.update", { ticketId: ticket.id, action: "update" });
         ok(res, { ticket });
     }
     catch (err) {

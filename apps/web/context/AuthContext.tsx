@@ -14,6 +14,7 @@ export interface User {
   emailVerified: boolean;
   createdAt: string;
   updatedAt: string;
+  permissions?: string[];
 }
 
 interface AuthContextType {

@@ -36,6 +36,7 @@ export interface UserPublic {
   isActive: boolean;
   emailVerified: boolean;
   createdAt: Date;
+  permissions?: string[];
 }
 
 export interface AuthResponse {

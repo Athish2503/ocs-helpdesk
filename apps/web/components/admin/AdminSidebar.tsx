@@ -31,7 +31,7 @@ type ActiveTab =
   | string;
 
 interface AdminSidebarProps {
-  user: { name: string; role: string };
+  user: { name: string; role: string; permissions?: string[] };
   activeTab: ActiveTab;
   onTabChange?: (tab: string) => void;
   onLogout: () => void;
@@ -90,6 +90,20 @@ export default function AdminSidebar({
     if (id === "kb") return activeTab === "kb" || (typeof window !== "undefined" && window.location.pathname.includes("/kb"));
     return activeTab === id;
   };
+
+  const canAccessNavItem = (itemId: string) => {
+    if (user.role === "ADMIN") return true;
+    if (!user.permissions) return false;
+    if (itemId === "clients") return user.permissions.includes("view_tickets") || user.permissions.includes("manage_staff");
+    if (itemId === "admins") return user.permissions.includes("manage_staff");
+    if (itemId === "routing") return user.permissions.includes("manage_categories_rules");
+    if (itemId === "permissions") return user.permissions.includes("manage_permissions");
+    if (itemId === "credits") return user.permissions.includes("adjust_credits");
+    if (itemId === "sla") return user.permissions.includes("view_tickets");
+    return false;
+  };
+
+  const visibleAdminItems = ADMIN_NAV_ITEMS.filter(item => canAccessNavItem(item.id));
 
   return (
     <aside
@@ -158,13 +172,13 @@ export default function AdminSidebar({
           />
         ))}
 
-        {/* Admin-only nav */}
-        {user.role === "ADMIN" && (
+        {/* Admin-only nav based on permissions */}
+        {visibleAdminItems.length > 0 && (
           <>
             {!isCollapsed && (
               <p className="admin-section-label">Administration</p>
             )}
-            {ADMIN_NAV_ITEMS.map((item) => (
+            {visibleAdminItems.map((item) => (
               <NavItem
                 key={item.id}
                 item={item}
@@ -176,6 +190,7 @@ export default function AdminSidebar({
             ))}
           </>
         )}
+
 
         {/* KB Section */}
         {!isCollapsed && (

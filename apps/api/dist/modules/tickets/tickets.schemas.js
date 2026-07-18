@@ -24,4 +24,7 @@ exports.updateTicketSchema = zod_1.z.object({
     teamId: zod_1.z.string().uuid().nullable().optional(),
     agentId: zod_1.z.string().uuid().nullable().optional(),
     hoursConsumed: zod_1.z.number().optional().nullable(),
+    isEscalated: zod_1.z.boolean().optional(),
+    escalationReason: zod_1.z.string().optional().nullable(),
+    updatedAt: zod_1.z.string().optional().nullable(),
 });

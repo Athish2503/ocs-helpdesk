@@ -16,6 +16,8 @@ import { sendMagicLinkEmail, sendPasswordResetEmail, sendInvitationEmail } from 
 // Helpers
 // ---------------------------------------------------------------------------
 
+import { DEFAULT_PERMISSIONS } from "../../middleware/role.middleware.js";
+
 type UserRow = {
   id: string;
   name: string;
@@ -26,7 +28,12 @@ type UserRow = {
   createdAt: Date;
 };
 
-function toPublicUser(user: UserRow): UserPublic {
+async function toPublicUser(user: UserRow): Promise<UserPublic> {
+  const rolePerm = await prisma.rolePermission.findUnique({
+    where: { role: user.role },
+  });
+  const permissions = rolePerm?.permissions ?? DEFAULT_PERMISSIONS[user.role] ?? [];
+
   return {
     id: user.id,
     name: user.name,
@@ -35,6 +42,7 @@ function toPublicUser(user: UserRow): UserPublic {
     isActive: user.isActive,
     emailVerified: user.emailVerified,
     createdAt: user.createdAt,
+    permissions,
   };
 }
 
@@ -157,7 +165,7 @@ export async function login(input: LoginInput): Promise<AuthResponse> {
   });
 
   return {
-    user: toPublicUser(user),
+    user: await toPublicUser(user),
     tokens: { accessToken, refreshToken },
   };
 }
@@ -210,7 +218,7 @@ export async function getMe(userId: string): Promise<UserPublic> {
     err.statusCode = 404;
     throw err;
   }
-  return toPublicUser(user);
+  return await toPublicUser(user);
 }
 
 // ---------------------------------------------------------------------------
@@ -375,7 +383,7 @@ export async function magicLogin(token: string): Promise<AuthResponse> {
   });
 
   return {
-    user: toPublicUser(user),
+    user: await toPublicUser(user),
     tokens: { accessToken, refreshToken },
   };
 }

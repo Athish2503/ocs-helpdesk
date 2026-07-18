@@ -186,7 +186,11 @@ exports.TicketScalarFieldEnum = {
     domainId: 'domainId',
     subscriptionId: 'subscriptionId',
     serviceId: 'serviceId',
-    createdBySecondaryEmail: 'createdBySecondaryEmail'
+    createdBySecondaryEmail: 'createdBySecondaryEmail',
+    isEscalated: 'isEscalated',
+    escalatedAt: 'escalatedAt',
+    escalatedById: 'escalatedById',
+    escalationReason: 'escalationReason'
 };
 exports.TicketMessageScalarFieldEnum = {
     id: 'id',

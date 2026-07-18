@@ -2,6 +2,7 @@ import { prisma } from "../../config/prisma.js";
 import { syncUserCredits } from "../../services/crm-cache.service.js";
 import type { Role } from "../../types/role.js";
 import type { CreateTicketInput, AddMessageInput, UpdateTicketInput } from "./tickets.schemas.js";
+import { DEFAULT_PERMISSIONS } from "../../middleware/role.middleware.js";
 
 interface UserContext {
   id: string;
@@ -328,6 +329,13 @@ export async function getTicketById(id: string, user: UserContext) {
           email: true,
         },
       },
+      escalatedBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
       messages: {
         include: {
           sender: {
@@ -464,10 +472,27 @@ export async function addTicketMessage(
  */
 export async function updateTicket(
   id: string,
-  input: UpdateTicketInput & { hoursConsumed?: number | null },
+  input: UpdateTicketInput & {
+    hoursConsumed?: number | null;
+    isEscalated?: boolean;
+    escalationReason?: string | null;
+    updatedAt?: string | null;
+  },
   user: UserContext
 ) {
   const ticket = await getTicketById(id, user);
+
+  // 1. Optimistic Concurrency Control (Prevent race conditions)
+  if (input.updatedAt) {
+    const dbTime = new Date(ticket.updatedAt).getTime();
+    const clientTime = new Date(input.updatedAt).getTime();
+    // Use a small tolerance of 1000ms for date round-trips
+    if (Math.abs(dbTime - clientTime) > 1000) {
+      const error = new Error("Conflict: Ticket was modified by another agent. Please refresh and try again.") as Error & { statusCode: number };
+      error.statusCode = 409;
+      throw error;
+    }
+  }
 
   const isStaff = user.role === "ADMIN" || user.role === "AGENT" || user.role === "SUPPORT_L1" || user.role === "SUPPORT_L2" || user.role === "BILLING";
 
@@ -483,11 +508,162 @@ export async function updateTicket(
       error.statusCode = 403;
       throw error;
     }
-    if (input.teamId || input.agentId) {
-      const error = new Error("Customers cannot assign teams or agents") as Error & { statusCode: number };
+    if (input.teamId || input.agentId || input.isEscalated !== undefined) {
+      const error = new Error("Customers cannot assign teams, agents, or escalate tickets") as Error & { statusCode: number };
       error.statusCode = 403;
       throw error;
     }
+  }
+
+  // 2. Permission Checking for Assignment / Reassignment
+  if (input.agentId !== undefined && input.agentId !== ticket.agentId) {
+    const isAssigningSelf = input.agentId === user.id;
+    if (isAssigningSelf) {
+      // Ensure assignee is staff member
+      if (!isStaff) {
+        const error = new Error("Access denied: Customers cannot assign tickets") as Error & { statusCode: number };
+        error.statusCode = 403;
+        throw error;
+      }
+
+      // If assigned to a team, make sure agent is a member of that team, unless they have assign_tickets or are ADMIN
+      if (ticket.teamId) {
+        const rolePerm = await prisma.rolePermission.findUnique({ where: { role: user.role } });
+        const userPermissions = rolePerm?.permissions ?? DEFAULT_PERMISSIONS[user.role] ?? [];
+        const hasAssignPermission = user.role === "ADMIN" || userPermissions.includes("assign_tickets");
+
+        if (!hasAssignPermission) {
+          const isMember = await prisma.team.findFirst({
+            where: {
+              id: ticket.teamId,
+              members: { some: { id: user.id } },
+            },
+          });
+          if (!isMember) {
+            const error = new Error("Access denied: You must be a member of the assigned team to assign this ticket to yourself") as Error & { statusCode: number };
+            error.statusCode = 403;
+            throw error;
+          }
+        }
+      }
+    } else {
+      // Reassigning to another agent requires assign_tickets permission or ADMIN role
+      const rolePerm = await prisma.rolePermission.findUnique({ where: { role: user.role } });
+      const userPermissions = rolePerm?.permissions ?? DEFAULT_PERMISSIONS[user.role] ?? [];
+      const hasAssignPermission = user.role === "ADMIN" || userPermissions.includes("assign_tickets");
+
+      if (!hasAssignPermission) {
+        const error = new Error("Access denied: You do not have permission to assign tickets to other agents") as Error & { statusCode: number };
+        error.statusCode = 403;
+        throw error;
+      }
+    }
+  }
+
+  if (input.teamId !== undefined && input.teamId !== ticket.teamId) {
+    const rolePerm = await prisma.rolePermission.findUnique({ where: { role: user.role } });
+    const userPermissions = rolePerm?.permissions ?? DEFAULT_PERMISSIONS[user.role] ?? [];
+    const hasAssignPermission = user.role === "ADMIN" || userPermissions.includes("assign_tickets");
+
+    if (!hasAssignPermission) {
+      const error = new Error("Access denied: You do not have permission to assign teams") as Error & { statusCode: number };
+      error.statusCode = 403;
+      throw error;
+    }
+  }
+
+  // 3. Escalation Logic
+  let isEscalating = false;
+  let escalatedAgentId: string | null = null;
+  let escalatedPriority: "HIGH" | "URGENT" | null = null;
+
+  if (input.isEscalated === true && !ticket.isEscalated) {
+    if (!isStaff) {
+      const error = new Error("Access denied: Customers cannot escalate tickets") as Error & { statusCode: number };
+      error.statusCode = 403;
+      throw error;
+    }
+
+    if (ticket.status === "RESOLVED" || ticket.status === "CLOSED") {
+      const error = new Error("Cannot escalate a resolved or closed ticket") as Error & { statusCode: number };
+      error.statusCode = 400;
+      throw error;
+    }
+
+    isEscalating = true;
+
+    // Find the configured routing rule to determine L2 escalation
+    const rule = await prisma.routingRule.findUnique({
+      where: { issueCategory: ticket.issueCategory || ticket.category.name },
+    });
+
+    if (rule && rule.secondaryAssigneeId) {
+      escalatedAgentId = rule.secondaryAssigneeId;
+    }
+
+    // Force priority to HIGH at minimum, or keep URGENT
+    if (ticket.priority !== "URGENT") {
+      escalatedPriority = "HIGH";
+    }
+
+    // Write system log message on timeline
+    await prisma.ticketMessage.create({
+      data: {
+        ticketId: id,
+        senderId: user.id,
+        message: `[System Alert] Ticket escalated to L2 Support. Reason: ${input.escalationReason || "No reason provided."}`,
+      },
+    });
+
+    // Write audit log entry
+    await prisma.auditLog.create({
+      data: {
+        action: "TICKET_ESCALATED",
+        entity: "Ticket",
+        entityId: id,
+        actorId: user.id,
+        actorEmail: user.email,
+        payload: JSON.stringify({
+          escalatedById: user.id,
+          reason: input.escalationReason,
+          previousAgentId: ticket.agentId,
+          newAgentId: escalatedAgentId || ticket.agentId,
+        }),
+      },
+    });
+  }
+
+  // 4. Assignment History Audit Logging
+  if (input.agentId !== undefined && input.agentId !== ticket.agentId && !isEscalating) {
+    await prisma.auditLog.create({
+      data: {
+        action: "TICKET_ASSIGNED",
+        entity: "Ticket",
+        entityId: id,
+        actorId: user.id,
+        actorEmail: user.email,
+        payload: JSON.stringify({
+          fromAgentId: ticket.agentId,
+          toAgentId: input.agentId,
+        }),
+      },
+    });
+  }
+
+  if (input.teamId !== undefined && input.teamId !== ticket.teamId) {
+    await prisma.auditLog.create({
+      data: {
+        action: "TICKET_TEAM_ASSIGNED",
+        entity: "Ticket",
+        entityId: id,
+        actorId: user.id,
+        actorEmail: user.email,
+        payload: JSON.stringify({
+          fromTeamId: ticket.teamId,
+          toTeamId: input.teamId,
+        }),
+      },
+    });
   }
 
   // Handle SLA & Resolution logic
@@ -586,15 +762,26 @@ export async function updateTicket(
     }
   }
 
+  // Perform database update
+  const finalAgentId = isEscalating
+    ? (escalatedAgentId !== null ? escalatedAgentId : ticket.agentId)
+    : (input.agentId !== undefined ? input.agentId : undefined);
+
   const updatedTicket = await prisma.ticket.update({
     where: { id },
     data: {
       ...(input.status ? { status: input.status } : {}),
-      ...(input.priority ? { priority: input.priority } : {}),
+      ...(escalatedPriority ? { priority: escalatedPriority } : (input.priority ? { priority: input.priority } : {})),
       ...(input.teamId !== undefined ? { teamId: input.teamId } : {}),
-      ...(input.agentId !== undefined ? { agentId: input.agentId } : {}),
+      ...(finalAgentId !== undefined ? { agentId: finalAgentId } : {}),
       ...(resolvedAt ? { resolvedAt } : {}),
       ...(ttrHours !== undefined ? { ttrHours } : {}),
+      ...(isEscalating ? {
+        isEscalated: true,
+        escalatedAt: new Date(),
+        escalatedById: user.id,
+        escalationReason: input.escalationReason || null,
+      } : {}),
     },
     include: {
       category: true,
@@ -615,22 +802,48 @@ export async function updateTicket(
           email: true,
         },
       },
+      escalatedBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
     },
   });
 
-  if (input.status === "RESOLVED" && ticket.status !== "RESOLVED") {
-    try {
-      const { sendCustomerTicketResolvedEmail } = await import("../../services/email.service.js");
+  // 5. Send notifications
+  try {
+    const { sendTicketNotificationEmail, sendCustomerTicketResolvedEmail } = await import("../../services/email.service.js");
+    
+    // Notify newly assigned agent if it was changed
+    if (finalAgentId && finalAgentId !== ticket.agentId) {
+      const newAgent = await prisma.user.findUnique({ where: { id: finalAgentId } });
+      if (newAgent) {
+        await sendTicketNotificationEmail(newAgent.email, {
+          id: updatedTicket.id,
+          title: updatedTicket.title,
+          description: updatedTicket.description,
+          category: updatedTicket.category.name,
+          priority: updatedTicket.priority,
+          customerName: updatedTicket.customer.name,
+          customerEmail: updatedTicket.customer.email,
+          affectedDomain: updatedTicket.affectedDomain,
+        }).catch(err => console.error("Failed to send agent notification email:", err));
+      }
+    }
+
+    if (input.status === "RESOLVED" && ticket.status !== "RESOLVED") {
       if (updatedTicket.customer && updatedTicket.customer.email) {
         await sendCustomerTicketResolvedEmail(updatedTicket.customer.email, {
           id: updatedTicket.id,
           title: updatedTicket.title,
           customerName: updatedTicket.customer.name,
-        });
+        }).catch(err => console.error("Failed to send customer resolved email:", err));
       }
-    } catch (err) {
-      console.error("Failed to send ticket resolution email notification:", err);
     }
+  } catch (err) {
+    console.error("Failed to process post-update email notifications:", err);
   }
 
   return updatedTicket;

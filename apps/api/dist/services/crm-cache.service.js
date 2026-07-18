@@ -41,24 +41,21 @@ exports.getOrFetchCustomerCredits = getOrFetchCustomerCredits;
 exports.syncUserCredits = syncUserCredits;
 const prisma_js_1 = require("../config/prisma.js");
 const crmService = __importStar(require("./crm.service.js"));
-const TTL_MS = 5 * 60 * 1000; // 5 minutes
+/**
+ * In-memory read-through cache for CRM entity data.
+ *
+ * IMPORTANT: Entries never expire via TTL. Invalidation is EXCLUSIVELY driven by
+ * domain events received through the webhook → crm-queue.service.ts pipeline.
+ * This guarantees that cached data is always current immediately after a CRM
+ * CRUD operation commits, without any polling or time-based staleness window.
+ */
 class MemoryCache {
     cache = new Map();
     set(key, data) {
-        this.cache.set(key, {
-            data,
-            expiry: Date.now() + TTL_MS,
-        });
+        this.cache.set(key, data);
     }
     get(key) {
-        const entry = this.cache.get(key);
-        if (!entry)
-            return null;
-        if (Date.now() > entry.expiry) {
-            this.cache.delete(key);
-            return null;
-        }
-        return entry.data;
+        return this.cache.get(key) ?? null;
     }
     delete(key) {
         this.cache.delete(key);

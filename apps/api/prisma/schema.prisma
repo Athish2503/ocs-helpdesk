@@ -52,6 +52,7 @@ model User {
   crmCustomer    CrmCustomer?   @relation("UserCrmCustomer", fields: [crmCustomerId], references: [crmCustomerId], onDelete: SetNull)
   sentInvitations Invitation[]  @relation("SentInvitations")
   uploadedAttachments TicketAttachment[] @relation("UserUploadedAttachments")
+  escalatedTickets Ticket[]      @relation("EscalatedTickets")
 
   @@map("users")
 }
@@ -164,6 +165,13 @@ model Ticket {
   statusHistory      TicketStatusHistory[]
   creditTransactions CreditTransaction[]
   usages             CreditUsage[]
+
+  isEscalated      Boolean   @default(false) @map("is_escalated")
+  escalatedAt      DateTime? @map("escalated_at")
+  escalatedById    String?   @map("escalated_by_id")
+  escalationReason String?   @map("escalation_reason")
+
+  escalatedBy      User?     @relation("EscalatedTickets", fields: [escalatedById], references: [id], onDelete: SetNull)
 
   @@map("tickets")
 }
