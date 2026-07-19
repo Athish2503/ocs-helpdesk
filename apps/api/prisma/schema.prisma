@@ -173,6 +173,11 @@ model Ticket {
 
   escalatedBy      User?     @relation("EscalatedTickets", fields: [escalatedById], references: [id], onDelete: SetNull)
 
+  // SLA tracking
+  slaResponseDeadline   DateTime? @map("sla_response_deadline")
+  slaResolutionDeadline DateTime? @map("sla_resolution_deadline")
+  slaBreached           Boolean   @default(false) @map("sla_breached")
+
   @@map("tickets")
 }
 
@@ -418,6 +423,20 @@ model RoutingRule {
   team              Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
 
   @@map("routing_rules")
+}
+
+model SlaPolicy {
+  id                  String   @id @default(uuid())
+  name                String
+  priority            String   // "LOW" | "MEDIUM" | "HIGH" | "URGENT" | "ALL"
+  firstResponseHours  Float    @map("first_response_hours")
+  resolutionHours     Float    @map("resolution_hours")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@unique([priority], name: "unique_priority")
+  @@map("sla_policies")
 }
 
 model CustomerCredits {

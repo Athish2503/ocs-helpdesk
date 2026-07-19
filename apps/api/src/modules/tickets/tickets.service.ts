@@ -3,6 +3,7 @@ import { syncUserCredits } from "../../services/crm-cache.service.js";
 import type { Role } from "../../types/role.js";
 import type { CreateTicketInput, AddMessageInput, UpdateTicketInput } from "./tickets.schemas.js";
 import { DEFAULT_PERMISSIONS } from "../../middleware/role.middleware.js";
+import { computeSlaDeadlines } from "../sla/sla.service.js";
 
 interface UserContext {
   id: string;
@@ -126,6 +127,10 @@ export async function createTicket(
     }
   }
 
+  // Compute SLA deadlines based on priority
+  const ticketCreatedAt = new Date();
+  const slaDeadlines = await computeSlaDeadlines(priority, ticketCreatedAt);
+
   const ticket = await prisma.ticket.create({
     data: {
       title: input.title,
@@ -143,6 +148,8 @@ export async function createTicket(
       subscriptionId: input.subscriptionId || null,
       serviceId: input.serviceId || null,
       createdBySecondaryEmail,
+      slaResponseDeadline: slaDeadlines.slaResponseDeadline,
+      slaResolutionDeadline: slaDeadlines.slaResolutionDeadline,
     },
     include: {
       category: true,
@@ -682,15 +689,6 @@ export async function updateTicket(
     });
 
     if (input.status === "RESOLVED" || input.status === "CLOSED") {
-      // Validate that at least one resolution proof/screenshot attachment is present
-      const attachmentsCount = await prisma.ticketAttachment.count({
-        where: { ticketId: id }
-      });
-      if (attachmentsCount === 0) {
-        const error = new Error("Cannot resolve ticket: A resolution screenshot/attachment is required.") as Error & { statusCode: number };
-        error.statusCode = 400;
-        throw error;
-      }
 
       resolvedAt = new Date();
       const creationTime = new Date(ticket.createdAt).getTime();
@@ -782,7 +780,24 @@ export async function updateTicket(
         escalatedById: user.id,
         escalationReason: input.escalationReason || null,
       } : {}),
+      // Recompute SLA deadlines if priority changed
+      ...await (async () => {
+        const newPriority = escalatedPriority || input.priority;
+        if (newPriority && newPriority !== ticket.priority) {
+          const sla = await computeSlaDeadlines(newPriority, new Date(ticket.createdAt));
+          return {
+            slaResponseDeadline: sla.slaResponseDeadline,
+            slaResolutionDeadline: sla.slaResolutionDeadline,
+          };
+        }
+        return {};
+      })(),
+      // Mark SLA breached on resolution if past resolution deadline
+      ...(resolvedAt && ticket.slaResolutionDeadline && resolvedAt > new Date(ticket.slaResolutionDeadline)
+        ? { slaBreached: true }
+        : {}),
     },
+
     include: {
       category: true,
       team: {

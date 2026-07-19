@@ -13,6 +13,7 @@ const teams_routes_js_1 = __importDefault(require("./modules/teams/teams.routes.
 const kb_routes_js_1 = __importDefault(require("./modules/kb/kb.routes.js"));
 const sync_routes_js_1 = __importDefault(require("./modules/sync/sync.routes.js"));
 const integrations_routes_js_1 = __importDefault(require("./modules/integrations/integrations.routes.js"));
+const sla_router_js_1 = __importDefault(require("./modules/sla/sla.router.js"));
 const error_middleware_js_1 = require("./middleware/error.middleware.js");
 const swagger_js_1 = require("./config/swagger.js");
 const app = (0, express_1.default)();
@@ -42,6 +43,7 @@ app.use("/api/tickets", tickets_routes_js_1.default);
 app.use("/api/users", users_routes_js_1.default);
 app.use("/api/teams", teams_routes_js_1.default);
 app.use("/api/kb", kb_routes_js_1.default);
+app.use("/api/sla", sla_router_js_1.default);
 // ---------------------------------------------------------------------------
 // 404 handler — must be after all routes
 // ---------------------------------------------------------------------------

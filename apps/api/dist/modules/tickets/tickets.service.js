@@ -8,6 +8,7 @@ exports.updateTicket = updateTicket;
 const prisma_js_1 = require("../../config/prisma.js");
 const crm_cache_service_js_1 = require("../../services/crm-cache.service.js");
 const role_middleware_js_1 = require("../../middleware/role.middleware.js");
+const sla_service_js_1 = require("../sla/sla.service.js");
 /**
  * Create a new ticket for a customer.
  */
@@ -97,6 +98,9 @@ async function createTicket(input, customerId, userRole, creatorEmail) {
             }
         }
     }
+    // Compute SLA deadlines based on priority
+    const ticketCreatedAt = new Date();
+    const slaDeadlines = await (0, sla_service_js_1.computeSlaDeadlines)(priority, ticketCreatedAt);
     const ticket = await prisma_js_1.prisma.ticket.create({
         data: {
             title: input.title,
@@ -114,6 +118,8 @@ async function createTicket(input, customerId, userRole, creatorEmail) {
             subscriptionId: input.subscriptionId || null,
             serviceId: input.serviceId || null,
             createdBySecondaryEmail,
+            slaResponseDeadline: slaDeadlines.slaResponseDeadline,
+            slaResolutionDeadline: slaDeadlines.slaResolutionDeadline,
         },
         include: {
             category: true,
@@ -595,15 +601,6 @@ async function updateTicket(id, input, user) {
             },
         });
         if (input.status === "RESOLVED" || input.status === "CLOSED") {
-            // Validate that at least one resolution proof/screenshot attachment is present
-            const attachmentsCount = await prisma_js_1.prisma.ticketAttachment.count({
-                where: { ticketId: id }
-            });
-            if (attachmentsCount === 0) {
-                const error = new Error("Cannot resolve ticket: A resolution screenshot/attachment is required.");
-                error.statusCode = 400;
-                throw error;
-            }
             resolvedAt = new Date();
             const creationTime = new Date(ticket.createdAt).getTime();
             ttrHours = (resolvedAt.getTime() - creationTime) / (1000 * 60 * 60); // In hours
@@ -684,6 +681,22 @@ async function updateTicket(id, input, user) {
                 escalatedById: user.id,
                 escalationReason: input.escalationReason || null,
             } : {}),
+            // Recompute SLA deadlines if priority changed
+            ...await (async () => {
+                const newPriority = escalatedPriority || input.priority;
+                if (newPriority && newPriority !== ticket.priority) {
+                    const sla = await (0, sla_service_js_1.computeSlaDeadlines)(newPriority, new Date(ticket.createdAt));
+                    return {
+                        slaResponseDeadline: sla.slaResponseDeadline,
+                        slaResolutionDeadline: sla.slaResolutionDeadline,
+                    };
+                }
+                return {};
+            })(),
+            // Mark SLA breached on resolution if past resolution deadline
+            ...(resolvedAt && ticket.slaResolutionDeadline && resolvedAt > new Date(ticket.slaResolutionDeadline)
+                ? { slaBreached: true }
+                : {}),
         },
         include: {
             category: true,

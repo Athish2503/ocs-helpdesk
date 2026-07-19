@@ -8,6 +8,7 @@ import teamsRouter from "./modules/teams/teams.routes.js";
 import kbRouter from "./modules/kb/kb.routes.js";
 import syncRouter from "./modules/sync/sync.routes.js";
 import integrationsRouter from "./modules/integrations/integrations.routes.js";
+import slaRouter from "./modules/sla/sla.router.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import { setupSwagger } from "./config/swagger.js";
 
@@ -42,6 +43,7 @@ app.use("/api/tickets", ticketsRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/teams", teamsRouter);
 app.use("/api/kb", kbRouter);
+app.use("/api/sla", slaRouter);
 
 // ---------------------------------------------------------------------------
 // 404 handler — must be after all routes

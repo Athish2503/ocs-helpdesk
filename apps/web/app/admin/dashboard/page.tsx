@@ -255,6 +255,17 @@ export default function AdminDashboard() {
   const [resolveTicketNotes, setResolveTicketNotes] = useState("");
   const [pendingStatusChange, setPendingStatusChange] = useState<"RESOLVED" | "CLOSED" | null>(null);
 
+  // Asynchronous mutation submitting states
+  const [submittingReply, setSubmittingReply] = useState(false);
+  const [submittingResolve, setSubmittingResolve] = useState(false);
+  const [updatingTicketDetails, setUpdatingTicketDetails] = useState(false);
+  const [submittingTeam, setSubmittingTeam] = useState(false);
+  const [submittingUser, setSubmittingUser] = useState(false);
+  const [submittingKB, setSubmittingKB] = useState(false);
+  const [submittingCategory, setSubmittingCategory] = useState(false);
+  const [submittingRoutingRule, setSubmittingRoutingRule] = useState(false);
+  const [submittingSla, setSubmittingSla] = useState(false);
+
   // Team state
   const [showCreateTeam, setShowCreateTeam] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
@@ -525,6 +536,7 @@ export default function AdminDashboard() {
   ) => {
     if (!selectedTicket) return;
     try {
+      setUpdatingTicketDetails(true);
       let hoursConsumed: number | null = null;
       if (updates.status === "RESOLVED" || updates.status === "CLOSED") {
         if (directHours !== undefined) {
@@ -570,12 +582,14 @@ export default function AdminDashboard() {
         toast.error(errData?.error?.message || "Failed to update ticket.");
       }
     } catch { toast.error("Failed to update ticket."); }
+    finally { setUpdatingTicketDetails(false); }
   };
 
   const submitTicketReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTicket || !ticketReply.trim()) return;
     try {
+      setSubmittingReply(true);
       const res = await fetchWithAuth(`/tickets/${selectedTicket.id}/messages`, { method: "POST", body: JSON.stringify({ message: ticketReply }) });
       if (res.ok) {
         const newMsg = (await res.json()).data.message;
@@ -584,6 +598,7 @@ export default function AdminDashboard() {
         toast.success("Reply sent.");
       } else toast.error("Failed to send reply.");
     } catch { toast.error("Failed to send reply."); }
+    finally { setSubmittingReply(false); }
   };
 
   const handleResolveSubmit = async (e: React.FormEvent, files: File[]) => {
@@ -591,6 +606,7 @@ export default function AdminDashboard() {
     if (!selectedTicket || !pendingStatusChange) return;
 
     try {
+      setSubmittingResolve(true);
       if (files && files.length > 0) {
         for (const file of files) {
           const formData = new FormData();
@@ -614,6 +630,8 @@ export default function AdminDashboard() {
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Failed to resolve ticket.");
+    } finally {
+      setSubmittingResolve(false);
     }
   };
 
@@ -622,12 +640,14 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!newTeamName.trim()) return;
     try {
+      setSubmittingTeam(true);
       const res = await fetchWithAuth("/teams", { method: "POST", body: JSON.stringify({ name: newTeamName, description: newTeamDesc, memberIds: newTeamMembers }) });
       if (res.ok) {
         setNewTeamName(""); setNewTeamDesc(""); setNewTeamMembers([]); setShowCreateTeam(false);
         refreshAllData(); toast.success("Team created.");
       } else toast.error((await res.json()).error?.message || "Error creating team");
     } catch { toast.error("Failed to create team."); }
+    finally { setSubmittingTeam(false); }
   };
 
   const toggleTeamMemberSelection = (agentId: string) =>
@@ -637,10 +657,12 @@ export default function AdminDashboard() {
     const confirmed = await dialog.confirm("Delete this team? Assigned tickets will be unassigned.", "Delete Team");
     if (!confirmed) return;
     try {
+      setSubmittingTeam(true);
       const res = await fetchWithAuth(`/teams/${teamId}`, { method: "DELETE" });
       if (res.ok) { refreshAllData(); toast.success("Team deleted."); }
       else toast.error("Failed to delete team.");
     } catch { toast.error("Failed to delete team."); }
+    finally { setSubmittingTeam(false); }
   };
 
   const handleEditTeamClick = (t: Team) => {
@@ -652,10 +674,12 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!selectedTeam || !editTeamName.trim()) { toast.error("Team name is required."); return; }
     try {
+      setSubmittingTeam(true);
       const res = await fetchWithAuth(`/teams/${selectedTeam.id}`, { method: "PATCH", body: JSON.stringify({ name: editTeamName, description: editTeamDesc, memberIds: editTeamMembers }) });
       if (res.ok) { toast.success("Team updated."); setShowEditTeam(false); setSelectedTeam(null); refreshAllData(); }
       else toast.error((await res.json()).error?.message || "Error updating team");
     } catch { toast.error("Failed to update team."); }
+    finally { setSubmittingTeam(false); }
   };
 
   // ── User Actions ─────────────────────────────────────────────────
@@ -663,6 +687,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!userFormName.trim() || !userFormEmail.trim() || !userFormPassword.trim()) { toast.error("Name, email, and password are required."); return; }
     try {
+      setSubmittingUser(true);
       const res = await fetchWithAuth("/users", { method: "POST", body: JSON.stringify({ name: userFormName, email: userFormEmail, password: userFormPassword, role: userFormRole, phoneNumber: userFormPhone || null, crmCustomerId: userFormCrmId || null, teamIds: (userFormRole === "AGENT" || userFormRole === "ADMIN") ? userFormTeams : [] }) });
       if (res.ok) {
         toast.success("User created."); setShowCreateUser(false);
@@ -671,6 +696,7 @@ export default function AdminDashboard() {
         refreshAllData();
       } else toast.error((await res.json()).error?.message || "Error creating user");
     } catch { toast.error("Failed to create user."); }
+    finally { setSubmittingUser(false); }
   };
 
   const handleEditUserClick = (u: UserProfile) => {
@@ -686,6 +712,7 @@ export default function AdminDashboard() {
     const payload: any = { name: userFormName, email: userFormEmail, role: userFormRole, isActive: userFormIsActive, phoneNumber: userFormPhone || null, crmCustomerId: userFormCrmId || null, teamIds: (userFormRole === "AGENT" || userFormRole === "ADMIN") ? userFormTeams : [] };
     if (userFormPassword.trim()) payload.password = userFormPassword;
     try {
+      setSubmittingUser(true);
       const res = await fetchWithAuth(`/users/${selectedUser.id}`, { method: "PATCH", body: JSON.stringify(payload) });
       if (res.ok) {
         toast.success("User updated."); setShowEditUser(false); setSelectedUser(null);
@@ -695,10 +722,12 @@ export default function AdminDashboard() {
       }
       else toast.error((await res.json()).error?.message || "Error updating user");
     } catch { toast.error("Failed to update user."); }
+    finally { setSubmittingUser(false); }
   };
 
   const handleUpdateUser = async (userId: string, updates: { role?: string; isActive?: boolean }) => {
     try {
+      setSubmittingUser(true);
       const res = await fetchWithAuth(`/users/${userId}`, { method: "PATCH", body: JSON.stringify(updates) });
       if (res.ok) {
         const updated = (await res.json()).data.user;
@@ -708,6 +737,7 @@ export default function AdminDashboard() {
         toast.success("User updated.");
       } else toast.error("Failed to update user.");
     } catch { toast.error("Failed to update user."); }
+    finally { setSubmittingUser(false); }
   };
 
   // ── KB Actions ───────────────────────────────────────────────────
@@ -716,6 +746,7 @@ export default function AdminDashboard() {
     if (!kbTitle.trim() || !kbContent.trim()) return;
     const payload = { title: kbTitle, content: kbContent, isPublished: kbIsPublished, isInternal: kbIsInternal, categoryId: kbCategoryId || null };
     try {
+      setSubmittingKB(true);
       const res = kbArticleId
         ? await fetchWithAuth(`/kb/${kbArticleId}`, { method: "PATCH", body: JSON.stringify(payload) })
         : await fetchWithAuth("/kb", { method: "POST", body: JSON.stringify(payload) });
@@ -724,6 +755,7 @@ export default function AdminDashboard() {
         refreshAllData(); toast.success("KB article saved.");
       } else toast.error((await res.json()).error?.message || "Error saving article");
     } catch { toast.error("Failed to save article."); }
+    finally { setSubmittingKB(false); }
   };
 
   const startEditKB = (art: KBArticle) => {
@@ -736,10 +768,12 @@ export default function AdminDashboard() {
     const confirmed = await dialog.confirm("Delete this article permanently?", "Delete Article");
     if (!confirmed) return;
     try {
+      setSubmittingKB(true);
       const res = await fetchWithAuth(`/kb/${articleId}`, { method: "DELETE" });
       if (res.ok) { refreshAllData(); toast.success("Article deleted."); }
       else toast.error("Failed to delete article.");
     } catch { toast.error("Failed to delete article."); }
+    finally { setSubmittingKB(false); }
   };
 
   // ── Categories CRUD Actions ──────────────────────────────────────
@@ -752,6 +786,7 @@ export default function AdminDashboard() {
       parentId: catFormParentId || null 
     };
     try {
+      setSubmittingCategory(true);
       const res = editingCatId
         ? await fetchWithAuth(`/categories/${editingCatId}`, { method: "PATCH", body: JSON.stringify(body) })
         : await fetchWithAuth("/categories", { method: "POST", body: JSON.stringify(body) });
@@ -768,6 +803,8 @@ export default function AdminDashboard() {
       }
     } catch {
       toast.error("An unexpected error occurred.");
+    } finally {
+      setSubmittingCategory(false);
     }
   };
 
@@ -806,6 +843,7 @@ export default function AdminDashboard() {
     }
 
     try {
+      setSubmittingCategory(true);
       const res = await fetchWithAuth(`/categories/${id}`, { 
         method: "DELETE",
         body: JSON.stringify({ reassignToId })
@@ -819,6 +857,8 @@ export default function AdminDashboard() {
       }
     } catch {
       toast.error("Failed to delete category.");
+    } finally {
+      setSubmittingCategory(false);
     }
   };
 
@@ -857,6 +897,7 @@ export default function AdminDashboard() {
     }
     
     try {
+      setSubmittingCategory(true);
       const res = await fetchWithAuth("/categories/bulk-delete", {
         method: "POST",
         body: JSON.stringify({ ids: selectedCategoryIds, reassignToId }),
@@ -871,6 +912,8 @@ export default function AdminDashboard() {
       }
     } catch {
       toast.error("Failed to bulk delete categories.");
+    } finally {
+      setSubmittingCategory(false);
     }
   };
 
@@ -883,6 +926,7 @@ export default function AdminDashboard() {
     }
 
     try {
+      setSubmittingRoutingRule(true);
       const res = await fetchWithAuth("/users/routing-rules", {
         method: "POST",
         body: JSON.stringify({
@@ -906,6 +950,8 @@ export default function AdminDashboard() {
       }
     } catch {
       toast.error("Failed to create routing rule.");
+    } finally {
+      setSubmittingRoutingRule(false);
     }
   };
 
@@ -913,6 +959,7 @@ export default function AdminDashboard() {
     const confirmed = await dialog.confirm("Delete this routing rule?", "Delete Routing Rule");
     if (!confirmed) return;
     try {
+      setSubmittingRoutingRule(true);
       const res = await fetchWithAuth(`/users/routing-rules/${id}`, { method: "DELETE" });
       if (res.ok) {
         toast.success("Routing rule deleted.");
@@ -922,6 +969,8 @@ export default function AdminDashboard() {
       }
     } catch {
       toast.error("Failed to delete routing rule.");
+    } finally {
+      setSubmittingRoutingRule(false);
     }
   };
 
@@ -1491,6 +1540,7 @@ export default function AdminDashboard() {
                     {selectedTicket.agent?.id !== user.id && (
                       <button 
                         onClick={() => updateTicketDetails({ agentId: user.id })}
+                        disabled={updatingTicketDetails}
                         className="admin-btn admin-btn-ghost admin-btn-sm text-[11px] gap-1 px-2.5"
                         style={{ height: 26 }}
                       >
@@ -1502,6 +1552,7 @@ export default function AdminDashboard() {
                     {selectedTicket.status === "OPEN" && (
                       <button 
                         onClick={() => updateTicketDetails({ status: "IN_PROGRESS" })}
+                        disabled={updatingTicketDetails}
                         className="admin-btn admin-btn-ghost admin-btn-sm text-[11px] gap-1 px-2.5"
                         style={{ height: 26 }}
                       >
@@ -1513,6 +1564,7 @@ export default function AdminDashboard() {
                     {!selectedTicket.isEscalated && (selectedTicket.status === "OPEN" || selectedTicket.status === "IN_PROGRESS") && (
                       <button 
                         onClick={() => setShowEscalateModal(true)}
+                        disabled={updatingTicketDetails}
                         className="admin-btn admin-btn-ghost admin-btn-sm text-[11px] gap-1 px-2.5"
                         style={{ height: 26 }}
                       >
@@ -1524,10 +1576,15 @@ export default function AdminDashboard() {
                     {(selectedTicket.status === "OPEN" || selectedTicket.status === "IN_PROGRESS") && (
                       <button 
                         onClick={() => updateTicketDetails({ status: "RESOLVED" })}
+                        disabled={updatingTicketDetails}
                         className="admin-btn admin-btn-primary admin-btn-sm text-[11px] gap-1 px-2.5"
                         style={{ height: 26 }}
                       >
-                        <Check className="w-3.5 h-3.5" />
+                        {updatingTicketDetails ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
                         Resolve Ticket
                       </button>
                     )}
@@ -1700,6 +1757,7 @@ export default function AdminDashboard() {
                             <select
                               value={value}
                               onChange={e => onChange(e.target.value)}
+                              disabled={updatingTicketDetails}
                               className={`admin-select text-xs flex-1 max-w-[150px] ${isDark ? "admin-dark" : ""}`}
                               style={{ height: 32 }}
                             >
@@ -1713,6 +1771,7 @@ export default function AdminDashboard() {
                           <select
                             value={selectedTicket.team?.id || ""}
                             onChange={e => updateTicketDetails({ teamId: e.target.value || null, agentId: null })}
+                            disabled={updatingTicketDetails}
                             className={`admin-select text-xs flex-1 max-w-[150px] ${isDark ? "admin-dark" : ""}`}
                             style={{ height: 32 }}
                           >
@@ -1726,6 +1785,7 @@ export default function AdminDashboard() {
                           <select
                             value={selectedTicket.agent?.id || ""}
                             onChange={e => updateTicketDetails({ agentId: e.target.value || null })}
+                            disabled={updatingTicketDetails}
                             className={`admin-select text-xs flex-1 max-w-[150px] ${isDark ? "admin-dark" : ""}`}
                             style={{ height: 32 }}
                           >
@@ -1967,14 +2027,19 @@ export default function AdminDashboard() {
                       <input
                         type="text"
                         required
+                        disabled={submittingReply}
                         value={ticketReply}
                         onChange={e => setTicketReply(e.target.value)}
                         placeholder="Write a reply..."
                         className={`admin-input ${isDark ? "admin-dark" : ""} flex-1 text-sm`}
                         style={{ height: 38 }}
                       />
-                      <button type="submit" className="admin-btn admin-btn-primary px-3" style={{ height: 38 }} aria-label="Send reply">
-                        <Send className="w-4 h-4" />
+                      <button type="submit" disabled={submittingReply || !ticketReply.trim()} className="admin-btn admin-btn-primary px-3" style={{ height: 38 }} aria-label="Send reply">
+                        {submittingReply ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Send className="w-4 h-4" />
+                        )}
                       </button>
                     </form>
                   </div>
@@ -2020,6 +2085,7 @@ export default function AdminDashboard() {
                 onClose={() => { setShowCreateTeam(false); setNewTeamName(""); setNewTeamDesc(""); setNewTeamMembers([]); }}
                 onSubmit={handleCreateTeam}
                 submitLabel="Create Team"
+                submitting={submittingTeam}
               />
             )}
 
@@ -2039,6 +2105,7 @@ export default function AdminDashboard() {
                 onClose={() => { setShowEditTeam(false); setSelectedTeam(null); }}
                 onSubmit={handleEditTeam}
                 submitLabel="Save Changes"
+                submitting={submittingTeam}
               />
             )}
 
@@ -3181,6 +3248,7 @@ export default function AdminDashboard() {
                 onClose={() => setShowCreateUser(false)}
                 onSubmit={handleCreateUser}
                 submitLabel="Create Client"
+                submitting={submittingUser}
               />
             )}
 
@@ -3207,6 +3275,7 @@ export default function AdminDashboard() {
                 onClose={() => { setShowEditUser(false); setSelectedUser(null); }}
                 onSubmit={handleSaveEditUser}
                 submitLabel="Save Changes"
+                submitting={submittingUser}
               />
             )}
           </div>
@@ -3311,6 +3380,7 @@ export default function AdminDashboard() {
                 onSubmit={handleCreateUser}
                 submitLabel="Create Staff"
                 roles={rolePermissions.map(rp => rp.role)}
+                submitting={submittingUser}
               />
             )}
 
@@ -3338,6 +3408,7 @@ export default function AdminDashboard() {
                 onSubmit={handleSaveEditUser}
                 submitLabel="Save Changes"
                 roles={rolePermissions.map(rp => rp.role)}
+                submitting={submittingUser}
               />
             )}
           </div>
@@ -3410,7 +3481,7 @@ export default function AdminDashboard() {
               <div className="max-w-4xl space-y-5">
                 <div className="flex items-center justify-between">
                   <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>{kbArticleId ? "Edit Article" : "New Article"}</h2>
-                  <button onClick={() => setKbEditing(false)} className={`text-sm font-medium flex items-center gap-1.5 ${isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-800"}`}>
+                  <button disabled={submittingKB} onClick={() => setKbEditing(false)} className={`text-sm font-medium flex items-center gap-1.5 ${isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-800"} disabled:opacity-50 disabled:cursor-not-allowed`}>
                     ← Back to list
                   </button>
                 </div>
@@ -3420,11 +3491,11 @@ export default function AdminDashboard() {
                     <div className={`md:col-span-2 admin-card p-5 space-y-4 ${isDark ? "admin-dark" : ""}`}>
                       <div className="admin-form-group">
                         <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Article Title <span className="text-red-500">*</span></label>
-                        <input type="text" required value={kbTitle} onChange={e => setKbTitle(e.target.value)} placeholder="e.g. How to reset your password" className={`admin-input ${isDark ? "admin-dark" : ""}`} />
+                        <input type="text" required disabled={submittingKB} value={kbTitle} onChange={e => setKbTitle(e.target.value)} placeholder="e.g. How to reset your password" className={`admin-input ${isDark ? "admin-dark" : ""}`} />
                       </div>
                       <div className="admin-form-group">
                         <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Content (Markdown) <span className="text-red-500">*</span></label>
-                        <textarea required value={kbContent} onChange={e => setKbContent(e.target.value)} placeholder="Write your article content here..." className={`admin-textarea font-mono ${isDark ? "admin-dark" : ""}`} style={{ minHeight: 300 }} />
+                        <textarea required disabled={submittingKB} value={kbContent} onChange={e => setKbContent(e.target.value)} placeholder="Write your article content here..." className={`admin-textarea font-mono ${isDark ? "admin-dark" : ""}`} style={{ minHeight: 300 }} />
                       </div>
                     </div>
 
@@ -3432,7 +3503,7 @@ export default function AdminDashboard() {
                       <h3 className={`text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Settings</h3>
                       <div className="admin-form-group">
                         <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Category</label>
-                        <select value={kbCategoryId} onChange={e => setKbCategoryId(e.target.value)} className={`admin-select ${isDark ? "admin-dark" : ""}`}>
+                        <select disabled={submittingKB} value={kbCategoryId} onChange={e => setKbCategoryId(e.target.value)} className={`admin-select ${isDark ? "admin-dark" : ""}`}>
                           <option value="">Uncategorized</option>
                           {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                         </select>
@@ -3440,18 +3511,25 @@ export default function AdminDashboard() {
 
                       <div className="space-y-3 pt-1">
                         <label className={`flex items-center gap-3 text-sm cursor-pointer ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-                          <input type="checkbox" checked={kbIsPublished} onChange={() => setKbIsPublished(!kbIsPublished)} className="w-4 h-4 rounded accent-[#38b1f7]" />
+                          <input type="checkbox" disabled={submittingKB} checked={kbIsPublished} onChange={() => setKbIsPublished(!kbIsPublished)} className="w-4 h-4 rounded accent-[#38b1f7]" />
                           Publish immediately
                         </label>
                         <label className={`flex items-center gap-3 text-sm cursor-pointer ${isDark ? "text-amber-400" : "text-amber-700"}`}>
-                          <input type="checkbox" checked={kbIsInternal} onChange={() => setKbIsInternal(!kbIsInternal)} className="w-4 h-4 rounded accent-amber-500" />
+                          <input type="checkbox" disabled={submittingKB} checked={kbIsInternal} onChange={() => setKbIsInternal(!kbIsInternal)} className="w-4 h-4 rounded accent-amber-500" />
                           Internal only (agents only)
                         </label>
                       </div>
 
                       <div className="pt-2">
-                        <button type="submit" className="admin-btn admin-btn-primary w-full">
-                          {kbArticleId ? "Update Article" : "Save Article"}
+                        <button type="submit" disabled={submittingKB} className="admin-btn admin-btn-primary w-full">
+                          {submittingKB ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5 inline" />
+                              <span>Saving...</span>
+                            </>
+                          ) : (
+                            kbArticleId ? "Update Article" : "Save Article"
+                          )}
                         </button>
                       </div>
                     </div>
@@ -3488,6 +3566,7 @@ export default function AdminDashboard() {
                     <input 
                       type="text" 
                       required 
+                      disabled={submittingCategory}
                       value={catFormName} 
                       onChange={e => setCatFormName(e.target.value)} 
                       placeholder="e.g., Domain Hosting, Google Workspace" 
@@ -3499,6 +3578,7 @@ export default function AdminDashboard() {
                     <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Parent Category</label>
                     <select 
                       value={catFormParentId} 
+                      disabled={submittingCategory}
                       onChange={e => setCatFormParentId(e.target.value)} 
                       className={`admin-select ${isDark ? "admin-dark" : ""} text-xs`}
                       style={{ height: 34 }}
@@ -3513,6 +3593,7 @@ export default function AdminDashboard() {
                     <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Description</label>
                     <textarea 
                       value={catFormDesc} 
+                      disabled={submittingCategory}
                       onChange={e => setCatFormDesc(e.target.value)} 
                       placeholder="Covered issues details..." 
                       rows={2} 
@@ -3520,12 +3601,20 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div className="flex gap-2 pt-1">
-                    <button type="submit" className="admin-btn admin-btn-primary flex-1 text-xs" style={{ height: 34 }}>
-                      {editingCatId ? "Save Changes" : "Create Category"}
+                    <button type="submit" disabled={submittingCategory} className="admin-btn admin-btn-primary flex-1 text-xs" style={{ height: 34 }}>
+                      {submittingCategory ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5 inline" />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        editingCatId ? "Save Changes" : "Create Category"
+                      )}
                     </button>
                     {editingCatId && (
                       <button 
                         type="button" 
+                        disabled={submittingCategory}
                         onClick={() => { setEditingCatId(null); setCatFormName(""); setCatFormDesc(""); setCatFormParentId(""); }} 
                         className="admin-btn admin-btn-ghost text-xs"
                         style={{ height: 34 }}
@@ -3670,12 +3759,14 @@ export default function AdminDashboard() {
                       ]}
                       placeholder="Search or select category..."
                       isDark={isDark}
+                      disabled={submittingRoutingRule}
                     />
                   </div>
                   <div className="admin-form-group">
                     <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Primary Assignee</label>
                     <select 
                       value={newRuleAssignee} 
+                      disabled={submittingRoutingRule}
                       onChange={e => setNewRuleAssignee(e.target.value)} 
                       className={`admin-select ${isDark ? "admin-dark" : ""} text-xs`}
                       style={{ height: 34 }}
@@ -3688,6 +3779,7 @@ export default function AdminDashboard() {
                     <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Primary Support Team</label>
                     <select 
                       value={newRuleTeam} 
+                      disabled={submittingRoutingRule}
                       onChange={e => setNewRuleTeam(e.target.value)} 
                       className={`admin-select ${isDark ? "admin-dark" : ""} text-xs`}
                       style={{ height: 34 }}
@@ -3700,6 +3792,7 @@ export default function AdminDashboard() {
                     <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Secondary Assignee (L2 Manager)</label>
                     <select 
                       value={newRuleSecondary} 
+                      disabled={submittingRoutingRule}
                       onChange={e => setNewRuleSecondary(e.target.value)} 
                       className={`admin-select ${isDark ? "admin-dark" : ""} text-xs`}
                       style={{ height: 34 }}
@@ -3711,8 +3804,15 @@ export default function AdminDashboard() {
                     </select>
                   </div>
                   <div className="sm:col-span-2 flex justify-end">
-                    <button type="submit" className="admin-btn admin-btn-primary px-5 text-xs" style={{ height: 34 }}>
-                      Add Rule
+                    <button type="submit" disabled={submittingRoutingRule} className="admin-btn admin-btn-primary px-5 text-xs" style={{ height: 34 }}>
+                      {submittingRoutingRule ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5 inline" />
+                          <span>Adding...</span>
+                        </>
+                      ) : (
+                        "Add Rule"
+                      )}
                     </button>
                   </div>
                 </form>
@@ -4187,6 +4287,7 @@ export default function AdminDashboard() {
             onHoursChange={setResolveTicketHours}
             onNotesChange={setResolveTicketNotes}
             onSubmit={handleResolveSubmit}
+            submitting={submittingResolve}
           />
         )}
 
@@ -4457,6 +4558,7 @@ interface UserModalProps {
   onClose: () => void; onSubmit: (e: React.FormEvent) => void;
   submitLabel: string;
   roles?: string[];
+  submitting?: boolean;
 }
 
 function UserModal({
@@ -4465,7 +4567,7 @@ function UserModal({
   formRole, setFormRole, formIsActive, setFormIsActive, formTeams, setFormTeams,
   formPhone, setFormPhone, formCrmId, setFormCrmId,
   teams, users = [], editingUserId, onClose, onSubmit, submitLabel,
-  roles = []
+  roles = [], submitting = false
 }: UserModalProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [crmSearch, setCrmSearch] = useState("");
@@ -5102,24 +5204,32 @@ function UserModal({
             <button 
               type="button" 
               onClick={onClose} 
+              disabled={submitting}
               className={`px-5 py-2 text-sm font-semibold rounded-lg transition-all ${
                 isDark 
                   ? "text-slate-300 hover:text-white hover:bg-slate-800" 
                   : "text-slate-600 hover:text-slate-800 hover:bg-slate-100"
-              }`}
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               Cancel
             </button>
             <button 
               type="submit" 
-              disabled={accountExists}
-              className={`px-5 py-2 text-sm font-semibold text-white transition-all rounded-lg shadow-lg ${
-                accountExists 
+              disabled={accountExists || submitting}
+              className={`px-5 py-2 text-sm font-semibold text-white transition-all rounded-lg shadow-lg flex items-center justify-center gap-1.5 ${
+                (accountExists || submitting) 
                   ? "bg-slate-300 dark:bg-slate-800 text-slate-500 dark:text-slate-600 cursor-not-allowed shadow-none border border-slate-200 dark:border-slate-700" 
                   : "bg-[#0d9fea] hover:bg-[#38b1f7] active:scale-[0.98] shadow-sky-500/10 hover:shadow-sky-500/20"
               }`}
             >
-              {accountExists ? "Account Exists" : submitLabel}
+              {submitting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Submitting...</span>
+                </>
+              ) : (
+                accountExists ? "Account Exists" : submitLabel
+              )}
             </button>
           </div>
         </form>
@@ -5349,9 +5459,10 @@ interface SearchableSelectProps {
   options: string[];
   placeholder: string;
   isDark: boolean;
+  disabled?: boolean;
 }
 
-function SearchableSelect({ value, onChange, options, placeholder, isDark }: SearchableSelectProps) {
+function SearchableSelect({ value, onChange, options, placeholder, isDark, disabled }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -5376,11 +5487,12 @@ function SearchableSelect({ value, onChange, options, placeholder, isDark }: Sea
   );
 
   return (
-    <div ref={containerRef} className="relative w-full">
+    <div ref={containerRef} className={`relative w-full ${disabled ? "opacity-50 cursor-not-allowed pointer-events-none" : ""}`}>
       <div className="relative">
         <input
           type="text"
           value={search}
+          disabled={disabled}
           onChange={(e) => {
             setSearch(e.target.value);
             setIsOpen(true);
@@ -5388,14 +5500,14 @@ function SearchableSelect({ value, onChange, options, placeholder, isDark }: Sea
               onChange("");
             }
           }}
-          onFocus={() => setIsOpen(true)}
+          onFocus={() => { if (!disabled) setIsOpen(true); }}
           placeholder={placeholder}
           className={`admin-input ${isDark ? "admin-dark" : ""} w-full text-xs pr-8`}
           style={{ height: 34 }}
         />
         <div 
           className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center text-slate-400 cursor-pointer" 
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => { if (!disabled) setIsOpen(!isOpen); }}
         >
           <ChevronDown className="w-3.5 h-3.5" />
         </div>

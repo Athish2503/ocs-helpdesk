@@ -558,11 +558,20 @@ export default function CustomerDashboard() {
         try {
           const payload = JSON.parse(e.data) as { ticketId: string; action: string };
           console.log(`[SSE] Customer Dashboard received ticket.update: ${payload.ticketId}, action: ${payload.action}`);
-          loadTickets(false); // Refresh ticket list without full loading spinner
+          // Refresh the full ticket list
+          loadTickets(false);
+          // Also refresh the open ticket's activity stream immediately if it's the one that changed
+          setSelectedTicketId(prev => {
+            if (prev === payload.ticketId) {
+              loadTicketDetails(payload.ticketId);
+            }
+            return prev;
+          });
         } catch (err) {
           console.error("[SSE] Failed to parse ticket.update event:", err);
         }
       });
+
 
       eventSource.addEventListener("shutdown", () => {
         console.log("[SSE] Server shutting down. Reconnecting in 5s...");
@@ -583,7 +592,7 @@ export default function CustomerDashboard() {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       eventSource?.close();
     };
-  }, [user, loadCrmDetails, refreshUser]);
+  }, [user, loadCrmDetails, refreshUser, loadTicketDetails]);
 
   // Perform the actual ticket save & file attachment upload
   const executeTicketCreation = async () => {
@@ -2188,7 +2197,11 @@ export default function CustomerDashboard() {
                                 disabled={submittingMessage || !newMessage.trim()}
                                 className="btn-cyber h-[48px] px-4 shrink-0 flex items-center justify-center shadow-none"
                               >
-                                <Send className="w-4 h-4" />
+                                {submittingMessage ? (
+                                  <RefreshCw className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Send className="w-4 h-4" />
+                                )}
                               </button>
                             </form>
                           )}
@@ -2488,7 +2501,14 @@ export default function CustomerDashboard() {
                         disabled={submittingSettings}
                         className="btn-cyber flex items-center space-x-2"
                       >
-                        <span>{submittingSettings ? "Saving Settings..." : "Save Settings"}</span>
+                        {submittingSettings ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Saving Settings...</span>
+                          </>
+                        ) : (
+                          <span>Save Settings</span>
+                        )}
                       </button>
                     </div>
                   </form>
@@ -3487,7 +3507,7 @@ export default function CustomerDashboard() {
                       selectedFile
                         ? isDark ? 'border-[#38b1f7]/30 bg-[#38b1f7]/5' : 'border-[#38b1f7]/30 bg-sky-50'
                         : isDark ? 'border-white/[0.06] bg-slate-950/40 hover:border-white/10' : 'border-slate-200 bg-slate-50 hover:border-slate-300'
-                    }`}>
+                    } ${submittingCreate ? 'pointer-events-none opacity-50 cursor-not-allowed' : ''}`}>
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
                         isDark ? 'bg-slate-800' : 'bg-slate-200'
                       }`}>
@@ -3500,7 +3520,7 @@ export default function CustomerDashboard() {
                           {selectedFile ? selectedFile.name : "Click to attach a file"}
                         </p>
                         <p className={`text-[10px] ${
-                          isDark ? 'text-slate-500' : 'text-slate-400'
+                          isDark ? 'text-slate-550' : 'text-slate-400'
                         }`}>
                           {selectedFile ? `${(selectedFile.size / 1024).toFixed(1)} KB` : "PNG, JPG, PDF, ZIP — max 20 MB"}
                         </p>
@@ -3508,13 +3528,14 @@ export default function CustomerDashboard() {
                       {selectedFile && (
                         <button
                           type="button"
+                          disabled={submittingCreate}
                           onClick={(e) => { e.preventDefault(); setSelectedFile(null); }}
                           className="text-red-400 hover:text-red-300 shrink-0"
                         >
                           <X className="w-4 h-4" />
                         </button>
                       )}
-                      <input type="file" className="hidden" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
+                      <input type="file" disabled={submittingCreate} className="hidden" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
                     </label>
                   </div>
                 </div>
