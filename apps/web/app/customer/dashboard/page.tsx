@@ -2,6 +2,7 @@
 
 import { useAuth } from "../../../context/AuthContext";
 import Loader from "../../../components/Loader";
+import LogoutTransition from "../../../components/LogoutTransition";
 import { useToast } from "../../../context/ToastContext";
 import React, { useState, useEffect, useCallback } from "react";
 
@@ -364,6 +365,7 @@ export default function CustomerDashboard() {
   const [previewImageModal, setPreviewImageModal] = useState<{ url: string; name: string } | null>(null);
   const [resolvingTicketId, setResolvingTicketId] = useState<string | null>(null);
   const [ticketSearch, setTicketSearch] = useState("");
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleResolveTicketCustomer = async (ticketId: string) => {
     try {
@@ -1225,21 +1227,31 @@ export default function CustomerDashboard() {
 
             {/* Logout Button (Top Right Corner) */}
             <button
-              onClick={() => logout()}
+              type="button"
+              onClick={() => setIsLoggingOut(true)}
               className={`
-                flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all duration-150 active:scale-95
+                px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all duration-200 active:scale-95 cursor-pointer shadow-sm
                 ${isDark
-                  ? "border-red-500/20 text-red-400 hover:bg-red-950/30 hover:border-red-500/40 hover:text-red-300"
-                  : "border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"}
+                  ? "bg-slate-800/80 hover:bg-rose-600/90 text-slate-300 hover:text-white border-slate-700/60 hover:border-rose-500/50"
+                  : "bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border-slate-200 hover:border-rose-300"}
               `}
-              title="Logout"
+              title="Logout from Customer Portal"
               aria-label="Logout"
             >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Logout</span>
+              <LogOut className="w-3.5 h-3.5 opacity-80" />
+              <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
         </header>
+
+        {/* Clean Full-Screen Logout Transition */}
+        <LogoutTransition
+          isLoggingOut={isLoggingOut}
+          onComplete={async () => {
+            await logout();
+          }}
+          isDark={isDark}
+        />
 
         {/* 3. Main Dashboard Scroll Area */}
         <div className="flex-grow flex overflow-hidden">
