@@ -49,6 +49,7 @@ import {
   FileText,
   ShieldAlert,
   RotateCw,
+  RefreshCw,
   Lock,
 } from "lucide-react";
 import { useDialog } from "../../../context/DialogContext";
@@ -156,6 +157,18 @@ interface RoutingRule {
   secondaryAssignee?: { id: string; name: string; email: string } | null;
   team?: { id: string; name: string } | null;
 }
+
+interface SlaPolicy {
+  id: string;
+  name: string;
+  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT" | "ALL";
+  firstResponseHours: number;
+  resolutionHours: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 
 // ── Status / Priority Helpers ──────────────────────────────────────
 function statusBadgeClass(status: string) {
@@ -334,6 +347,156 @@ export default function AdminDashboard() {
   const [importingCrm, setImportingCrm] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; failed: number; total: number } | null>(null);
 
+  // SLA Policies state
+  const [slaPolicies, setSlaPolicies] = useState<SlaPolicy[]>([]);
+  const [slaSubTab, setSlaSubTab] = useState<"policies" | "metrics">("policies");
+  const [showSlaModal, setShowSlaModal] = useState(false);
+  const [editingSlaPolicy, setEditingSlaPolicy] = useState<SlaPolicy | null>(null);
+  const [slaFormName, setSlaFormName] = useState("");
+  const [slaFormPriority, setSlaFormPriority] = useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT" | "ALL">("MEDIUM");
+  const [slaFormFirstResponse, setSlaFormFirstResponse] = useState<number | string>(4);
+  const [slaFormResolution, setSlaFormResolution] = useState<number | string>(24);
+  const [slaFormIsActive, setSlaFormIsActive] = useState<boolean>(true);
+
+  // Pagination states for Client Accounts & Client Credits
+  const [clientCurrentPage, setClientCurrentPage] = useState(1);
+  const [clientPageSize, setClientPageSize] = useState(10);
+  const [creditsCurrentPage, setCreditsCurrentPage] = useState(1);
+  const [creditsPageSize, setCreditsPageSize] = useState(10);
+
+  useEffect(() => {
+    setClientCurrentPage(1);
+  }, [userSearch, clientFilter]);
+
+  useEffect(() => {
+    setCreditsCurrentPage(1);
+  }, [userSearch]);
+
+  const openSlaModalForCreate = () => {
+    setEditingSlaPolicy(null);
+    setSlaFormName("");
+    setSlaFormPriority("MEDIUM");
+    setSlaFormFirstResponse(4);
+    setSlaFormResolution(24);
+    setSlaFormIsActive(true);
+    setShowSlaModal(true);
+  };
+
+  const openSlaModalForEdit = (policy: SlaPolicy) => {
+    setEditingSlaPolicy(policy);
+    setSlaFormName(policy.name);
+    setSlaFormPriority(policy.priority);
+    setSlaFormFirstResponse(policy.firstResponseHours);
+    setSlaFormResolution(policy.resolutionHours);
+    setSlaFormIsActive(policy.isActive);
+    setShowSlaModal(true);
+  };
+
+  const handleSaveSlaPolicy = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const trimmedName = slaFormName.trim();
+    if (!trimmedName) {
+      toast.error("Policy name is required.");
+      return;
+    }
+
+    const frHours = Number(slaFormFirstResponse);
+    if (isNaN(frHours) || frHours <= 0) {
+      toast.error("First response target must be a positive number.");
+      return;
+    }
+
+    const resHours = Number(slaFormResolution);
+    if (isNaN(resHours) || resHours <= 0) {
+      toast.error("Resolution target must be a positive number.");
+      return;
+    }
+
+    if (resHours < frHours) {
+      toast.error("Resolution target cannot be less than First Response target.");
+      return;
+    }
+
+    setSubmittingSla(true);
+    try {
+      const payload = {
+        name: trimmedName,
+        priority: slaFormPriority,
+        firstResponseHours: frHours,
+        resolutionHours: resHours,
+        isActive: slaFormIsActive,
+      };
+
+      let res;
+      if (editingSlaPolicy) {
+        res = await fetchWithAuth(`/sla/${editingSlaPolicy.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+      } else {
+        res = await fetchWithAuth("/sla", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+      }
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success(editingSlaPolicy ? "SLA Policy updated successfully." : "SLA Policy created successfully.");
+        setShowSlaModal(false);
+        setEditingSlaPolicy(null);
+        refreshAllData();
+      } else {
+        toast.error(data.error?.message || "Failed to save SLA Policy.");
+      }
+    } catch (err) {
+      toast.error("An error occurred while saving SLA Policy.");
+    } finally {
+      setSubmittingSla(false);
+    }
+  };
+
+  const handleToggleSlaPolicy = async (policy: SlaPolicy) => {
+    try {
+      const res = await fetchWithAuth(`/sla/${policy.id}/toggle`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive: !policy.isActive }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success(`SLA Policy "${policy.name}" ${!policy.isActive ? "activated" : "deactivated"}.`);
+        refreshAllData();
+      } else {
+        toast.error(data.error?.message || "Failed to toggle SLA Policy.");
+      }
+    } catch (err) {
+      toast.error("Failed to toggle SLA Policy.");
+    }
+  };
+
+  const handleDeleteSlaPolicy = async (id: string, name: string) => {
+    const confirm = await dialog.confirm(
+      `Are you sure you want to delete SLA policy "${name}"?`,
+      "Delete SLA Policy"
+    );
+    if (!confirm) return;
+
+    try {
+      const res = await fetchWithAuth(`/sla/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("SLA Policy deleted successfully.");
+        refreshAllData();
+      } else {
+        const data = await res.json();
+        toast.error(data.error?.message || "Failed to delete SLA Policy.");
+      }
+    } catch (err) {
+      toast.error("Failed to delete SLA Policy.");
+    }
+  };
+
+
   const handleBulkImportCrm = async () => {
     setImportingCrm(true);
     setImportResult(null);
@@ -440,12 +603,13 @@ export default function AdminDashboard() {
     setDataLoading(true);
     setError(null);
     try {
-      const [ticketsRes, teamsRes, agentsRes, kbRes, catRes] = await Promise.all([
+      const [ticketsRes, teamsRes, agentsRes, kbRes, catRes, slaRes] = await Promise.all([
         fetchWithAuth("/tickets"),
         fetchWithAuth("/teams"),
         fetchWithAuth("/users/agents"),
         fetchWithAuth("/kb"),
         fetchWithAuth("/categories?all=true"),
+        fetchWithAuth("/sla"),
       ]);
       if (ticketsRes.ok) setTickets((await ticketsRes.json()).data.tickets);
       if (teamsRes.ok) setTeams((await teamsRes.json()).data.teams);
@@ -455,6 +619,7 @@ export default function AdminDashboard() {
         const r = await catRes.json();
         setCategories(r.data.categories || r.data);
       }
+      if (slaRes.ok) setSlaPolicies((await slaRes.json()).data.policies);
       if (user?.role === "ADMIN") {
         const [usersRes, rulesRes, permRes] = await Promise.all([
           fetchWithAuth("/users"),
@@ -2336,6 +2501,9 @@ export default function AdminDashboard() {
                   return true;
                 });
 
+                const totalClientPages = Math.ceil(searchedClients.length / clientPageSize) || 1;
+                const paginatedClients = searchedClients.slice((clientCurrentPage - 1) * clientPageSize, clientCurrentPage * clientPageSize);
+
                 if (searchedClients.length === 0) {
                   return (
                     <div className={`divide-y overflow-y-auto flex-1 ${isDark ? "divide-white/[0.04]" : "divide-slate-100"}`}>
@@ -2345,102 +2513,114 @@ export default function AdminDashboard() {
                 }
 
                 return (
-                  <div className={`divide-y overflow-y-auto flex-1 max-h-[620px] ${isDark ? "divide-white/[0.04]" : "divide-slate-100"}`}>
-                    {searchedClients.map(u => {
-                      const initials = u.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-                      const credits = u.customerCredits;
-                      const utilPct = credits ? Math.min(100, Math.round((credits.usedHours / Math.max(credits.allocatedHours, 0.01)) * 100)) : 0;
-                      const isSelected = selectedClientView?.id === u.id;
-                      const clientTickets = tickets.filter(t => t.customer.id === u.id);
-                      const openCount = clientTickets.filter(t => t.status === "OPEN" || t.status === "IN_PROGRESS").length;
-                      const isActivated = u.emailVerified;
-                      const hasCrm = !!u.crmCustomerId;
-                      const company = (u as any).crmCustomer?.companyName;
+                  <div className="flex flex-col flex-1 min-h-0">
+                    <div className={`divide-y overflow-y-auto flex-1 max-h-[580px] ${isDark ? "divide-white/[0.04]" : "divide-slate-100"}`}>
+                      {paginatedClients.map(u => {
+                        const initials = u.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+                        const credits = u.customerCredits;
+                        const utilPct = credits ? Math.min(100, Math.round((credits.usedHours / Math.max(credits.allocatedHours, 0.01)) * 100)) : 0;
+                        const isSelected = selectedClientView?.id === u.id;
+                        const clientTickets = tickets.filter(t => t.customer.id === u.id);
+                        const openCount = clientTickets.filter(t => t.status === "OPEN" || t.status === "IN_PROGRESS").length;
+                        const isActivated = u.emailVerified;
+                        const hasCrm = !!u.crmCustomerId;
+                        const company = (u as any).crmCustomer?.companyName;
 
-                      return (
-                        <div
-                          key={u.id}
-                          onClick={() => handleSelectClient(u)}
-                          className={`flex items-start gap-3 px-4 py-3.5 cursor-pointer transition-all duration-200 border-l-2 ${
-                            isSelected
-                              ? isDark ? "bg-[#38b1f7]/8 border-[#38b1f7]" : "bg-blue-50/60 border-[#38b1f7]"
-                              : `border-transparent ${isDark ? "hover:bg-white/[0.025]" : "hover:bg-slate-50/80"}`
-                          }`}
-                        >
-                          {/* Avatar */}
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${
-                            isSelected
-                              ? isDark ? "bg-[#38b1f7]/25 text-[#5fc0f9]" : "bg-blue-100 text-blue-700"
-                              : isDark ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"
-                          }`}>
-                            {initials}
-                          </div>
+                        return (
+                          <div
+                            key={u.id}
+                            onClick={() => handleSelectClient(u)}
+                            className={`flex items-start gap-3 px-4 py-3.5 cursor-pointer transition-all duration-200 border-l-2 ${
+                              isSelected
+                                ? isDark ? "bg-[#38b1f7]/8 border-[#38b1f7]" : "bg-blue-50/60 border-[#38b1f7]"
+                                : `border-transparent ${isDark ? "hover:bg-white/[0.025]" : "hover:bg-slate-50/80"}`
+                            }`}
+                          >
+                            {/* Avatar */}
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${
+                              isSelected
+                                ? isDark ? "bg-[#38b1f7]/25 text-[#5fc0f9]" : "bg-blue-100 text-blue-700"
+                                : isDark ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"
+                            }`}>
+                              {initials}
+                            </div>
 
-                          <div className="flex-1 min-w-0 space-y-1">
-                            {/* Name + Status */}
-                            <div className="flex items-center justify-between gap-2">
-                              <p className={`text-sm font-semibold truncate ${isDark ? "text-slate-100" : "text-slate-900"}`}>{u.name}</p>
-                              <div className="flex items-center gap-1 shrink-0">
-                                {hasCrm && (
-                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
-                                    isDark ? "bg-[#38b1f7]/8 border-[#38b1f7]/20 text-[#5fc0f9]" : "bg-blue-50 border-blue-200 text-blue-600"
-                                  }`}>CRM</span>
-                                )}
-                                <span className={`admin-badge ${u.isActive ? "admin-badge-active" : "admin-badge-suspended"}`}>
-                                  {u.isActive ? "Active" : "Off"}
+                            <div className="flex-1 min-w-0 space-y-1">
+                              {/* Name + Status */}
+                              <div className="flex items-center justify-between gap-2">
+                                <p className={`text-sm font-semibold truncate ${isDark ? "text-slate-100" : "text-slate-900"}`}>{u.name}</p>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {hasCrm && (
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                                      isDark ? "bg-[#38b1f7]/8 border-[#38b1f7]/20 text-[#5fc0f9]" : "bg-blue-50 border-blue-200 text-blue-600"
+                                    }`}>CRM</span>
+                                  )}
+                                  <span className={`admin-badge ${u.isActive ? "admin-badge-active" : "admin-badge-suspended"}`}>
+                                    {u.isActive ? "Active" : "Off"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Company or Email */}
+                              {company ? (
+                                <p className={`text-xs font-medium truncate ${isDark ? "text-slate-400" : "text-slate-600"}`}>{company}</p>
+                              ) : null}
+                              <p className={`text-xs truncate ${isDark ? "text-slate-500" : "text-slate-400"}`}>{u.email}</p>
+
+                              {/* Bottom row: invite pill + credit bar + open tickets */}
+                              <div className="flex items-center gap-2 pt-0.5">
+                                {/* Invite status */}
+                                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${
+                                  isActivated
+                                    ? isDark ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-600 border-emerald-200"
+                                    : hasCrm
+                                    ? isDark ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-600 border-amber-200"
+                                    : isDark ? "bg-slate-800 text-slate-600 border-slate-700/50" : "bg-slate-100 text-slate-400 border-slate-200"
+                                }`}>
+                                  {isActivated ? "✓ Activated" : hasCrm ? "● Pending" : "○ No Invite"}
                                 </span>
+
+                                {/* Credit bar */}
+                                {credits && (
+                                  <div className="flex-1 flex items-center gap-1.5 min-w-0">
+                                    <div className={`flex-1 h-1 rounded-full overflow-hidden ${isDark ? "bg-white/[0.06]" : "bg-slate-200"}`}>
+                                      <div
+                                        className={`h-full rounded-full transition-all ${
+                                          utilPct >= 90 ? "bg-red-500" : utilPct >= 70 ? "bg-amber-500" : "bg-emerald-500"
+                                        }`}
+                                        style={{ width: `${utilPct}%` }}
+                                      />
+                                    </div>
+                                    <span className={`text-[9px] shrink-0 font-medium tabular-nums ${
+                                      utilPct >= 90 ? "text-red-500" : utilPct >= 70 ? "text-amber-500" : isDark ? "text-slate-500" : "text-slate-400"
+                                    }`}>{credits.remainingHours}h</span>
+                                  </div>
+                                )}
+
+                                {/* Open tickets badge */}
+                                {openCount > 0 && (
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                                    isDark ? "bg-amber-500/15 text-amber-400" : "bg-amber-50 text-amber-700"
+                                  }`}>
+                                    {openCount} open
+                                  </span>
+                                )}
                               </div>
                             </div>
-
-                            {/* Company or Email */}
-                            {company ? (
-                              <p className={`text-xs font-medium truncate ${isDark ? "text-slate-400" : "text-slate-600"}`}>{company}</p>
-                            ) : null}
-                            <p className={`text-xs truncate ${isDark ? "text-slate-500" : "text-slate-400"}`}>{u.email}</p>
-
-                            {/* Bottom row: invite pill + credit bar + open tickets */}
-                            <div className="flex items-center gap-2 pt-0.5">
-                              {/* Invite status */}
-                              <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${
-                                isActivated
-                                  ? isDark ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-600 border-emerald-200"
-                                  : hasCrm
-                                  ? isDark ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-600 border-amber-200"
-                                  : isDark ? "bg-slate-800 text-slate-600 border-slate-700/50" : "bg-slate-100 text-slate-400 border-slate-200"
-                              }`}>
-                                {isActivated ? "✓ Activated" : hasCrm ? "● Pending" : "○ No Invite"}
-                              </span>
-
-                              {/* Credit bar */}
-                              {credits && (
-                                <div className="flex-1 flex items-center gap-1.5 min-w-0">
-                                  <div className={`flex-1 h-1 rounded-full overflow-hidden ${isDark ? "bg-white/[0.06]" : "bg-slate-200"}`}>
-                                    <div
-                                      className={`h-full rounded-full transition-all ${
-                                        utilPct >= 90 ? "bg-red-500" : utilPct >= 70 ? "bg-amber-500" : "bg-emerald-500"
-                                      }`}
-                                      style={{ width: `${utilPct}%` }}
-                                    />
-                                  </div>
-                                  <span className={`text-[9px] shrink-0 font-medium tabular-nums ${
-                                    utilPct >= 90 ? "text-red-500" : utilPct >= 70 ? "text-amber-500" : isDark ? "text-slate-500" : "text-slate-400"
-                                  }`}>{credits.remainingHours}h</span>
-                                </div>
-                              )}
-
-                              {/* Open tickets badge */}
-                              {openCount > 0 && (
-                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                                  isDark ? "bg-amber-500/15 text-amber-400" : "bg-amber-50 text-amber-700"
-                                }`}>
-                                  {openCount} open
-                                </span>
-                              )}
-                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
+                    <PaginationControls
+                      currentPage={clientCurrentPage}
+                      totalPages={totalClientPages}
+                      totalItems={searchedClients.length}
+                      pageSize={clientPageSize}
+                      onPageChange={setClientCurrentPage}
+                      onPageSizeChange={setClientPageSize}
+                      isDark={isDark}
+                      itemLabel="clients"
+                    />
                   </div>
                 );
               })()}
@@ -3751,12 +3931,12 @@ export default function AdminDashboard() {
                     <SearchableSelect
                       value={newRuleCategory}
                       onChange={setNewRuleCategory}
-                      options={[
+                      options={Array.from(new Set([
                         "Billing / Renewals",
                         "Critical Issues",
                         "Technical Support",
                         ...categories.map(c => c.name)
-                      ]}
+                      ]))}
                       placeholder="Search or select category..."
                       isDark={isDark}
                       disabled={submittingRoutingRule}
@@ -4064,63 +4244,229 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <div className={`admin-card overflow-hidden ${isDark ? "admin-dark" : ""}`}>
-              <div className="overflow-x-auto">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Customer Name</th>
-                      <th>Email</th>
-                      <th>Allocated Credit</th>
-                      <th>Used Credits</th>
-                      <th>Remaining Credits</th>
-                      <th>Billable Credits</th>
-                      <th className="text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.filter(u => u.role === "CUSTOMER").filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).length === 0 ? (
-                      <tr><td colSpan={7} className="text-center py-8"><span className={isDark ? "text-slate-500" : "text-slate-400"}>No customers found.</span></td></tr>
-                    ) : users.filter(u => u.role === "CUSTOMER").filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).map(u => (
-                      <tr key={u.id}>
-                        <td><span className={`font-semibold text-sm ${isDark ? "text-slate-100" : "text-slate-900"}`}>{u.name}</span></td>
-                        <td><span className={`text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>{u.email}</span></td>
-                        <td><span className="font-semibold">{u.customerCredits?.allocatedHours ?? 20} hrs</span></td>
-                        <td><span className="text-amber-500 font-semibold">{u.customerCredits?.usedHours ?? 0} hrs</span></td>
-                        <td><span className="text-green-500 font-semibold">{u.customerCredits?.remainingHours ?? 20} hrs</span></td>
-                        <td><span className="text-red-500 font-semibold">{u.customerCredits?.billableHours ?? 0} hrs</span></td>
-                        <td className="text-center">
-                          <button 
-                            onClick={() => {
-                              setCreditsEditingUser(u);
-                              setCreditsAllocated(u.customerCredits?.allocatedHours ?? 20);
-                              setCreditsDescription("");
-                            }}
-                            className="admin-btn admin-btn-secondary admin-btn-sm"
-                          >
-                            Adjust Credits
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {(() => {
+              const allCustomerUsers = users.filter(u => u.role === "CUSTOMER").filter(u => !userSearch.trim() || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase()));
+              const totalCreditsPages = Math.ceil(allCustomerUsers.length / creditsPageSize) || 1;
+              const paginatedCreditUsers = allCustomerUsers.slice((creditsCurrentPage - 1) * creditsPageSize, creditsCurrentPage * creditsPageSize);
+
+              return (
+                <div className={`admin-card overflow-hidden ${isDark ? "admin-dark" : ""}`}>
+                  <div className="overflow-x-auto">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>Customer Name</th>
+                          <th>Email</th>
+                          <th>Allocated Credit</th>
+                          <th>Used Credits</th>
+                          <th>Remaining Credits</th>
+                          <th>Billable Credits</th>
+                          <th className="text-center">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allCustomerUsers.length === 0 ? (
+                          <tr><td colSpan={7} className="text-center py-8"><span className={isDark ? "text-slate-500" : "text-slate-400"}>No customers found.</span></td></tr>
+                        ) : paginatedCreditUsers.map(u => (
+                          <tr key={u.id}>
+                            <td><span className={`font-semibold text-sm ${isDark ? "text-slate-100" : "text-slate-900"}`}>{u.name}</span></td>
+                            <td><span className={`text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>{u.email}</span></td>
+                            <td><span className="font-semibold">{u.customerCredits?.allocatedHours ?? 20} hrs</span></td>
+                            <td><span className="text-amber-500 font-semibold">{u.customerCredits?.usedHours ?? 0} hrs</span></td>
+                            <td><span className="text-green-500 font-semibold">{u.customerCredits?.remainingHours ?? 20} hrs</span></td>
+                            <td><span className="text-red-500 font-semibold">{u.customerCredits?.billableHours ?? 0} hrs</span></td>
+                            <td className="text-center">
+                              <button 
+                                onClick={() => {
+                                  setCreditsEditingUser(u);
+                                  setCreditsAllocated(u.customerCredits?.allocatedHours ?? 20);
+                                  setCreditsDescription("");
+                                }}
+                                className="admin-btn admin-btn-secondary admin-btn-sm"
+                              >
+                                Adjust Credits
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <PaginationControls
+                    currentPage={creditsCurrentPage}
+                    totalPages={totalCreditsPages}
+                    totalItems={allCustomerUsers.length}
+                    pageSize={creditsPageSize}
+                    onPageChange={setCreditsCurrentPage}
+                    onPageSizeChange={setCreditsPageSize}
+                    isDark={isDark}
+                    itemLabel="customer accounts"
+                  />
+                </div>
+              );
+            })()}
           </div>
         )}
 
         {/* ══════════════════════════════════════════════════════════
-            TAB: SLA METRICS
+            TAB: SLA MANAGEMENT & METRICS
         ══════════════════════════════════════════════════════════ */}
         {activeTab === "sla" && (
           <div className="space-y-6">
-            <div>
-              <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>SLA & Turnaround Analytics</h2>
-              <p className={`text-sm mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Real-time response compliance, resolution durations, and breach summaries.</p>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+              <div>
+                <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>SLA Management & Analytics</h2>
+                <p className={`text-sm mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Configure response/resolution policies and monitor compliance metrics.</p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {/* Sub-tab navigation */}
+                <div className={`flex items-center p-1 rounded-xl border ${isDark ? "bg-white/[0.04] border-white/[0.08]" : "bg-slate-100 border-slate-200"}`}>
+                  <button
+                    onClick={() => setSlaSubTab("policies")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      slaSubTab === "policies"
+                        ? isDark ? "bg-[#38b1f7] text-white shadow-md" : "bg-white text-slate-900 shadow-sm"
+                        : isDark ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    SLA Policies ({slaPolicies.length})
+                  </button>
+                  <button
+                    onClick={() => setSlaSubTab("metrics")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      slaSubTab === "metrics"
+                        ? isDark ? "bg-[#38b1f7] text-white shadow-md" : "bg-white text-slate-900 shadow-sm"
+                        : isDark ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    Analytics & Compliance
+                  </button>
+                </div>
+
+                {user.role === "ADMIN" && (
+                  <button
+                    onClick={openSlaModalForCreate}
+                    className="admin-btn admin-btn-primary text-xs"
+                    style={{ height: 36 }}
+                  >
+                    <Plus className="w-4 h-4" />
+                    Create SLA Policy
+                  </button>
+                )}
+              </div>
             </div>
 
-            {(() => {
+            {/* Sub-Tab 1: SLA Policies CRUD Table */}
+            {slaSubTab === "policies" && (
+              <div className="space-y-4">
+                <div className={`admin-card overflow-hidden ${isDark ? "admin-dark" : ""}`}>
+                  <div className="overflow-x-auto">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>Policy Name</th>
+                          <th>Priority Tier</th>
+                          <th>First Response Target</th>
+                          <th>Resolution Target</th>
+                          <th>Status</th>
+                          <th className="text-center">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {slaPolicies.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="text-center py-12">
+                              <div className="flex flex-col items-center justify-center space-y-3">
+                                <Clock className={`w-8 h-8 ${isDark ? "text-slate-600" : "text-slate-300"}`} />
+                                <p className={`text-sm font-medium ${isDark ? "text-slate-400" : "text-slate-500"}`}>No SLA Policies defined yet.</p>
+                                {user.role === "ADMIN" && (
+                                  <button onClick={openSlaModalForCreate} className="admin-btn admin-btn-primary text-xs">
+                                    <Plus className="w-3.5 h-3.5 mr-1 inline" />
+                                    Create First Policy
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ) : (
+                          slaPolicies.map((p) => {
+                            const priorityBadge =
+                              p.priority === "URGENT"
+                                ? "admin-badge-urgent"
+                                : p.priority === "HIGH"
+                                ? "admin-badge-high"
+                                : p.priority === "MEDIUM"
+                                ? "admin-badge-medium"
+                                : p.priority === "LOW"
+                                ? "admin-badge-low"
+                                : "admin-badge-open";
+
+                            return (
+                              <tr key={p.id} className={isDark ? "hover:bg-white/[0.01]" : "hover:bg-slate-50/50"}>
+                                <td>
+                                  <span className={`font-bold text-sm ${isDark ? "text-slate-100" : "text-slate-900"}`}>{p.name}</span>
+                                </td>
+                                <td>
+                                  <span className={`admin-badge uppercase ${priorityBadge}`}>{p.priority}</span>
+                                </td>
+                                <td>
+                                  <span className="font-medium text-xs">
+                                    {p.firstResponseHours >= 1 ? `${p.firstResponseHours} hr${p.firstResponseHours > 1 ? "s" : ""}` : `${p.firstResponseHours * 60} mins`}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span className="font-medium text-xs">
+                                    {p.resolutionHours >= 1 ? `${p.resolutionHours} hr${p.resolutionHours > 1 ? "s" : ""}` : `${p.resolutionHours * 60} mins`}
+                                  </span>
+                                </td>
+                                <td>
+                                  <button
+                                    onClick={() => handleToggleSlaPolicy(p)}
+                                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
+                                      p.isActive
+                                        ? isDark ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-emerald-50 border-emerald-200 text-emerald-700"
+                                        : isDark ? "bg-slate-800 border-slate-700 text-slate-500" : "bg-slate-100 border-slate-200 text-slate-500"
+                                    }`}
+                                  >
+                                    {p.isActive ? "● Active" : "○ Inactive"}
+                                  </button>
+                                </td>
+                                <td className="text-center">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <button
+                                      onClick={() => openSlaModalForEdit(p)}
+                                      className={`p-1.5 rounded transition-all ${
+                                        isDark ? "hover:bg-white/[0.08] text-slate-400 hover:text-white" : "hover:bg-slate-100 text-slate-500 hover:text-slate-900"
+                                      }`}
+                                      title="Edit Policy"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    {user.role === "ADMIN" && (
+                                      <button
+                                        onClick={() => handleDeleteSlaPolicy(p.id, p.name)}
+                                        className="p-1.5 rounded transition-all hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-red-500"
+                                        title="Delete Policy"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Sub-Tab 2: SLA Analytics & Compliance */}
+            {slaSubTab === "metrics" && (() => {
               const resolvedTickets = tickets.filter(t => t.status === "RESOLVED" || t.status === "CLOSED");
               const respondedTickets = tickets.filter(t => t.firstResponseAt);
 
@@ -4189,9 +4535,19 @@ export default function AdminDashboard() {
                 }
               });
 
+              const totalBreaches = responseBreaches + resolutionBreaches;
+              const compliancePct = tickets.length > 0 ? Math.max(0, Math.round(((tickets.length - totalBreaches) / tickets.length) * 100)) : 100;
+
               return (
                 <>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+                    <div className={`admin-card p-5 ${isDark ? "admin-dark" : ""}`}>
+                      <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Overall Compliance</p>
+                      <p className={`text-3xl font-extrabold ${compliancePct >= 90 ? "text-emerald-500" : compliancePct >= 75 ? "text-amber-500" : "text-red-500"}`}>
+                        {compliancePct}%
+                      </p>
+                      <p className={`text-[10px] mt-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Target SLA compliance rate</p>
+                    </div>
                     <div className={`admin-card p-5 ${isDark ? "admin-dark" : ""}`}>
                       <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Avg Response Time</p>
                       <p className="text-3xl font-extrabold text-[#38b1f7]">{avgFrt} hrs</p>
@@ -4203,41 +4559,57 @@ export default function AdminDashboard() {
                       <p className={`text-[10px] mt-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Based on {resolvedTickets.length} resolved tickets</p>
                     </div>
                     <div className={`admin-card p-5 ${isDark ? "admin-dark" : ""}`}>
-                      <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Response Breaches</p>
-                      <p className="text-3xl font-extrabold text-red-500">{responseBreaches}</p>
-                      <p className={`text-[10px] mt-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Exceeded response SLA time limit</p>
-                    </div>
-                    <div className={`admin-card p-5 ${isDark ? "admin-dark" : ""}`}>
-                      <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${isDark ? "text-[#94a3b8]" : "text-slate-400"}`}>Resolution Breaches</p>
-                      <p className="text-3xl font-extrabold text-red-500">{resolutionBreaches}</p>
-                      <p className={`text-[10px] mt-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Exceeded resolution SLA time limit</p>
+                      <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Total Breaches</p>
+                      <p className="text-3xl font-extrabold text-red-500">{totalBreaches}</p>
+                      <p className={`text-[10px] mt-1.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>{responseBreaches} response / {resolutionBreaches} resolution</p>
                     </div>
                   </div>
 
                   <div className={`admin-card p-6 space-y-4 ${isDark ? "admin-dark" : ""}`}>
-                    <h3 className={`text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>SLA Threshold Guidelines</h3>
+                    <h3 className={`text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Active SLA Policy Targets</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                      <div className={`p-4 border rounded-xl ${isDark ? "bg-[#38b1f7]/5 border-[#38b1f7]/15" : "bg-blue-50 border-blue-100"}`}>
-                        <p className="font-bold text-red-500">Urgent / High Priority</p>
-                        <p className="mt-1">Response: Within 2 hours</p>
-                        <p>Resolution: Within 8 hours</p>
-                      </div>
-                      <div className={`p-4 border rounded-xl ${isDark ? "bg-amber-500/5 border-amber-500/15" : "bg-amber-50 border-amber-100"}`}>
-                        <p className="font-bold text-amber-500">Medium Priority</p>
-                        <p className="mt-1">Response: Within 8 hours</p>
-                        <p>Resolution: Within 24 hours</p>
-                      </div>
-                      <div className={`p-4 border rounded-xl ${isDark ? "bg-slate-500/5 border-slate-500/15" : "bg-slate-50 border-slate-200"}`}>
-                        <p className="font-bold text-slate-655 dark:text-slate-350">Low Priority</p>
-                        <p className="mt-1">Response: Within 24 hours</p>
-                        <p>Resolution: Within 72 hours</p>
-                      </div>
+                      {slaPolicies.filter(p => p.isActive).map(policy => (
+                        <div key={policy.id} className={`p-4 border rounded-xl ${
+                          policy.priority === "URGENT" || policy.priority === "HIGH"
+                            ? isDark ? "bg-[#38b1f7]/5 border-[#38b1f7]/15" : "bg-blue-50 border-blue-100"
+                            : policy.priority === "MEDIUM"
+                            ? isDark ? "bg-amber-500/5 border-amber-500/15" : "bg-amber-50 border-amber-100"
+                            : isDark ? "bg-slate-500/5 border-slate-500/15" : "bg-slate-50 border-slate-200"
+                        }`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="font-bold">{policy.name}</p>
+                            <span className="admin-badge uppercase text-[9px]">{policy.priority}</span>
+                          </div>
+                          <p className="mt-2 text-slate-500 dark:text-slate-400">First Response: <span className="font-bold text-slate-800 dark:text-slate-200">{policy.firstResponseHours}h</span></p>
+                          <p className="text-slate-500 dark:text-slate-400">Resolution Target: <span className="font-bold text-slate-800 dark:text-slate-200">{policy.resolutionHours}h</span></p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </>
               );
             })()}
           </div>
+        )}
+
+        {showSlaModal && (
+          <SlaPolicyModal
+            isDark={isDark}
+            editingPolicy={editingSlaPolicy}
+            name={slaFormName}
+            setName={setSlaFormName}
+            priority={slaFormPriority}
+            setPriority={setSlaFormPriority}
+            firstResponseHours={slaFormFirstResponse}
+            setFirstResponseHours={setSlaFormFirstResponse}
+            resolutionHours={slaFormResolution}
+            setResolutionHours={setSlaFormResolution}
+            isActive={slaFormIsActive}
+            setIsActive={setSlaFormIsActive}
+            submitting={submittingSla}
+            onClose={() => setShowSlaModal(false)}
+            onSubmit={handleSaveSlaPolicy}
+          />
         )}
 
         {creditsEditingUser && (
@@ -5253,11 +5625,12 @@ interface TeamModalProps {
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => void;
   submitLabel: string;
+  submitting?: boolean;
 }
 
 function TeamModal({
   title, subtitle, isDark, name, onNameChange, description, onDescriptionChange,
-  selectedMemberIds, onMembersChange, agents, onClose, onSubmit, submitLabel,
+  selectedMemberIds, onMembersChange, agents, onClose, onSubmit, submitLabel, submitting = false,
 }: TeamModalProps) {
   const [memberSearch, setMemberSearch] = React.useState("");
 
@@ -5482,7 +5855,8 @@ function SearchableSelect({ value, onChange, options, placeholder, isDark, disab
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [value]);
 
-  const filteredOptions = options.filter(opt =>
+  const uniqueOptions = Array.from(new Set(options || []));
+  const filteredOptions = uniqueOptions.filter(opt =>
     opt.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -5521,9 +5895,9 @@ function SearchableSelect({ value, onChange, options, placeholder, isDark, disab
           {filteredOptions.length === 0 ? (
             <div className="p-2.5 text-xs text-slate-400 text-center">No categories found</div>
           ) : (
-            filteredOptions.map((opt) => (
+            filteredOptions.map((opt, idx) => (
               <div
-                key={opt}
+                key={`${opt}-${idx}`}
                 onClick={() => {
                   onChange(opt);
                   setSearch(opt);
@@ -5560,10 +5934,11 @@ interface ResolveTicketModalProps {
   onHoursChange: (v: number) => void;
   onNotesChange: (v: string) => void;
   onSubmit: (e: React.FormEvent, files: File[]) => void;
+  submitting?: boolean;
 }
 
 function ResolveTicketModal({
-  ticket, customerUser, hours, notes, isDark, onClose, onHoursChange, onNotesChange, onSubmit
+  ticket, customerUser, hours, notes, isDark, onClose, onHoursChange, onNotesChange, onSubmit, submitting = false
 }: ResolveTicketModalProps) {
   const [screenshots, setScreenshots] = React.useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = React.useState<string[]>([]);
@@ -5786,3 +6161,255 @@ function ResolveTicketModal({
     </div>
   );
 }
+
+// ── Pagination Controls Helper ────────────────────────────────────
+function PaginationControls({
+  currentPage,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+  isDark,
+  itemLabel = "items",
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+  isDark: boolean;
+  itemLabel?: string;
+}) {
+  if (totalItems === 0) return null;
+  const startItem = (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalItems);
+
+  return (
+    <div className={`flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t text-xs ${
+      isDark ? "border-white/[0.06] bg-slate-900/40 text-slate-400" : "border-slate-200/80 bg-slate-50/50 text-slate-600"
+    }`}>
+      <div className="flex items-center gap-3">
+        <span>
+          Showing <span className="font-semibold">{startItem}</span> to <span className="font-semibold">{endItem}</span> of{" "}
+          <span className="font-semibold">{totalItems}</span> {itemLabel}
+        </span>
+        <div className="flex items-center gap-1.5 ml-2">
+          <span className="text-[11px]">Per page:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            className={`admin-select text-xs py-0.5 px-2 rounded border ${
+              isDark ? "bg-slate-800 border-white/[0.1] text-white" : "bg-white border-slate-200 text-slate-700"
+            }`}
+            style={{ height: 26 }}
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage <= 1}
+          className={`px-2.5 py-1 rounded border text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+            isDark
+              ? "bg-slate-800 border-white/[0.1] text-slate-300 hover:bg-slate-700 hover:text-white"
+              : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
+          }`}
+        >
+          Previous
+        </button>
+
+        {Array.from({ length: totalPages }, (_, i) => i + 1)
+          .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+          .map((page, idx, arr) => {
+            const prev = arr[idx - 1];
+            const showEllipsis = prev && page - prev > 1;
+            return (
+              <React.Fragment key={page}>
+                {showEllipsis && <span className="px-1 text-slate-400">...</span>}
+                <button
+                  onClick={() => onPageChange(page)}
+                  className={`w-7 h-7 rounded border text-xs font-semibold transition-all ${
+                    currentPage === page
+                      ? isDark
+                        ? "bg-[#38b1f7] border-[#38b1f7] text-white"
+                        : "bg-blue-600 border-blue-600 text-white"
+                      : isDark
+                      ? "bg-slate-800 border-white/[0.1] text-slate-300 hover:bg-slate-700"
+                      : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  {page}
+                </button>
+              </React.Fragment>
+            );
+          })}
+
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage >= totalPages}
+          className={`px-2.5 py-1 rounded border text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+            isDark
+              ? "bg-slate-800 border-white/[0.1] text-slate-300 hover:bg-slate-700 hover:text-white"
+              : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
+          }`}
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── SLA Policy Create/Edit Modal ──────────────────────────────────
+function SlaPolicyModal({
+  isDark,
+  editingPolicy,
+  name,
+  setName,
+  priority,
+  setPriority,
+  firstResponseHours,
+  setFirstResponseHours,
+  resolutionHours,
+  setResolutionHours,
+  isActive,
+  setIsActive,
+  submitting,
+  onClose,
+  onSubmit,
+}: {
+  isDark: boolean;
+  editingPolicy: SlaPolicy | null;
+  name: string;
+  setName: (v: string) => void;
+  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT" | "ALL";
+  setPriority: (v: "LOW" | "MEDIUM" | "HIGH" | "URGENT" | "ALL") => void;
+  firstResponseHours: number | string;
+  setFirstResponseHours: (v: number | string) => void;
+  resolutionHours: number | string;
+  setResolutionHours: (v: number | string) => void;
+  isActive: boolean;
+  setIsActive: (v: boolean) => void;
+  submitting: boolean;
+  onClose: () => void;
+  onSubmit: (e: React.FormEvent) => void;
+}) {
+  return (
+    <div className={`admin-modal-overlay ${isDark ? "admin-dark" : ""}`} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className={`admin-modal w-full max-w-[500px] ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
+        <div className="flex items-start justify-between mb-5 pb-4 border-b dark:border-white/[0.06] border-slate-100">
+          <div>
+            <h3 className={`text-base font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+              {editingPolicy ? "Edit SLA Policy" : "Create New SLA Policy"}
+            </h3>
+            <p className={`text-xs mt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+              Define response and resolution SLA targets per priority tier.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className={`p-1.5 rounded-lg ${isDark ? "text-slate-400 hover:text-white hover:bg-white/[0.05]" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"}`}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="admin-form-group">
+            <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Policy Name <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Critical SLA Target, Standard Tier SLA"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className={`admin-input ${isDark ? "admin-dark" : ""} w-full text-xs`}
+              style={{ height: 38 }}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="admin-form-group">
+              <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Priority Tier <span className="text-red-500">*</span></label>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as any)}
+                className={`admin-select ${isDark ? "admin-dark" : ""} w-full text-xs`}
+                style={{ height: 38 }}
+              >
+                <option value="URGENT">URGENT</option>
+                <option value="HIGH">HIGH</option>
+                <option value="MEDIUM">MEDIUM</option>
+                <option value="LOW">LOW</option>
+                <option value="ALL">ALL (Fallback)</option>
+              </select>
+            </div>
+
+            <div className="admin-form-group">
+              <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Status</label>
+              <div className="flex items-center gap-2 pt-2">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isActive}
+                    onChange={(e) => setIsActive(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-[#38b1f7]"></div>
+                  <span className={`ml-2 text-xs font-semibold ${isActive ? "text-green-500" : isDark ? "text-slate-500" : "text-slate-400"}`}>
+                    {isActive ? "Active" : "Inactive"}
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="admin-form-group">
+              <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>First Response Target (Hours) <span className="text-red-500">*</span></label>
+              <input
+                type="number"
+                required
+                min={0.001}
+                step="any"
+                value={firstResponseHours}
+                onChange={(e) => setFirstResponseHours(e.target.value)}
+                className={`admin-input ${isDark ? "admin-dark" : ""} w-full text-xs`}
+                style={{ height: 38 }}
+              />
+            </div>
+
+            <div className="admin-form-group">
+              <label className={`admin-form-label ${isDark ? "admin-dark" : ""}`}>Resolution Target (Hours) <span className="text-red-500">*</span></label>
+              <input
+                type="number"
+                required
+                min={0.001}
+                step="any"
+                value={resolutionHours}
+                onChange={(e) => setResolutionHours(e.target.value)}
+                className={`admin-input ${isDark ? "admin-dark" : ""} w-full text-xs`}
+                style={{ height: 38 }}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t dark:border-white/[0.06] border-slate-100">
+            <button type="button" onClick={onClose} className="admin-btn admin-btn-ghost text-xs" style={{ height: 36 }}>
+              Cancel
+            </button>
+            <button type="submit" disabled={submitting} className="admin-btn admin-btn-primary text-xs" style={{ height: 36 }}>
+              {submitting ? "Saving..." : editingPolicy ? "Update Policy" : "Create Policy"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+

@@ -349,11 +349,10 @@ export default function CustomerDashboard() {
     title: "",
     description: "",
     categoryId: "",
-    priority: "MEDIUM" as "LOW" | "MEDIUM" | "HIGH" | "URGENT",
+    priority: "LOW" as "LOW" | "MEDIUM" | "HIGH" | "URGENT",
     affectedDomain: "",
-    issueType: "" as "" | "billing" | "technical" | "critical" | "other",
   });
-  const [isIssueTypeOpen, setIsIssueTypeOpen] = useState(false);
+  const [isPriorityOpen, setIsPriorityOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [wizardStep, setWizardStep] = useState<"select-domain" | "select-subscription" | "self-help" | "intake" | "routing">("select-domain");
   const [suggestedArticles, setSuggestedArticles] = useState<any[]>([]);
@@ -600,15 +599,9 @@ export default function CustomerDashboard() {
       setSubmittingCreate(true);
       setCreateError(null);
 
-      // Determine routing category string
-      let issueCategory = "Technical Support";
-      if (createForm.issueType === "billing") {
-        issueCategory = "Billing / Renewals";
-      } else if (createForm.issueType === "critical") {
-        issueCategory = "Critical Issues";
-      } else if (createForm.issueType === "technical") {
-        issueCategory = "Technical Support";
-      }
+      // Determine routing category string from DB category
+      const selectedCat = categories.find(c => c.id === createForm.categoryId);
+      const issueCategory = selectedCat ? selectedCat.name : "Technical Support";
 
       // 1. Create the Ticket
       const res = await fetchWithAuth("/tickets", {
@@ -678,10 +671,10 @@ export default function CustomerDashboard() {
         title: "",
         description: "",
         categoryId: categories.length > 0 ? categories[0].id : "",
-        priority: "MEDIUM",
+        priority: "LOW",
         affectedDomain: "",
-        issueType: "",
       });
+      setIsPriorityOpen(false);
       setSelectedFile(null);
       setSelectedDomainId("");
       setSelectedServiceId("");
@@ -709,10 +702,6 @@ export default function CustomerDashboard() {
 
     // ── Client-side validation (mirrors API Zod schema) ───────────────────────
     const newFieldErrors: Record<string, string> = {};
-    if (!createForm.issueType) {
-      setCreateError("Please select an issue type.");
-      return;
-    }
     if (!createForm.title.trim()) {
       newFieldErrors["title"] = "Title is required.";
     } else if (createForm.title.trim().length < 3) {
@@ -3205,148 +3194,6 @@ export default function CustomerDashboard() {
                     </div>
                   </div>
 
-                  {/* Issue Type Selector */}
-                  <div className="space-y-2">
-                    {(() => {
-                      const issueTypeOptions = [
-                        {
-                          key: "technical" as const,
-                          label: "Technical Support",
-                          desc: "Configuration, connectivity, and software issues",
-                          icon: Cpu,
-                          color: "text-[#38b1f7]"
-                        },
-                        {
-                          key: "billing" as const,
-                          label: "Billing / Renewals",
-                          desc: "Invoices, subscriptions, and payment queries",
-                          icon: Receipt,
-                          color: "text-violet-400"
-                        },
-                        {
-                          key: "critical" as const,
-                          label: "Critical / Outage",
-                          desc: "Service down or business completely blocked",
-                          icon: ShieldAlert,
-                          color: "text-red-400"
-                        },
-                        {
-                          key: "other" as const,
-                          label: "General / Other",
-                          desc: "Account management and general inquiries",
-                          icon: HelpCircle,
-                          color: "text-slate-400"
-                        }
-                      ];
-
-                      return (
-                        <div className="relative mt-2" id="issue-type-dropdown-container">
-                          {/* Floating Label sitting on border */}
-                          <span className={`absolute left-3 -top-2 px-1.5 text-[10px] font-bold uppercase tracking-wider transition-all z-10 ${
-                            isDark 
-                              ? 'bg-[#0f172a] text-slate-400' 
-                              : 'bg-white text-slate-550'
-                          }`}>
-                            Issue Type <span className="text-red-400">*</span>
-                          </span>
-
-                          {/* Dropdown Trigger Button */}
-                          <button
-                            type="button"
-                            onClick={() => setIsIssueTypeOpen(!isIssueTypeOpen)}
-                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-left outline-none transition-all duration-200 min-h-[52px] ${
-                              isDark
-                                ? 'bg-slate-950/40 border-slate-700/60 hover:border-slate-500 text-white focus:border-[#38b1f7] focus:shadow-[0_0_0_1px_rgba(56,177,247,0.5)]'
-                                : 'bg-white border-slate-200 hover:border-slate-400 text-slate-900 focus:border-[#38b1f7] focus:shadow-[0_0_0_1px_rgba(56,177,247,0.5)]'
-                            }`}
-                          >
-                            {(() => {
-                              const selectedOpt = issueTypeOptions.find(o => o.key === createForm.issueType);
-                              if (selectedOpt) {
-                                const Icon = selectedOpt.icon;
-                                return (
-                                  <div className="flex items-center gap-3">
-                                    <Icon className={`w-4 h-4 shrink-0 ${selectedOpt.color}`} />
-                                    <div className="leading-tight">
-                                      <p className="text-xs font-bold">{selectedOpt.label}</p>
-                                      <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{selectedOpt.desc}</p>
-                                    </div>
-                                  </div>
-                                );
-                              }
-                              return (
-                                <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                                  Select issue type...
-                                </span>
-                              );
-                            })()}
-                            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isIssueTypeOpen ? 'rotate-180' : ''}`} />
-                          </button>
-
-                          {/* Dropdown Menu Options */}
-                          {isIssueTypeOpen && (
-                            <div className={`absolute left-0 right-0 mt-1.5 rounded-xl border shadow-xl z-50 overflow-hidden max-h-[300px] overflow-y-auto ${
-                              isDark
-                                ? 'bg-slate-950 border-slate-800 text-slate-100'
-                                : 'bg-white border-slate-200 text-slate-800'
-                            }`}>
-                              <div className="p-1.5 space-y-1">
-                                {issueTypeOptions.map((opt) => {
-                                  const isSelected = createForm.issueType === opt.key;
-                                  const Icon = opt.icon;
-                                  return (
-                                    <button
-                                      key={opt.key}
-                                      type="button"
-                                      onClick={() => {
-                                        const newPriority = opt.key === "critical" ? "HIGH" : createForm.priority;
-                                        let catId = createForm.categoryId;
-                                        if (opt.key === "billing") {
-                                          const billingCat = categories.find(
-                                            c => c.name.toLowerCase().includes("billing") || c.name.toLowerCase().includes("renew")
-                                          );
-                                          if (billingCat) catId = billingCat.id;
-                                        }
-                                        setCreateForm(prev => ({
-                                          ...prev,
-                                          issueType: opt.key,
-                                          priority: newPriority,
-                                          categoryId: catId,
-                                        }));
-                                        setCreateError(null);
-                                        setIsIssueTypeOpen(false);
-                                      }}
-                                      className={`w-full flex items-center justify-between p-2.5 rounded-lg text-left transition-colors ${
-                                        isSelected
-                                          ? isDark
-                                            ? 'bg-[#38b1f7]/10 text-white'
-                                            : 'bg-sky-50 text-[#0c7fc0]'
-                                          : isDark
-                                            ? 'hover:bg-slate-900/60 text-slate-300'
-                                            : 'hover:bg-slate-50 text-slate-700'
-                                      }`}
-                                    >
-                                      <div className="flex items-center gap-3">
-                                        <Icon className={`w-4 h-4 shrink-0 ${opt.color}`} />
-                                        <div className="leading-tight">
-                                          <p className={`text-xs font-bold ${isSelected ? 'text-[#38b1f7]' : ''}`}>{opt.label}</p>
-                                          <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-450'}`}>{opt.desc}</p>
-                                        </div>
-                                      </div>
-                                      {isSelected && (
-                                        <Check className={`w-4 h-4 text-[#38b1f7]`} />
-                                      )}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-
                   {/* Title */}
                   <div className="space-y-1.5">
                     <label className={`text-[10px] font-bold uppercase tracking-wider ${
@@ -3380,7 +3227,7 @@ export default function CustomerDashboard() {
                     )}
                   </div>
 
-                  {/* Affected Domain + Category — side by side */}
+                  {/* Affected Domain + Service Category (From DB) — side by side */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className={`text-[10px] font-bold uppercase tracking-wider ${
@@ -3404,54 +3251,121 @@ export default function CustomerDashboard() {
                     <div className="space-y-1.5">
                       <label className={`text-[10px] font-bold uppercase tracking-wider ${
                         isDark ? 'text-slate-400' : 'text-slate-500'
-                      }`}>Service Category</label>
-                      <select
-                        value={createForm.categoryId}
-                        onChange={(e) => setCreateForm(prev => ({ ...prev, categoryId: e.target.value }))}
-                        className={`text-sm h-[42px] rounded-xl outline-none transition-all duration-200 px-3 w-full border appearance-none ${
-                          isDark
-                            ? "bg-[#0a0f1e] border-white/[0.06] focus:border-[#38b1f7] text-[#F8FAFC]"
-                            : "bg-white border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] text-slate-900"
-                        }`}
-                        disabled={submittingCreate || loadingSuggestions || loadingCategories}
-                      >
-                        {categories.map((cat) => (
-                          <option key={cat.id} value={cat.id}>{cat.name}</option>
-                        ))}
-                      </select>
+                      }`}>Service Category <span className="text-red-400">*</span></label>
+                      <div className="relative">
+                        <select
+                          value={createForm.categoryId}
+                          onChange={(e) => setCreateForm(prev => ({ ...prev, categoryId: e.target.value }))}
+                          className={`text-sm h-[42px] rounded-xl outline-none transition-all duration-200 px-3.5 w-full border appearance-none pr-9 ${
+                            isDark
+                              ? "bg-[#0a0f1e] border-white/[0.06] focus:border-[#38b1f7] text-[#F8FAFC]"
+                              : "bg-white border-slate-200 hover:border-slate-300 focus:border-[#38b1f7] text-slate-900"
+                          }`}
+                          disabled={submittingCreate || loadingSuggestions || loadingCategories}
+                        >
+                          {categories.length === 0 ? (
+                            <option value="">{loadingCategories ? "Loading..." : "General Support"}</option>
+                          ) : (
+                            categories.map((cat) => (
+                              <option key={cat.id} value={cat.id} className={isDark ? "bg-slate-900 text-white" : "bg-white text-slate-900"}>
+                                {cat.name}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
                     </div>
                   </div>
 
-                  {/* Priority */}
-                  <div className="space-y-2">
-                    <label className={`text-[10px] font-bold uppercase tracking-wider ${
-                      isDark ? 'text-slate-400' : 'text-slate-500'
-                    }`}>Business Impact / Priority</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {([
-                        { val: "LOW", label: "Low", sub: "Usable, no impact", color: "text-slate-400", activeCls: isDark ? "border-slate-500 bg-slate-800" : "border-slate-500 bg-slate-100" },
-                        { val: "MEDIUM", label: "Medium", sub: "Impact, workaround exists", color: "text-amber-400", activeCls: isDark ? "border-amber-500/60 bg-amber-950/30" : "border-amber-400 bg-amber-50" },
-                        { val: "HIGH", label: "High / Urgent", sub: "Down, no workaround", color: "text-red-400", activeCls: isDark ? "border-red-500/60 bg-red-950/30" : "border-red-400 bg-red-50" },
-                      ] as const).map(({ val, label, sub, color, activeCls }) => (
-                        <button
-                          key={val}
-                          type="button"
-                          onClick={() => setCreateForm(prev => ({ ...prev, priority: val }))}
-                          className={`p-2.5 rounded-xl border text-left transition-all duration-200 ${
-                            createForm.priority === val
-                              ? activeCls
-                              : isDark ? 'bg-slate-900/40 border-slate-800 hover:border-slate-700' : 'bg-slate-50 border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          <span className={`text-[11px] font-bold block ${
-                            createForm.priority === val ? color : isDark ? 'text-slate-300' : 'text-slate-700'
-                          }`}>{label}</span>
-                          <span className={`text-[9px] leading-snug ${
-                            isDark ? 'text-slate-500' : 'text-slate-400'
-                          }`}>{sub}</span>
-                        </button>
-                      ))}
-                    </div>
+                  {/* Priority Selection Dropdown (Matching screenshot UI) */}
+                  <div className="relative mt-3 mb-1" id="priority-dropdown-container">
+                    {/* Floating Label sitting on upper border */}
+                    <span className={`absolute left-3 -top-2.5 px-1.5 text-[11px] font-medium transition-all z-10 ${
+                      isDark
+                        ? 'bg-[#0f172a] text-[#38b1f7]'
+                        : 'bg-white text-sky-600'
+                    }`}>
+                      Priority selection
+                    </span>
+
+                    {/* Dropdown Trigger Button */}
+                    <button
+                      type="button"
+                      onClick={() => setIsPriorityOpen(!isPriorityOpen)}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-left outline-none transition-all duration-200 min-h-[50px] ${
+                        isPriorityOpen
+                          ? 'border-[#38b1f7] ring-1 ring-[#38b1f7]'
+                          : isDark
+                            ? 'bg-slate-950/40 border-slate-700/60 hover:border-slate-500 text-white'
+                            : 'bg-white border-slate-300 hover:border-slate-400 text-slate-900'
+                      }`}
+                    >
+                      {(() => {
+                        const priorityOptions = [
+                          { val: "URGENT", codeLabel: "P1 - Critical impact" },
+                          { val: "HIGH", codeLabel: "P2 - High impact" },
+                          { val: "MEDIUM", codeLabel: "P3 - Medium impact" },
+                          { val: "LOW", codeLabel: "P4 - Low impact" },
+                        ];
+                        const selectedOpt = priorityOptions.find(o => o.val === createForm.priority) || priorityOptions[3];
+                        return (
+                          <span className={`text-sm font-medium ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                            {selectedOpt.codeLabel}
+                          </span>
+                        );
+                      })()}
+                      <ChevronDown className={`w-4 h-4 text-[#38b1f7] transition-transform ${isPriorityOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {/* Priority Dropdown Options Menu */}
+                    {isPriorityOpen && (
+                      <div className={`absolute left-0 right-0 mt-1 rounded-xl border shadow-xl z-50 overflow-hidden ${
+                        isDark
+                          ? 'bg-[#0b1329] border-slate-700/80 text-slate-100'
+                          : 'bg-white border-slate-200 text-slate-800'
+                      }`}>
+                        <div className="py-1">
+                          {[
+                            { val: "URGENT", codeLabel: "P1 - Critical impact", subLabel: "Service unusable in production" },
+                            { val: "HIGH", codeLabel: "P2 - High impact", subLabel: "Service use severely impaired" },
+                            { val: "MEDIUM", codeLabel: "P3 - Medium impact", subLabel: "Service use partially impaired" },
+                            { val: "LOW", codeLabel: "P4 - Low impact", subLabel: "Service fully usable" },
+                          ].map((opt) => {
+                            const isSelected = createForm.priority === opt.val;
+                            return (
+                              <button
+                                key={opt.val}
+                                type="button"
+                                onClick={() => {
+                                  setCreateForm(prev => ({ ...prev, priority: opt.val as any }));
+                                  setIsPriorityOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between px-4 py-2.5 text-left transition-colors ${
+                                  isSelected
+                                    ? isDark
+                                      ? 'bg-slate-800/90 text-white'
+                                      : 'bg-slate-200/80 text-slate-900'
+                                    : isDark
+                                      ? 'hover:bg-slate-800/50 text-slate-200'
+                                      : 'hover:bg-slate-50 text-slate-800'
+                                }`}
+                              >
+                                <div>
+                                  <p className="text-xs font-bold leading-tight">{opt.codeLabel}</p>
+                                  <p className={`text-[11px] mt-0.5 leading-tight ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                    {opt.subLabel}
+                                  </p>
+                                </div>
+                                {isSelected && (
+                                  <Check className="w-4 h-4 text-[#38b1f7] shrink-0 ml-3" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Description */}
@@ -3746,10 +3660,6 @@ export default function CustomerDashboard() {
                         type="button"
                         onClick={() => {
                           setWizardStep("intake");
-                          setCreateForm(prev => ({
-                            ...prev,
-                            issueType: prev.issueType || "technical",
-                          }));
                         }}
                         className="btn-cyber h-10 px-5 text-xs flex items-center gap-2"
                       >
@@ -3765,10 +3675,9 @@ export default function CustomerDashboard() {
             {/* ── STEP 3: ROUTING PREVIEW + FINAL SUBMIT ───────────────────── */}
             {wizardStep === "routing" && (() => {
               // Determine routing destination for display
-              const isBilling = createForm.issueType === "billing" ||
-                categories.find(c => c.id === createForm.categoryId)?.name?.toLowerCase().includes("billing") ||
-                categories.find(c => c.id === createForm.categoryId)?.name?.toLowerCase().includes("renew");
-              const isCritical = createForm.issueType === "critical" || createForm.priority === "HIGH" || createForm.priority === "URGENT";
+              const selectedCat = categories.find(c => c.id === createForm.categoryId);
+              const isBilling = selectedCat?.name?.toLowerCase().includes("billing") || selectedCat?.name?.toLowerCase().includes("renew");
+              const isCritical = createForm.priority === "HIGH" || createForm.priority === "URGENT";
 
               type RoutingDest = { dept: string; who: string; icon: React.ElementType; color: string; bg: string; escalated?: boolean };
 
