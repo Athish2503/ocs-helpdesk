@@ -45,8 +45,12 @@ import {
   Activity,
   Shield,
   Check,
+  Copy,
   ChevronDown,
   ArrowUpCircle,
+  UploadCloud,
+  Eye,
+  Image as ImageIcon,
 } from "lucide-react";
 
 interface Category {
@@ -172,7 +176,9 @@ function CustomerNavItem({ label, icon: Icon, active, collapsed, isDark, onClick
           </span>
         )}
         {collapsed && badge !== undefined && badge > 0 && (
-          <div className="absolute top-1.5 right-2.5 w-2.5 h-2.5 rounded-full bg-[#38b1f7] ring-2 ring-[#020617] animate-pulse" />
+          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center px-1 rounded-full text-[9px] font-mono font-bold bg-[#38b1f7] text-[#020617] shadow-md z-10">
+            {badge}
+          </span>
         )}
       </button>
 
@@ -353,7 +359,72 @@ export default function CustomerDashboard() {
     affectedDomain: "",
   });
   const [isPriorityOpen, setIsPriorityOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [previewImageModal, setPreviewImageModal] = useState<{ url: string; name: string } | null>(null);
+  const [resolvingTicketId, setResolvingTicketId] = useState<string | null>(null);
+  const [ticketSearch, setTicketSearch] = useState("");
+
+  const handleResolveTicketCustomer = async (ticketId: string) => {
+    try {
+      setResolvingTicketId(ticketId);
+      const res = await fetchWithAuth(`/tickets/${ticketId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "RESOLVED" }),
+      });
+      if (res.ok) {
+        setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: "RESOLVED" } : t));
+        if (detailedTicket?.id === ticketId) {
+          setDetailedTicket(prev => prev ? { ...prev, status: "RESOLVED" } : null);
+        }
+        toast.success("Ticket marked as resolved!");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "Failed to resolve ticket.");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "An error occurred.");
+    } finally {
+      setResolvingTicketId(null);
+    }
+  };
+
+  const handleAddFiles = (newFiles: FileList | File[] | null) => {
+    if (!newFiles) return;
+    const arr = Array.from(newFiles);
+    setSelectedFiles(prev => {
+      const existingKeys = new Set(prev.map(f => `${f.name}-${f.size}`));
+      const uniqueNew = arr.filter(f => !existingKeys.has(`${f.name}-${f.size}`));
+      return [...prev, ...uniqueNew];
+    });
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleAddFiles(e.dataTransfer.files);
+    }
+  };
+
   const [wizardStep, setWizardStep] = useState<"select-domain" | "select-subscription" | "self-help" | "intake" | "routing">("select-domain");
   const [suggestedArticles, setSuggestedArticles] = useState<any[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState<boolean>(false);
@@ -424,9 +495,9 @@ export default function CustomerDashboard() {
   }, []);
 
   // Fetch detailed ticket messages
-  const loadTicketDetails = useCallback(async (ticketId: string) => {
+  const loadTicketDetails = useCallback(async (ticketId: string, showLoader = true) => {
     try {
-      setLoadingDetails(true);
+      if (showLoader) setLoadingDetails(true);
       const res = await fetchWithAuth(`/tickets/${ticketId}`);
       if (res.ok) {
         const body = await res.json();
@@ -437,7 +508,7 @@ export default function CustomerDashboard() {
     } catch (err) {
       console.error("Failed to load ticket details:", err);
     } finally {
-      setLoadingDetails(false);
+      if (showLoader) setLoadingDetails(false);
     }
   }, []);
 
@@ -489,12 +560,29 @@ export default function CustomerDashboard() {
   // Sync details when selection changes
   useEffect(() => {
     if (selectedTicketId) {
-      loadTicketDetails(selectedTicketId);
+      loadTicketDetails(selectedTicketId, true);
     } else {
       setDetailedTicket(null);
       setMessages([]);
     }
   }, [selectedTicketId, loadTicketDetails]);
+
+  // Real-time background auto-polling for tickets & active conversation thread without page refresh
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      // Refresh tickets list silently to update statuses, assigned staff, etc.
+      loadTickets(false);
+
+      // Refresh selected ticket conversation thread silently
+      if (selectedTicketId) {
+        loadTicketDetails(selectedTicketId, false);
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [user, selectedTicketId, loadTickets, loadTicketDetails]);
 
   // ── Real-time CRM sync via Server-Sent Events ─────────────────────────────
   // Establishes a persistent SSE connection to /api/users/me/events.
@@ -613,9 +701,9 @@ export default function CustomerDashboard() {
           priority: createForm.priority,
           affectedDomain: createForm.affectedDomain.trim() || null,
           issueCategory,
-          domainId: selectedDomainId || null,
-          subscriptionId: selectedSubscriptionId || null,
-          serviceId: selectedServiceId || null,
+          domainId: selectedDomainId ? String(selectedDomainId) : null,
+          subscriptionId: selectedSubscriptionId ? String(selectedSubscriptionId) : null,
+          serviceId: selectedServiceId ? String(selectedServiceId) : null,
         }),
       });
 
@@ -644,22 +732,25 @@ export default function CustomerDashboard() {
 
       const createdTicket = resBody.data.ticket;
 
-      // 2. If a file is selected, upload it as an attachment
-      if (selectedFile) {
-        const formData = new FormData();
-        formData.append("file", selectedFile);
-
-        const uploadRes = await fetchWithAuth(`/tickets/${createdTicket.id}/attachments`, {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!uploadRes.ok) {
+      // 2. Upload multiple attachments if selected
+      if (selectedFiles && selectedFiles.length > 0) {
+        for (const file of selectedFiles) {
           try {
-            const errData = await uploadRes.json();
-            toast.warning(`Ticket created, but attachment upload failed: ${errData.error?.message || "Unknown validation error"}`);
-          } catch {
-            toast.warning("Ticket created, but attachment upload failed.");
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const uploadRes = await fetchWithAuth(`/tickets/${createdTicket.id}/attachments`, {
+              method: "POST",
+              body: formData,
+            });
+
+            if (!uploadRes.ok) {
+              const errData = await uploadRes.json().catch(() => null);
+              toast.warning(`Ticket created, but attachment ${file.name} failed: ${errData?.error?.message || "Validation error"}`);
+            }
+          } catch (err) {
+            console.error(`Attachment upload error for ${file.name}:`, err);
+            toast.warning(`Could not upload ${file.name}`);
           }
         }
       }
@@ -674,8 +765,8 @@ export default function CustomerDashboard() {
         priority: "LOW",
         affectedDomain: "",
       });
+      setSelectedFiles([]);
       setIsPriorityOpen(false);
-      setSelectedFile(null);
       setSelectedDomainId("");
       setSelectedServiceId("");
       setSelectedSubscriptionId("");
@@ -730,7 +821,7 @@ export default function CustomerDashboard() {
   // Submit Reply Message
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedTicketId) return;
+    if (!newMessage.trim() || !selectedTicketId || detailedTicket?.status === "CLOSED" || detailedTicket?.status === "RESOLVED") return;
 
     try {
       setSubmittingMessage(true);
@@ -1664,7 +1755,7 @@ export default function CustomerDashboard() {
 
                       {crmDetails.subscriptions.length > 0 ? (
                         <div className="space-y-4">
-                          {crmDetails.subscriptions.map((sub) => {
+                          {crmDetails.subscriptions.map((sub, sIdx) => {
                             // Map services for this subscription
                             const subServices = (sub.services && sub.services.length > 0)
                               ? sub.services.map(s => ({ name: s.serviceName || s.SKU, status: "ACTIVE", domainName: null }))
@@ -1672,7 +1763,7 @@ export default function CustomerDashboard() {
 
                             return (
                               <div
-                                key={sub.id}
+                                key={sub.id || sub.crmSubscriptionId || `sub-${sIdx}`}
                                 className={`p-6 border rounded-2xl transition-all duration-300 ${
                                   isDark
                                     ? 'bg-[#0F172A]/45 border-white/[0.05] hover:border-emerald-500/20'
@@ -1721,9 +1812,9 @@ export default function CustomerDashboard() {
 
                                   {subServices.length > 0 ? (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                      {subServices.map((svc, idx) => (
+                                      {subServices.map((svc, svcIdx) => (
                                         <div
-                                          key={idx}
+                                          key={svc.name ? `${svc.name}-${svcIdx}` : `sub-svc-${svcIdx}`}
                                           className={`p-3 rounded-xl border flex items-center justify-between transition-colors ${
                                             isDark
                                               ? 'bg-slate-900/40 border-white/[0.04] hover:border-sky-500/30'
@@ -1774,9 +1865,9 @@ export default function CustomerDashboard() {
                                 <h4 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>Active Services</h4>
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {crmDetails.services.map((svc) => (
+                                {crmDetails.services.map((svc, svcIdx) => (
                                   <div
-                                    key={svc.id}
+                                    key={svc.id || svc.crmServiceId || `svc-${svcIdx}`}
                                     className={`p-3 rounded-xl border flex items-center justify-between ${
                                       isDark ? 'bg-slate-900/40 border-white/[0.05]' : 'bg-slate-50 border-slate-200'
                                     }`}
@@ -1828,8 +1919,8 @@ export default function CustomerDashboard() {
 
                       {crmDetails.domains.length > 0 ? (
                         <div className="space-y-2.5">
-                          {crmDetails.domains.map((dom) => (
-                            <div key={dom.id} className={`p-3 rounded-xl border flex items-center justify-between transition-colors hover:border-indigo-500/30 ${
+                          {crmDetails.domains.map((dom, dIdx) => (
+                            <div key={dom.id || dom.crmDomainId || `dom-${dIdx}`} className={`p-3 rounded-xl border flex items-center justify-between transition-colors hover:border-indigo-500/30 ${
                               isDark ? 'bg-white/[0.01] border-white/[0.05]' : 'bg-slate-50/50 border-slate-100'
                             }`}>
                               <div className="flex items-center gap-3 min-w-0 pr-2">
@@ -1905,71 +1996,133 @@ export default function CustomerDashboard() {
               </div>
             )}
 
-            {activeTab === "tickets" && (
-              <div className="grid lg:grid-cols-12 gap-8 items-start h-full">
-                {/* Tickets list panel (7 cols if drawer is active, 12 if not) */}
-                <div className={`${selectedTicketId ? "lg:col-span-5" : "lg:col-span-12"} space-y-4 transition-all duration-300`}>
-                  <div className="flex items-center justify-between">
-                    <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>My Tickets </h3>
-                    <button
-                      onClick={() => setShowCreateModal(true)}
-                      className="btn-cyber h-9 text-xs px-4 py-0 flex items-center space-x-1.5 shadow-none"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>New Ticket</span>
-                    </button>
-                  </div>
+            {activeTab === "tickets" && (() => {
+              const filteredCustomerTickets = tickets.filter(t => {
+                if (!ticketSearch.trim()) return true;
+                const rawQuery = ticketSearch.trim().toLowerCase();
+                const cleanHashQuery = rawQuery.replace(/^#?tk-?/i, "");
+                const shortId = t.id.slice(0, 8).toLowerCase();
+                const fullId = t.id.toLowerCase();
 
-                  <div className="space-y-3">
-                    {loadingTickets ? (
-                      <div className="p-8 flex items-center justify-center">
-                        <Loader size="md" theme={theme} label="Loading ticket queue..." />
-                      </div>
-                    ) : tickets.length === 0 ? (
-                      <div className={`p-8 text-center text-sm border rounded-2xl ${
-                        isDark ? 'glass-card border-white/[0.06] text-slate-500' : 'bg-white border-slate-200 shadow-sm text-slate-400'
-                      }`}>
-                        No support tickets found. Create a ticket to get started.
-                      </div>
-                    ) : (
-                      tickets.map(t => (
-                        <div
-                          key={t.id}
-                          onClick={() => setSelectedTicketId(t.id)}
-                          className={`p-5 cursor-pointer text-left transition-all duration-200 border rounded-2xl ${
-                            selectedTicketId === t.id
-                              ? isDark
-                                ? "border-[#38b1f7]/50 bg-slate-900/60 shadow-[0_0_15px_rgba(56,177,247,0.08)]"
-                                : "border-[#38b1f7]/60 bg-white shadow-[0_4px_12px_rgba(56,177,247,0.08)]"
-                              : isDark
-                                ? "bg-[#0F172A]/45 border-white/[0.06] hover:border-[#38b1f7]/20 hover:bg-slate-900/20"
-                                : "bg-white border-slate-200/80 shadow-sm hover:border-[#38b1f7]/30 hover:bg-slate-50/50 hover:shadow-md"
+                return (
+                  fullId.includes(rawQuery) ||
+                  fullId.includes(cleanHashQuery) ||
+                  shortId.includes(cleanHashQuery) ||
+                  `#tk-${shortId}`.includes(rawQuery) ||
+                  `tk-${shortId}`.includes(rawQuery) ||
+                  t.title.toLowerCase().includes(rawQuery) ||
+                  t.description.toLowerCase().includes(rawQuery) ||
+                  (t.category?.name?.toLowerCase() || "").includes(rawQuery) ||
+                  t.status.toLowerCase().includes(rawQuery) ||
+                  t.priority.toLowerCase().includes(rawQuery)
+                );
+              });
+
+              return (
+                <div className="grid lg:grid-cols-12 gap-8 items-start h-full">
+                  {/* Tickets list panel (5 cols if drawer is active, 12 if not) */}
+                  <div className={`${selectedTicketId ? "lg:col-span-5" : "lg:col-span-12"} space-y-4 transition-all duration-300`}>
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                      <h3 className={`text-xs font-bold uppercase tracking-wider shrink-0 ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>My Tickets</h3>
+
+                      {/* Ticket Search Bar */}
+                      <div className="relative flex-1 max-w-sm">
+                        <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? 'text-slate-500' : 'text-slate-400'}`} />
+                        <input
+                          type="text"
+                          value={ticketSearch}
+                          onChange={e => setTicketSearch(e.target.value)}
+                          placeholder="Search Ticket ID, title, status..."
+                          className={`w-full text-xs h-9 rounded-xl pl-9 pr-3 outline-none transition-all ${
+                            isDark
+                              ? 'bg-slate-900/60 border border-white/10 text-white placeholder-slate-500 focus:border-[#38b1f7]'
+                              : 'bg-white border border-slate-200 text-slate-900 placeholder-slate-400 focus:border-[#38b1f7]'
                           }`}
-                        >
-                          <div className="flex items-start justify-between gap-4 mb-2">
-                            <h4 className={`font-bold text-sm truncate transition-colors ${
+                        />
+                        {ticketSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setTicketSearch("")}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="btn-cyber h-9 text-xs px-4 py-0 flex items-center space-x-1.5 shadow-none shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>New Ticket</span>
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {loadingTickets ? (
+                        <div className="p-8 flex items-center justify-center">
+                          <Loader size="md" theme={theme} label="Loading ticket queue..." />
+                        </div>
+                      ) : filteredCustomerTickets.length === 0 ? (
+                        <div className={`p-8 text-center text-sm border rounded-2xl ${
+                          isDark ? 'glass-card border-white/[0.06] text-slate-500' : 'bg-white border-slate-200 shadow-sm text-slate-400'
+                        }`}>
+                          {ticketSearch ? "No tickets match your search criteria." : "No support tickets found. Create a ticket to get started."}
+                        </div>
+                      ) : (
+                        filteredCustomerTickets.map(t => (
+                          <div
+                            key={t.id}
+                            onClick={() => setSelectedTicketId(t.id)}
+                            className={`p-5 cursor-pointer text-left transition-all duration-200 border rounded-2xl ${
+                              selectedTicketId === t.id
+                                ? isDark
+                                  ? "border-[#38b1f7]/50 bg-slate-900/60 shadow-[0_0_15px_rgba(56,177,247,0.08)]"
+                                  : "border-[#38b1f7]/60 bg-white shadow-[0_4px_12px_rgba(56,177,247,0.08)]"
+                                : isDark
+                                  ? "bg-[#0F172A]/45 border-white/[0.06] hover:border-[#38b1f7]/20 hover:bg-slate-900/20"
+                                  : "bg-white border-slate-200/80 shadow-sm hover:border-[#38b1f7]/30 hover:bg-slate-50/50 hover:shadow-md"
+                            }`}
+                          >
+                            {/* Ticket ID & Badges Top Row */}
+                            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(t.id);
+                                  toast.success("Ticket ID copied!");
+                                }}
+                                className="font-mono text-xs font-bold text-[#38b1f7] bg-[#38b1f7]/10 dark:bg-[#38b1f7]/15 px-2 py-0.5 rounded-md border border-[#38b1f7]/25 flex items-center gap-1 group/id cursor-pointer hover:bg-[#38b1f7]/20 transition-colors"
+                                title="Click to copy full Ticket ID"
+                              >
+                                #TK-{t.id.slice(0, 8).toUpperCase()}
+                                <Copy className="w-3 h-3 opacity-70 group-hover/id:opacity-100 shrink-0" />
+                              </span>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {t.isEscalated && (
+                                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-red-500 text-white flex items-center gap-0.5 border border-red-600 shadow-[0_0_10px_rgba(239,68,68,0.1)]">
+                                    <ArrowUpCircle className="w-2.5 h-2.5" />
+                                    ESCALATED
+                                  </span>
+                                )}
+                                <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${getStatusStyle(t.status)}`}>
+                                  {t.status}
+                                </span>
+                              </div>
+                            </div>
+
+                            <h4 className={`font-bold text-sm truncate mb-2 transition-colors ${
                               selectedTicketId === t.id
                                 ? isDark ? "text-[#38b1f7]" : "text-[#0d7fc0]"
                                 : isDark ? "text-slate-100 hover:text-[#38b1f7]" : "text-slate-800 hover:text-[#0d7fc0]"
                             }`}>{t.title}</h4>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {t.isEscalated && (
-                                <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-red-500 text-white flex items-center gap-0.5 border border-red-600 shadow-[0_0_10px_rgba(239,68,68,0.1)]">
-                                  <ArrowUpCircle className="w-2.5 h-2.5" />
-                                  ESCALATED
-                                </span>
-                              )}
-                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${getStatusStyle(t.status)}`}>
-                                {t.status}
-                              </span>
-                            </div>
-                          </div>
-                          
-                          <p className={`text-xs line-clamp-2 mb-4 leading-relaxed transition-colors ${
-                            isDark ? 'text-slate-400' : 'text-slate-500'
-                          }`}>
-                            {t.description}
-                          </p>
+                            
+                            <p className={`text-xs line-clamp-2 mb-4 leading-relaxed transition-colors ${
+                              isDark ? 'text-slate-400' : 'text-slate-500'
+                            }`}>
+                              {t.description}
+                            </p>
 
                           <div className={`flex items-center justify-between text-[10px] pt-3 border-t transition-colors ${
                             isDark ? 'border-white/[0.03] text-slate-400' : 'border-slate-100 text-slate-500'
@@ -1991,6 +2144,17 @@ export default function CustomerDashboard() {
                               </span>
                             </div>
                           </div>
+
+                          {(t.agent || t.status === "IN_PROGRESS") && (
+                            <div className={`mt-2.5 pt-2 border-t flex items-center justify-between text-[10px] ${
+                              isDark ? 'border-white/[0.04] text-emerald-400' : 'border-slate-100 text-emerald-700'
+                            }`}>
+                              <span className="flex items-center gap-1.5 font-bold">
+                                <User className="w-3 h-3 text-emerald-500" />
+                                <span>Assigned Staff: <strong className={isDark ? "text-emerald-300" : "text-emerald-800"}>{t.agent ? t.agent.name : "Support Staff"}</strong></span>
+                              </span>
+                            </div>
+                          )}
                         </div>
                       ))
                     )}
@@ -2014,8 +2178,19 @@ export default function CustomerDashboard() {
                         <div className={`p-5 border-b flex items-center justify-between transition-colors ${
                           isDark ? 'border-[#1E293B] bg-slate-900/40' : 'border-slate-200 bg-slate-50/50'
                         }`}>
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-2">
+                          <div className="space-y-1.5">
+                            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                              <span
+                                onClick={() => {
+                                  navigator.clipboard.writeText(detailedTicket.id);
+                                  toast.success("Ticket ID copied!");
+                                }}
+                                className="font-mono text-xs font-black text-[#38b1f7] bg-[#38b1f7]/10 dark:bg-[#38b1f7]/15 px-2.5 py-0.5 rounded-md border border-[#38b1f7]/25 flex items-center gap-1.5 cursor-pointer hover:bg-[#38b1f7]/20 transition-all shadow-sm"
+                                title="Click to copy full Ticket ID"
+                              >
+                                #TK-{detailedTicket.id.slice(0, 8).toUpperCase()}
+                                <Copy className="w-3.5 h-3.5 opacity-75 shrink-0" />
+                              </span>
                               <h3 className={`font-bold text-md tracking-tight ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>{detailedTicket.title}</h3>
                               {detailedTicket.isEscalated && (
                                 <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-red-500 text-white flex items-center gap-0.5 border border-red-600 shadow-[0_0_10px_rgba(239,68,68,0.1)]">
@@ -2027,12 +2202,50 @@ export default function CustomerDashboard() {
                                 {detailedTicket.status}
                               </span>
                             </div>
-                            <p className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                              Opened: {new Date(detailedTicket.createdAt).toLocaleString()} | Category: <span className={`font-semibold ${isDark ? 'text-[#38b1f7]' : 'text-[#0d7fc0]'}`}>{detailedTicket.category?.name}</span>
-                            </p>
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <p className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                Opened: {new Date(detailedTicket.createdAt).toLocaleString()} | Category: <span className={`font-semibold ${isDark ? 'text-[#38b1f7]' : 'text-[#0d7fc0]'}`}>{detailedTicket.category?.name}</span>
+                              </p>
+
+                              {(detailedTicket.agent || detailedTicket.status === "IN_PROGRESS") && (
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold border ${
+                                  isDark
+                                    ? "bg-emerald-950/50 text-emerald-400 border-emerald-500/25"
+                                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                }`}>
+                                  <User className="w-3 h-3 text-emerald-500" />
+                                  Assigned Staff: {detailedTicket.agent ? detailedTicket.agent.name : "Support Staff"}
+                                </span>
+                              )}
+                            </div>
                           </div>
                           
                           <div className="flex items-center space-x-2">
+                            {(detailedTicket.status === "OPEN" || detailedTicket.status === "IN_PROGRESS") && (
+                              <button
+                                type="button"
+                                disabled={resolvingTicketId === detailedTicket.id}
+                                onClick={() => handleResolveTicketCustomer(detailedTicket.id)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                                  isDark
+                                    ? "bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-900/60"
+                                    : "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+                                }`}
+                                title="Mark ticket as resolved"
+                              >
+                                {resolvingTicketId === detailedTicket.id ? (
+                                  <>
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-500" />
+                                    <span>Resolving...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                                    <span>Mark Resolved</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
 
                             <button
                               onClick={() => setSelectedTicketId(null)}
@@ -2116,50 +2329,103 @@ export default function CustomerDashboard() {
                             )}
                           </div>
 
-                          {/* Message Loop */}
-                          {messages.map((msg) => {
-                            const isMe = msg.sender.id === user.id;
-                            const isStaff = msg.sender.role === "ADMIN" || msg.sender.role === "AGENT";
+                          {/* Integrated Activity & Conversation Stream */}
+                          {(() => {
+                            type StreamEvent =
+                              | { id: string; type: "message"; createdAt: string; sender: { id: string; name: string; role: string }; content: string }
+                              | { id: string; type: "status_change"; createdAt: string; sender?: { id: string; name: string; role: string } | null; fromStatus: string; toStatus: string };
 
-                            return (
-                              <div
-                                key={msg.id}
-                                className={`flex flex-col space-y-1 max-w-[80%] ${isMe ? "ml-auto items-end" : "mr-auto items-start"}`}
-                              >
-                                <div className={`p-4 rounded-xl text-xs leading-relaxed border ${
-                                  isMe
-                                    ? isDark
-                                      ? "bg-[#38b1f7]/10 text-slate-200 border-[#38b1f7]/25 rounded-tr-none"
-                                      : "bg-[#38b1f7]/10 text-slate-800 border-[#38b1f7]/25 rounded-tr-none shadow-sm"
-                                    : isStaff
+                            const streamEvents: StreamEvent[] = [
+                              ...messages.map(m => ({
+                                id: m.id,
+                                type: "message" as const,
+                                createdAt: m.createdAt,
+                                sender: m.sender,
+                                content: m.message,
+                              })),
+                              ...((detailedTicket as any).statusHistory || []).map((h: any) => ({
+                                id: h.id,
+                                type: "status_change" as const,
+                                createdAt: h.createdAt,
+                                sender: h.changedBy,
+                                fromStatus: h.fromStatus,
+                                toStatus: h.toStatus,
+                              })),
+                            ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+                            if (streamEvents.length === 0) {
+                              return null;
+                            }
+
+                            return streamEvents.map(event => {
+                              if (event.type === "status_change") {
+                                return (
+                                  <div key={event.id} className="flex justify-center my-3">
+                                    <div className={`px-3.5 py-1.5 rounded-full text-[10px] font-semibold border flex items-center gap-2 shadow-sm ${
+                                      isDark
+                                        ? 'bg-slate-900/90 border-slate-800 text-slate-300'
+                                        : 'bg-slate-100 border-slate-200 text-slate-700'
+                                    }`}>
+                                      <Activity className="w-3.5 h-3.5 text-[#38b1f7] shrink-0" />
+                                      <span>
+                                        Ticket status updated from <strong className="uppercase">{event.fromStatus}</strong> to <strong className="uppercase text-[#38b1f7]">{event.toStatus}</strong>
+                                        {event.sender?.name ? ` by ${event.sender.name}` : ""}
+                                      </span>
+                                      <span className="text-[9px] opacity-60">
+                                        ({new Date(event.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              const isMe = event.sender.id === user.id;
+                              const isStaff = event.sender.role === "ADMIN" || event.sender.role === "AGENT" || event.sender.role === "SUPPORT_L1" || event.sender.role === "SUPPORT_L2" || event.sender.role === "BILLING";
+
+                              return (
+                                <div
+                                  key={event.id}
+                                  className={`flex flex-col space-y-1 max-w-[80%] ${isMe ? "ml-auto items-end" : "mr-auto items-start"}`}
+                                >
+                                  <div className={`p-4 rounded-xl text-xs leading-relaxed border ${
+                                    isMe
                                       ? isDark
-                                        ? "bg-emerald-950/30 text-slate-200 border-emerald-500/20 rounded-tl-none"
-                                        : "bg-emerald-50 text-slate-800 border-emerald-200 rounded-tl-none"
-                                      : isDark
-                                        ? "bg-slate-900/60 text-slate-200 border-[#1E293B] rounded-tl-none"
-                                        : "bg-slate-100 text-slate-800 border-slate-200 rounded-tl-none"
-                                }`}>
-                                  <p className="whitespace-pre-wrap">{msg.message}</p>
+                                        ? "bg-[#38b1f7]/10 text-slate-200 border-[#38b1f7]/25 rounded-tr-none"
+                                        : "bg-[#38b1f7]/10 text-slate-800 border-[#38b1f7]/25 rounded-tr-none shadow-sm"
+                                      : isStaff
+                                        ? isDark
+                                          ? "bg-emerald-950/30 text-slate-200 border-emerald-500/20 rounded-tl-none"
+                                          : "bg-emerald-50 text-slate-800 border-emerald-200 rounded-tl-none"
+                                        : isDark
+                                          ? "bg-slate-900/60 text-slate-200 border-[#1E293B] rounded-tl-none"
+                                          : "bg-slate-100 text-slate-800 border-slate-200 rounded-tl-none"
+                                  }`}>
+                                    <p className="whitespace-pre-wrap">{event.content}</p>
+                                  </div>
+                                  <span className={`text-[9px] px-1 ${
+                                    isDark ? 'text-slate-500' : 'text-slate-400'
+                                  }`}>
+                                    {isMe ? "You" : `${event.sender.name} (${event.sender.role === "CUSTOMER" ? "Client" : "Support Staff"})`} • {new Date(event.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
                                 </div>
-                                <span className={`text-[9px] px-1 ${
-                                  isDark ? 'text-slate-500' : 'text-slate-400'
-                                }`}>
-                                  {isMe ? "You" : `${msg.sender.name} (${msg.sender.role})`} • {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                              </div>
-                            );
-                          })}
+                              );
+                            });
+                          })()}
                         </div>
 
                         {/* Send reply input form footer */}
                         <div className={`p-4 border-t transition-colors ${
                           isDark ? 'border-[#1E293B] bg-slate-900/30' : 'border-slate-200 bg-slate-50/60'
                         }`}>
-                          {detailedTicket.status === "CLOSED" ? (
-                            <p className="text-center text-xs text-slate-500 py-2 font-mono flex items-center justify-center space-x-1.5">
-                              <Lock className="w-3.5 h-3.5" />
-                              <span>This ticket has been marked closed. No further replies can be sent.</span>
-                            </p>
+                          {detailedTicket.status === "CLOSED" || detailedTicket.status === "RESOLVED" ? (
+                            <div className={`p-3.5 rounded-xl border flex items-center justify-center gap-2 text-xs font-semibold ${
+                              isDark
+                                ? "bg-slate-950/80 border-slate-800 text-slate-400"
+                                : "bg-slate-100 border-slate-200 text-slate-600"
+                            }`}>
+                              <Lock className="w-4 h-4 text-amber-500 shrink-0" />
+                              <span>Ticket Closed — No further text or replies can be entered.</span>
+                            </div>
                           ) : (
                             <form onSubmit={handleSendMessage} className="flex items-center space-x-3">
                               <input
@@ -2200,7 +2466,8 @@ export default function CustomerDashboard() {
                   </div>
                 )}
               </div>
-            )}
+            );
+          })()}
 
             {activeTab === "kb" && (
               <div className="space-y-6">
@@ -2596,7 +2863,7 @@ export default function CustomerDashboard() {
                     setSelectedServiceName("");
                     setCustomDomainInput("");
                     setUseCustomDomain(false);
-                    setSelectedFile(null);
+                    setSelectedFiles([]);
                     setSuggestedArticles([]);
                     setCreateError(null);
                     setFieldErrors({});
@@ -2936,11 +3203,11 @@ export default function CustomerDashboard() {
                     <div className="space-y-4">
                       <div className="grid grid-cols-1 gap-4 max-h-[300px] overflow-y-auto pr-1">
                         {activeSubsForDomain.length > 0 ? (
-                          activeSubsForDomain.map((sub) => {
+                          activeSubsForDomain.map((sub, sIdx) => {
                             const hasSelectedServiceInSub = selectedSubscriptionId === sub.crmSubscriptionId && selectedServiceId !== "";
                             return (
                               <div
-                                key={sub.id || sub.crmSubscriptionId}
+                                key={sub.id || sub.crmSubscriptionId || `wiz-sub-${sIdx}`}
                                 className={`p-4 rounded-xl border transition-all text-left space-y-3.5 ${
                                   hasSelectedServiceInSub
                                     ? isDark
@@ -3406,45 +3673,136 @@ export default function CustomerDashboard() {
                     )}
                   </div>
 
-                  {/* File Attachment */}
-                  <div className="space-y-1.5">
-                    <label className={`text-[10px] font-bold uppercase tracking-wider ${
-                      isDark ? 'text-slate-400' : 'text-slate-500'
-                    }`}>Attachment / Screenshot <span className={isDark ? 'text-slate-600' : 'text-slate-400'}>(Optional)</span></label>
-                    <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                      selectedFile
-                        ? isDark ? 'border-[#38b1f7]/30 bg-[#38b1f7]/5' : 'border-[#38b1f7]/30 bg-sky-50'
-                        : isDark ? 'border-white/[0.06] bg-slate-950/40 hover:border-white/10' : 'border-slate-200 bg-slate-50 hover:border-slate-300'
-                    } ${submittingCreate ? 'pointer-events-none opacity-50 cursor-not-allowed' : ''}`}>
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                        isDark ? 'bg-slate-800' : 'bg-slate-200'
+                  {/* Drag-and-Drop Attachments & Screenshot Previews */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className={`text-[10px] font-bold uppercase tracking-wider ${
+                        isDark ? 'text-slate-400' : 'text-slate-500'
                       }`}>
-                        <Paperclip className={`w-3.5 h-3.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-semibold truncate ${
-                          isDark ? 'text-slate-300' : 'text-slate-700'
-                        }`}>
-                          {selectedFile ? selectedFile.name : "Click to attach a file"}
-                        </p>
-                        <p className={`text-[10px] ${
-                          isDark ? 'text-slate-550' : 'text-slate-400'
-                        }`}>
-                          {selectedFile ? `${(selectedFile.size / 1024).toFixed(1)} KB` : "PNG, JPG, PDF, ZIP — max 20 MB"}
-                        </p>
-                      </div>
-                      {selectedFile && (
-                        <button
-                          type="button"
-                          disabled={submittingCreate}
-                          onClick={(e) => { e.preventDefault(); setSelectedFile(null); }}
-                          className="text-red-400 hover:text-red-300 shrink-0"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                        Attachments & Screenshots <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>(Optional)</span>
+                      </label>
+                      {selectedFiles.length > 0 && (
+                        <span className="text-[10px] font-semibold text-[#38b1f7]">
+                          {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} attached
+                        </span>
                       )}
-                      <input type="file" disabled={submittingCreate} className="hidden" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
-                    </label>
+                    </div>
+
+                    {/* Drag & Drop Zone */}
+                    <div
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      className={`relative rounded-xl border-2 border-dashed p-4 transition-all text-center ${
+                        isDragging
+                          ? 'border-[#38b1f7] bg-[#38b1f7]/10 shadow-[0_0_15px_rgba(56,177,247,0.15)] scale-[1.01]'
+                          : isDark
+                            ? 'border-white/10 bg-slate-950/40 hover:border-white/20'
+                            : 'border-slate-300 bg-slate-50/70 hover:border-slate-400'
+                      } ${submittingCreate ? 'pointer-events-none opacity-50' : ''}`}
+                    >
+                      <input
+                        type="file"
+                        multiple
+                        id="ticket-file-input"
+                        disabled={submittingCreate}
+                        className="hidden"
+                        onChange={(e) => handleAddFiles(e.target.files)}
+                      />
+
+                      <label htmlFor="ticket-file-input" className="cursor-pointer flex flex-col items-center justify-center gap-1.5 py-1">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                          isDragging ? 'bg-[#38b1f7] text-white' : isDark ? 'bg-slate-800 text-[#38b1f7]' : 'bg-sky-100 text-[#0c7fc0]'
+                        }`}>
+                          <UploadCloud className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className={`text-xs font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                            {isDragging ? "Drop your files here" : "Click or drag & drop screenshots / files"}
+                          </p>
+                          <p className={`text-[10px] mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                            Supports PNG, JPG, WEBP, PDF, ZIP — attach multiple screenshots (up to 20 MB each)
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Attached Files List & Previews */}
+                    {selectedFiles.length > 0 && (
+                      <div className="space-y-2 pt-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[200px] overflow-y-auto pr-1">
+                          {selectedFiles.map((file, idx) => {
+                            const isImage = file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(file.name);
+                            const previewUrl = isImage ? URL.createObjectURL(file) : null;
+
+                            return (
+                              <div
+                                key={`${file.name}-${file.size}-${idx}`}
+                                className={`p-2 rounded-xl border flex items-center justify-between gap-2 transition-all ${
+                                  isDark ? 'bg-slate-900/60 border-white/[0.06]' : 'bg-white border-slate-200 shadow-sm'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                  {isImage && previewUrl ? (
+                                    <div
+                                      onClick={() => setPreviewImageModal({ url: previewUrl, name: file.name })}
+                                      className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-white/10 group cursor-pointer"
+                                      title="Click to preview screenshot"
+                                    >
+                                      <img src={previewUrl} alt={file.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                        <Eye className="w-3.5 h-3.5 text-white" />
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 border ${
+                                      isDark ? 'bg-slate-800/80 border-slate-700 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-500'
+                                    }`}>
+                                      <FileText className="w-4 h-4" />
+                                    </div>
+                                  )}
+
+                                  <div className="min-w-0 flex-1">
+                                    <p className={`text-xs font-semibold truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`} title={file.name}>
+                                      {file.name}
+                                    </p>
+                                    <p className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                      {(file.size / 1024).toFixed(1)} KB {isImage ? "• Screenshot" : ""}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {isImage && previewUrl && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewImageModal({ url: previewUrl, name: file.name })}
+                                      className={`p-1.5 rounded-lg transition-colors ${
+                                        isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-sky-400' : 'hover:bg-slate-100 text-slate-500 hover:text-sky-600'
+                                      }`}
+                                      title="Preview screenshot"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    disabled={submittingCreate}
+                                    onClick={() => handleRemoveFile(idx)}
+                                    className={`p-1.5 rounded-lg transition-colors ${
+                                      isDark ? 'hover:bg-red-950/40 text-red-400' : 'hover:bg-red-50 text-red-600'
+                                    }`}
+                                    title="Remove file"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -3707,43 +4065,50 @@ export default function CustomerDashboard() {
                   <div className="p-6 space-y-4">
 
                     {/* Ticket summary recap */}
-                    <div className={`p-4 rounded-xl border space-y-3 ${
+                    <div className={`p-4 rounded-xl border space-y-3.5 ${
                       isDark ? 'bg-slate-900/40 border-white/[0.05]' : 'bg-slate-50 border-slate-200'
                     }`}>
-                      <h4 className={`text-[10px] font-bold uppercase tracking-wider ${
-                        isDark ? 'text-slate-500' : 'text-slate-400'
-                      }`}>Ticket Summary</h4>
-                      <div className="space-y-2">
-                        <div className="flex items-start gap-2">
-                          <FileText className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
-                            isDark ? 'text-slate-500' : 'text-slate-400'
+                      <div className="flex items-center justify-between">
+                        <h4 className={`text-[10px] font-bold uppercase tracking-wider ${
+                          isDark ? 'text-slate-400' : 'text-slate-500'
+                        }`}>Ticket Summary & Double Check</h4>
+                        <span className="text-[10px] font-semibold text-[#38b1f7]">Step 3 of 3</span>
+                      </div>
+
+                      <div className="space-y-3">
+                        {/* Title & Metadata */}
+                        <div className="flex items-start gap-2.5">
+                          <FileText className={`w-4 h-4 mt-0.5 shrink-0 ${
+                            isDark ? 'text-sky-400' : 'text-sky-600'
                           }`} />
-                          <div>
-                            <p className={`text-[10px] ${
+                          <div className="min-w-0 flex-1">
+                            <p className={`text-[10px] uppercase font-bold tracking-wider ${
                               isDark ? 'text-slate-500' : 'text-slate-400'
-                            }`}>Title</p>
-                            <p className={`text-sm font-semibold ${
+                            }`}>Ticket Title</p>
+                            <p className={`text-sm font-bold truncate ${
                               isDark ? 'text-white' : 'text-slate-900'
                             }`}>{createForm.title}</p>
                           </div>
                         </div>
+
                         {createForm.affectedDomain && (
-                          <div className="flex items-start gap-2">
-                            <Globe className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
-                              isDark ? 'text-slate-500' : 'text-slate-400'
+                          <div className="flex items-start gap-2.5">
+                            <Globe className={`w-4 h-4 mt-0.5 shrink-0 ${
+                              isDark ? 'text-indigo-400' : 'text-indigo-600'
                             }`} />
                             <div>
-                              <p className={`text-[10px] ${
+                              <p className={`text-[10px] uppercase font-bold tracking-wider ${
                                 isDark ? 'text-slate-500' : 'text-slate-400'
                               }`}>Affected Domain</p>
-                              <p className={`text-sm font-mono font-semibold ${
-                                isDark ? 'text-white' : 'text-slate-900'
+                              <p className={`text-xs font-mono font-semibold ${
+                                isDark ? 'text-slate-200' : 'text-slate-800'
                               }`}>{createForm.affectedDomain}</p>
                             </div>
                           </div>
                         )}
-                        <div className="flex items-center gap-4 pt-1">
-                          <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold ${
+
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <span className={`text-[10px] px-2.5 py-1 rounded-lg border font-bold ${
                             createForm.priority === "HIGH" || createForm.priority === "URGENT"
                               ? isDark ? 'text-red-400 border-red-500/25 bg-red-950/30' : 'text-red-700 border-red-200 bg-red-50'
                               : createForm.priority === "MEDIUM"
@@ -3752,19 +4117,85 @@ export default function CustomerDashboard() {
                           }`}>
                             {createForm.priority} Priority
                           </span>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold ${
+                          <span className={`text-[10px] px-2.5 py-1 rounded-lg border font-bold ${
                             isDark ? 'text-slate-300 border-slate-700 bg-slate-800/40' : 'text-slate-700 border-slate-200 bg-slate-100'
                           }`}>
-                            {categories.find(c => c.id === createForm.categoryId)?.name || "General"}
+                            Category: {categories.find(c => c.id === createForm.categoryId)?.name || "General Support"}
                           </span>
-                          {selectedFile && (
-                            <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold ${
+                          {selectedFiles.length > 0 && (
+                            <span className={`text-[10px] px-2.5 py-1 rounded-lg border font-bold ${
                               isDark ? 'text-sky-400 border-sky-500/25 bg-sky-950/30' : 'text-sky-700 border-sky-200 bg-sky-50'
                             }`}>
-                              1 attachment
+                              {selectedFiles.length} Attachment{selectedFiles.length > 1 ? 's' : ''}
                             </span>
                           )}
                         </div>
+
+                        {/* Problem Description Box */}
+                        <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-white/[0.04]">
+                          <p className={`text-[10px] font-bold uppercase tracking-wider ${
+                            isDark ? 'text-slate-400' : 'text-slate-500'
+                          }`}>Problem Description</p>
+                          <div className={`p-3 rounded-xl border text-xs leading-relaxed whitespace-pre-wrap max-h-[140px] overflow-y-auto ${
+                            isDark ? 'bg-slate-950/60 border-white/[0.04] text-slate-200' : 'bg-white border-slate-200 text-slate-800'
+                          }`}>
+                            {createForm.description}
+                          </div>
+                        </div>
+
+                        {/* Attached Screenshots & Files Previews */}
+                        {selectedFiles.length > 0 && (
+                          <div className="space-y-1.5 pt-1 border-t border-slate-100 dark:border-white/[0.04]">
+                            <p className={`text-[10px] font-bold uppercase tracking-wider ${
+                              isDark ? 'text-slate-400' : 'text-slate-500'
+                            }`}>
+                              Attached Screenshots & Files ({selectedFiles.length})
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[160px] overflow-y-auto pr-1">
+                              {selectedFiles.map((file, fIdx) => {
+                                const isImage = file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(file.name);
+                                const pUrl = isImage ? URL.createObjectURL(file) : null;
+                                return (
+                                  <div
+                                    key={`rev-file-${fIdx}`}
+                                    onClick={() => pUrl && setPreviewImageModal({ url: pUrl, name: file.name })}
+                                    className={`p-2 rounded-xl border flex items-center gap-2 transition-all ${
+                                      pUrl ? 'cursor-pointer hover:border-[#38b1f7]/40 group' : ''
+                                    } ${
+                                      isDark ? 'bg-slate-950/40 border-white/[0.04]' : 'bg-white border-slate-200 shadow-sm'
+                                    }`}
+                                  >
+                                    {pUrl ? (
+                                      <div className="relative w-8 h-8 rounded-lg overflow-hidden shrink-0 border border-white/10">
+                                        <img src={pUrl} alt={file.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                          <Eye className="w-3 h-3 text-white" />
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                        isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'
+                                      }`}>
+                                        <FileText className="w-3.5 h-3.5" />
+                                      </div>
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                      <p className={`text-[11px] font-bold truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                        {file.name}
+                                      </p>
+                                      <p className={`text-[9px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                        {(file.size / 1024).toFixed(1)} KB {isImage ? "• Screenshot" : ""}
+                                      </p>
+                                    </div>
+                                    {pUrl && (
+                                      <Eye className="w-3.5 h-3.5 text-slate-400 group-hover:text-sky-400 shrink-0" />
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -3882,6 +4313,45 @@ export default function CustomerDashboard() {
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* Screenshot Image Preview Lightbox Modal */}
+      {previewImageModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn"
+          onClick={() => setPreviewImageModal(null)}
+        >
+          <div
+            className={`relative max-w-4xl max-h-[85vh] w-full p-4 rounded-2xl border shadow-2xl flex flex-col items-center transition-all ${
+              isDark ? 'bg-[#0F172A] border-white/10 text-white' : 'bg-white border-slate-200 text-slate-900'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-full flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
+              <div className="flex items-center gap-2 min-w-0">
+                <ImageIcon className="w-4 h-4 text-[#38b1f7] shrink-0" />
+                <span className="text-xs font-bold truncate">{previewImageModal.name}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewImageModal(null)}
+                className={`p-1.5 rounded-lg border transition-colors ${
+                  isDark ? 'border-white/10 hover:bg-slate-800 text-slate-400 hover:text-white' : 'border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-800'
+                }`}
+                title="Close preview"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 flex items-center justify-center overflow-auto max-h-[70vh] w-full">
+              <img
+                src={previewImageModal.url}
+                alt={previewImageModal.name}
+                className="max-w-full max-h-[65vh] object-contain rounded-xl shadow-lg border border-slate-200 dark:border-white/10"
+              />
+            </div>
           </div>
         </div>
       )}

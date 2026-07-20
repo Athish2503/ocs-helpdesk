@@ -14,6 +14,7 @@ import {
   BookOpen,
   Plus,
   Trash2,
+  Copy,
   X,
   Search,
   AlertCircle,
@@ -187,6 +188,15 @@ function priorityBadgeClass(priority: string) {
     case "MEDIUM": return "admin-badge admin-badge-medium";
     case "LOW": return "admin-badge admin-badge-low";
     default: return "admin-badge admin-badge-low";
+  }
+}
+function formatPriorityLabel(priority: string) {
+  switch (priority?.toUpperCase()) {
+    case "URGENT": return "P1 - Critical";
+    case "HIGH": return "P2 - High";
+    case "MEDIUM": return "P3 - Medium";
+    case "LOW": return "P4 - Low";
+    default: return priority ? `P4 - ${priority}` : "P4 - Low";
   }
 }
 function StatusIcon({ status }: { status: string }) {
@@ -1302,15 +1312,24 @@ export default function AdminDashboard() {
       if (ticketCategoryFilter !== "ALL" && t.category.id !== ticketCategoryFilter) return false;
 
       if (ticketSearch.trim()) {
-        const query = ticketSearch.toLowerCase();
+        const rawQuery = ticketSearch.trim().toLowerCase();
+        const cleanHashQuery = rawQuery.replace(/^#?tk-?/i, "");
+        const shortId = t.id.slice(0, 8).toLowerCase();
+        const fullId = t.id.toLowerCase();
+
         const matches = 
-          t.title.toLowerCase().includes(query) ||
-          t.description.toLowerCase().includes(query) ||
-          t.customer.name.toLowerCase().includes(query) ||
-          t.customer.email.toLowerCase().includes(query) ||
-          t.id.toLowerCase().includes(query) ||
-          (t.team?.name.toLowerCase() || "").includes(query) ||
-          (t.agent?.name.toLowerCase() || "").includes(query);
+          fullId.includes(rawQuery) ||
+          fullId.includes(cleanHashQuery) ||
+          shortId.includes(cleanHashQuery) ||
+          `#tk-${shortId}`.includes(rawQuery) ||
+          `tk-${shortId}`.includes(rawQuery) ||
+          t.title.toLowerCase().includes(rawQuery) ||
+          t.description.toLowerCase().includes(rawQuery) ||
+          t.customer.name.toLowerCase().includes(rawQuery) ||
+          t.customer.email.toLowerCase().includes(rawQuery) ||
+          (t.category?.name?.toLowerCase() || "").includes(rawQuery) ||
+          (t.team?.name.toLowerCase() || "").includes(rawQuery) ||
+          (t.agent?.name.toLowerCase() || "").includes(rawQuery);
         if (!matches) return false;
       }
       return true;
@@ -1436,33 +1455,106 @@ export default function AdminDashboard() {
 
             {/* Overview grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-              {/* Unassigned Queue */}
-              <div className={`lg:col-span-2 admin-card p-5 space-y-4 ${isDark ? "admin-dark" : ""}`}>
-                <div className="flex items-center justify-between">
-                  <h2 className={`text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Unassigned Queue</h2>
-                  <span className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}>
-                    {tickets.filter(t => !t.agent).length} unassigned
-                  </span>
-                </div>
-                <div className={`divide-y overflow-y-auto max-h-72 ${isDark ? "divide-white/[0.04]" : "divide-slate-100"}`}>
-                  {tickets.filter(t => !t.agent).length === 0 ? (
-                    <EmptyState icon={<CheckCircle className="w-8 h-8" />} title="All caught up!" description="No unassigned tickets right now." isDark={isDark} />
-                  ) : tickets.filter(t => !t.agent).map(t => (
-                    <div
-                      key={t.id}
-                      onClick={() => { setActiveTab("tickets"); selectTicket(t); }}
-                      className={`flex items-center justify-between py-3 px-2 rounded-lg cursor-pointer transition-colors ${isDark ? "hover:bg-white/[0.03]" : "hover:bg-slate-50"}`}
-                    >
-                      <div className="space-y-1 min-w-0 flex-1 mr-4">
-                        <p className={`text-sm font-medium truncate ${isDark ? "text-slate-200" : "text-slate-800"}`}>{t.title}</p>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}>{t.category.name}</span>
-                          <span className={priorityBadgeClass(t.priority)}>{t.priority}</span>
-                        </div>
-                      </div>
-                      <span className={`text-xs shrink-0 ${isDark ? "text-slate-500" : "text-slate-400"}`}>{new Date(t.createdAt).toLocaleDateString()}</span>
+              <div className="lg:col-span-2 space-y-5">
+                {/* 1. Unassigned Queue Card */}
+                <div className={`admin-card p-5 space-y-4 ${isDark ? "admin-dark" : ""}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h2 className={`text-sm font-bold ${isDark ? "text-white" : "text-slate-900"}`}>Unassigned Queue</h2>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        isDark ? "bg-amber-950/40 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-700 border-amber-200"
+                      }`}>
+                        Action Required
+                      </span>
                     </div>
-                  ))}
+                    <span className={`text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                      {tickets.filter(t => !t.agent && t.status !== "RESOLVED" && t.status !== "CLOSED").length} unassigned
+                    </span>
+                  </div>
+                  <div className={`divide-y overflow-y-auto max-h-56 ${isDark ? "divide-white/[0.04]" : "divide-slate-100"}`}>
+                    {tickets.filter(t => !t.agent && t.status !== "RESOLVED" && t.status !== "CLOSED").length === 0 ? (
+                      <EmptyState icon={<CheckCircle className="w-8 h-8" />} title="All caught up!" description="No unassigned tickets right now." isDark={isDark} />
+                    ) : (
+                      tickets.filter(t => !t.agent && t.status !== "RESOLVED" && t.status !== "CLOSED").map(t => (
+                        <div
+                          key={t.id}
+                          onClick={() => { setActiveTab("tickets"); selectTicket(t); }}
+                          className={`flex items-center justify-between py-3 px-2 rounded-lg cursor-pointer transition-colors ${isDark ? "hover:bg-white/[0.03]" : "hover:bg-slate-50"}`}
+                        >
+                          <div className="space-y-1 min-w-0 flex-1 mr-4">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-mono text-xs font-black text-[#38b1f7] bg-[#38b1f7]/10 dark:bg-[#38b1f7]/15 px-1.5 py-0.5 rounded border border-[#38b1f7]/30 shrink-0">
+                                #TK-{t.id.slice(0, 8).toUpperCase()}
+                              </span>
+                              <p className={`text-sm font-medium truncate ${isDark ? "text-slate-200" : "text-slate-800"}`}>{t.title}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}>{t.category.name}</span>
+                              <span className={priorityBadgeClass(t.priority)}>{formatPriorityLabel(t.priority)}</span>
+                            </div>
+                          </div>
+                          <span className={`text-xs shrink-0 ${isDark ? "text-slate-500" : "text-slate-400"}`}>{new Date(t.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. In Progress Queue Card */}
+                <div className={`admin-card p-5 space-y-4 ${isDark ? "admin-dark" : ""}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h2 className={`text-sm font-bold ${isDark ? "text-white" : "text-slate-900"}`}>In Progress Queue</h2>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        isDark ? "bg-sky-950/40 text-sky-400 border-sky-500/20" : "bg-sky-50 text-sky-700 border-sky-200"
+                      }`}>
+                        Active Work
+                      </span>
+                    </div>
+                    <span className={`text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                      {tickets.filter(t => t.status === "IN_PROGRESS" || (t.agent && t.status !== "RESOLVED" && t.status !== "CLOSED")).length} in progress
+                    </span>
+                  </div>
+                  <div className={`divide-y overflow-y-auto max-h-64 ${isDark ? "divide-white/[0.04]" : "divide-slate-100"}`}>
+                    {tickets.filter(t => t.status === "IN_PROGRESS" || (t.agent && t.status !== "RESOLVED" && t.status !== "CLOSED")).length === 0 ? (
+                      <EmptyState icon={<Clock className="w-8 h-8" />} title="No active tickets" description="No tickets are currently in progress." isDark={isDark} />
+                    ) : (
+                      tickets.filter(t => t.status === "IN_PROGRESS" || (t.agent && t.status !== "RESOLVED" && t.status !== "CLOSED")).map(t => (
+                        <div
+                          key={t.id}
+                          onClick={() => { setActiveTab("tickets"); selectTicket(t); }}
+                          className={`flex items-center justify-between py-3 px-2 rounded-lg cursor-pointer transition-colors ${isDark ? "hover:bg-white/[0.03]" : "hover:bg-slate-50"}`}
+                        >
+                          <div className="space-y-1 min-w-0 flex-1 mr-4">
+                            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                              <span className="font-mono text-xs font-black text-[#38b1f7] bg-[#38b1f7]/10 dark:bg-[#38b1f7]/15 px-1.5 py-0.5 rounded border border-[#38b1f7]/30 shrink-0">
+                                #TK-{t.id.slice(0, 8).toUpperCase()}
+                              </span>
+                              <p className={`text-sm font-medium truncate ${isDark ? "text-slate-200" : "text-slate-800"}`}>{t.title}</p>
+                              {t.status === "IN_PROGRESS" && (
+                                <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border shrink-0 ${
+                                  isDark ? "bg-sky-950/50 text-sky-400 border-sky-500/30" : "bg-sky-50 text-sky-700 border-sky-200"
+                                }`}>
+                                  IN PROGRESS
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2.5 flex-wrap">
+                              <span className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}>{t.category.name}</span>
+                              <span className={priorityBadgeClass(t.priority)}>{formatPriorityLabel(t.priority)}</span>
+                              {t.agent && (
+                                <span className={`text-[10px] font-semibold flex items-center gap-1 ${isDark ? "text-emerald-400" : "text-emerald-700"}`}>
+                                  <User className="w-3 h-3 text-emerald-500" />
+                                  <span>Assigned: <strong>{t.agent.name}</strong></span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <span className={`text-xs shrink-0 ${isDark ? "text-slate-500" : "text-slate-400"}`}>{new Date(t.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1473,6 +1565,8 @@ export default function AdminDashboard() {
                   {[
                     { label: "Logged in as", value: user.name },
                     { label: "Role", value: user.role },
+                    { label: "In-Progress tickets", value: tickets.filter(t => t.status === "IN_PROGRESS").length.toString() },
+                    { label: "Unassigned tickets", value: tickets.filter(t => !t.agent && t.status !== "RESOLVED" && t.status !== "CLOSED").length.toString() },
                     { label: "Resolved today", value: tickets.filter(t => t.status === "RESOLVED").length.toString() },
                     { label: "Published articles", value: kbArticles.filter(a => a.isPublished).length.toString() },
                   ].map(item => (
@@ -1552,10 +1646,10 @@ export default function AdminDashboard() {
                     style={{ height: 36 }}
                   >
                     <option value="ALL">All Priorities</option>
-                    <option value="LOW">Low</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HIGH">High</option>
-                    <option value="URGENT">Urgent</option>
+                    <option value="LOW">P4 - Low (Default)</option>
+                    <option value="MEDIUM">P3 - Medium</option>
+                    <option value="HIGH">P2 - High</option>
+                    <option value="URGENT">P1 - Critical</option>
                   </select>
 
                   <select
@@ -1619,7 +1713,12 @@ export default function AdminDashboard() {
 
                       <div className="space-y-1.5 flex-1 min-w-0 mr-3">
                         <div className="flex items-center justify-between gap-2">
-                          <p className={`text-sm font-semibold leading-tight truncate ${isDark ? "text-slate-100" : "text-slate-855"}`}>{t.title}</p>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-mono text-xs font-black text-[#38b1f7] bg-[#38b1f7]/10 dark:bg-[#38b1f7]/15 px-2 py-0.5 rounded-md border border-[#38b1f7]/30 shrink-0">
+                              #TK-{t.id.slice(0, 8).toUpperCase()}
+                            </span>
+                            <p className={`text-sm font-semibold leading-tight truncate ${isDark ? "text-slate-100" : "text-slate-855"}`}>{t.title}</p>
+                          </div>
                           <span className={`text-[10px] shrink-0 ${isDark ? "text-slate-550" : "text-slate-455"}`}>
                             {new Date(t.createdAt).toLocaleDateString()}
                           </span>
@@ -1632,7 +1731,7 @@ export default function AdminDashboard() {
                           </span>
                           <span className={priorityBadgeClass(t.priority)}>
                             <PriorityIconComponent priority={t.priority} />
-                            {t.priority}
+                            {formatPriorityLabel(t.priority)}
                           </span>
                           {t.isEscalated && (
                             <span className="admin-badge bg-red-50 text-red-700 border-red-200 dark:bg-red-950/20 dark:text-red-400 dark:border-red-900/30 flex items-center gap-1 font-bold">
@@ -1682,8 +1781,18 @@ export default function AdminDashboard() {
                   {/* Panel header */}
                   <div className={`px-5 py-4 border-b flex items-start justify-between gap-3 ${isDark ? "border-white/[0.05]" : "border-slate-100"}`}>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <p className={`text-[10px] font-mono font-bold ${isDark ? "text-[#5fc0f9]" : "text-[#0d7fc0]"}`}>#{selectedTicket.id.slice(0, 8).toUpperCase()}</p>
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        <span
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedTicket.id);
+                            toast.success("Ticket ID copied!");
+                          }}
+                          className="font-mono text-sm font-black text-[#38b1f7] bg-[#38b1f7]/15 dark:bg-[#38b1f7]/20 px-3 py-1 rounded-lg border border-[#38b1f7]/35 tracking-wider flex items-center gap-1.5 cursor-pointer hover:bg-[#38b1f7]/25 transition-all shadow-sm"
+                          title="Click to copy full Ticket ID"
+                        >
+                          #TK-{selectedTicket.id.slice(0, 8).toUpperCase()}
+                          <Copy className="w-3.5 h-3.5 opacity-75 shrink-0" />
+                        </span>
                         {selectedTicket.isEscalated && (
                           <span className="text-[9px] font-extrabold uppercase tracking-wider bg-red-500 text-white px-2 py-0.5 rounded flex items-center gap-0.5 w-fit">
                             <ArrowUpCircle className="w-2.5 h-2.5" />
@@ -1926,7 +2035,11 @@ export default function AdminDashboard() {
                               className={`admin-select text-xs flex-1 max-w-[150px] ${isDark ? "admin-dark" : ""}`}
                               style={{ height: 32 }}
                             >
-                              {options.map(o => <option key={o} value={o}>{o.replace("_", " ")}</option>)}
+                              {options.map(o => (
+                                <option key={o} value={o}>
+                                  {label === "Priority" ? formatPriorityLabel(o) : o.replace("_", " ")}
+                                </option>
+                              ))}
                             </select>
                           </div>
                         ))}
@@ -6130,8 +6243,25 @@ function ResolveTicketModal({
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t dark:border-white/[0.06] border-slate-100">
-            <button type="button" onClick={onClose} className="admin-btn admin-btn-ghost text-xs" style={{ height: 36 }}>Cancel</button>
-            <button type="submit" className="admin-btn admin-btn-primary text-xs" style={{ height: 36 }}>Confirm Resolution</button>
+            <button type="button" onClick={onClose} disabled={submitting} className="admin-btn admin-btn-ghost text-xs" style={{ height: 36 }}>Cancel</button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="admin-btn admin-btn-primary text-xs flex items-center justify-center gap-2 min-w-[150px]"
+              style={{ height: 36 }}
+            >
+              {submitting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Resolving Ticket...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  <span>Confirm Resolution</span>
+                </>
+              )}
+            </button>
           </div>
         </form>
       </div>
