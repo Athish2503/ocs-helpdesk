@@ -205,7 +205,7 @@ export async function createTicket(
       const admins = await prisma.user.findMany({
         where: { role: "ADMIN" },
       });
-      admins.forEach((a) => emailRecipients.push(a.email));
+      (admins || []).forEach((a) => emailRecipients.push(a.email));
     }
 
     // Send emails using email service

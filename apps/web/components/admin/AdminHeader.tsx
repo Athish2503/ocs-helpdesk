@@ -11,6 +11,7 @@ interface AdminHeaderProps {
   onToggleTheme: () => void;
   onRefresh?: () => void;
   onLogout?: () => void;
+  user?: { name: string; role: string; permissions?: string[] };
   children?: React.ReactNode; // extra right-side actions
 }
 
@@ -22,6 +23,7 @@ export default function AdminHeader({
   onToggleTheme,
   onRefresh,
   onLogout,
+  user,
   children,
 }: AdminHeaderProps) {
   return (
@@ -48,7 +50,7 @@ export default function AdminHeader({
       </div>
 
       {/* Right: Actions */}
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-2.5 shrink-0">
         {children}
 
         {/* Theme Toggle */}
@@ -84,21 +86,53 @@ export default function AdminHeader({
           </button>
         )}
 
-        {/* Mobile logout */}
-        {onLogout && (
-          <button
-            onClick={onLogout}
-            className={`
-              md:hidden p-2 rounded-lg border transition-all
-              ${isDark
-                ? "border-red-500/25 text-red-400 hover:bg-red-950/20"
-                : "border-red-200 text-red-500 hover:bg-red-50"}
-            `}
-            aria-label="Logout"
-            title="Logout"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+        {/* User Profile & Logout (Top Right Corner) */}
+        {(user || onLogout) && (
+          <>
+            <div className={`h-6 w-[1px] ${isDark ? "bg-white/10" : "bg-slate-200"} mx-0.5`} />
+
+            {user && (
+              <div className="flex items-center gap-2 px-1">
+                <div
+                  className={`
+                    w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 border
+                    ${isDark
+                      ? "bg-[#38b1f7]/15 text-[#5fc0f9] border-[#38b1f7]/20"
+                      : "bg-[#38b1f7]/10 text-[#0d7fc0] border-[#38b1f7]/15"}
+                  `}
+                  title={user.name}
+                >
+                  {user.name ? user.name.charAt(0).toUpperCase() : "A"}
+                </div>
+
+                <div className="hidden sm:flex flex-col min-w-0 max-w-[140px]">
+                  <span className={`text-xs font-bold truncate leading-tight ${isDark ? "text-white" : "text-slate-900"}`}>
+                    {user.name}
+                  </span>
+                  <span className={`text-[10px] truncate leading-tight uppercase font-mono tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    {user.role}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className={`
+                  flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all duration-150 active:scale-95
+                  ${isDark
+                    ? "border-red-500/20 text-red-400 hover:bg-red-950/30 hover:border-red-500/40 hover:text-red-300"
+                    : "border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"}
+                `}
+                title="Logout"
+                aria-label="Logout"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Logout</span>
+              </button>
+            )}
+          </>
         )}
       </div>
     </header>

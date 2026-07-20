@@ -315,7 +315,9 @@ export async function magicLogin(token: string): Promise<AuthResponse> {
   // 2. Check expiration
   if (magicToken.expiresAt < new Date()) {
     // Clean up expired token
-    await prisma.magicToken.delete({ where: { id: magicToken.id } }).catch(() => {});
+    try {
+      await prisma.magicToken.delete({ where: { id: magicToken.id } });
+    } catch {}
     const err = new Error("This magic link has expired. Please request a new one.") as Error & { statusCode: number };
     err.statusCode = 401;
     throw err;
@@ -391,8 +393,9 @@ export async function magicLogin(token: string): Promise<AuthResponse> {
 export async function forgotPassword(
   input: ForgotPasswordInput
 ): Promise<{ message: string; resetLink?: string }> {
+  const normalizedEmail = input.email.trim().toLowerCase();
   // 1. Check if user exists
-  const user = await prisma.user.findUnique({ where: { email: input.email } });
+  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
 
   // For security, return a success message even if the user doesn't exist
   // to prevent email enumeration.
@@ -409,11 +412,11 @@ export async function forgotPassword(
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
   // 3. Persist the reset token (delete any existing ones first to prevent clutter)
-  await prisma.passwordResetToken.deleteMany({ where: { email: input.email } });
+  await prisma.passwordResetToken.deleteMany({ where: { email: normalizedEmail } });
   await prisma.passwordResetToken.create({
     data: {
       token,
-      email: input.email,
+      email: normalizedEmail,
       expiresAt,
     },
   });
@@ -452,7 +455,9 @@ export async function resetPassword(
 
   // 2. Check expiration
   if (resetToken.expiresAt < new Date()) {
-    await prisma.passwordResetToken.delete({ where: { id: resetToken.id } }).catch(() => {});
+    try {
+      await prisma.passwordResetToken.delete({ where: { id: resetToken.id } });
+    } catch {}
     const err = new Error("This password reset link has expired. Please request a new one.") as Error & { statusCode: number };
     err.statusCode = 400;
     throw err;

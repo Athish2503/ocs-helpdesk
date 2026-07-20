@@ -71,6 +71,7 @@ export default function AdminShell({
           onToggleTheme={onToggleTheme}
           onRefresh={onRefresh}
           onLogout={onLogout}
+          user={user}
         >
           {headerActions}
         </AdminHeader>

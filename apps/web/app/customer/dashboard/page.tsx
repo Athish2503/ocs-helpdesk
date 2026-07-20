@@ -1044,74 +1044,6 @@ export default function CustomerDashboard() {
             onClick={() => { setActiveTab("settings"); setSelectedTicketId(null); setSelectedArticle(null); }}
           />
         </nav>
-
-        {/* Sidebar Bottom Profile Section */}
-        <div className={`
-          px-3 py-3 border-t shrink-0
-          ${isDark ? "border-white/[0.06]" : "border-slate-100"}
-        `}>
-          <div className={`
-            flex items-center gap-3 p-2.5 rounded-xl transition-all duration-300
-            ${isDark ? "bg-white/[0.03]" : "bg-slate-50"}
-            ${isSidebarCollapsed ? "justify-center" : ""}
-          `}>
-            {/* Avatar */}
-            <div
-              className={`
-                w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 border
-                ${isDark
-                  ? "bg-[#38b1f7]/15 text-[#5fc0f9] border-[#38b1f7]/20"
-                  : "bg-[#38b1f7]/10 text-[#0d7fc0] border-[#38b1f7]/15"}
-              `}
-              title={isSidebarCollapsed ? user.name : undefined}
-            >
-              {user.name.charAt(0).toUpperCase()}
-            </div>
-
-            {!isSidebarCollapsed && (
-              <>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-semibold truncate leading-tight ${isDark ? "text-white" : "text-slate-900"}`}>
-                    {user.name}
-                  </p>
-                  <p className={`text-[11px] truncate leading-tight uppercase font-mono tracking-wider ${isDark ? "text-slate-500" : "text-slate-400"}`}>
-                    {user.role}
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => logout()}
-                  className={`
-                    p-1.5 rounded-lg border transition-all shrink-0
-                    ${isDark
-                      ? "border-red-500/20 text-red-400 hover:bg-red-950/30 hover:text-red-300 hover:border-red-500/30"
-                      : "border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600"}
-                  `}
-                  title="Logout"
-                  aria-label="Logout"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                </button>
-              </>
-            )}
-          </div>
-
-          {isSidebarCollapsed && (
-            <button
-              onClick={() => logout()}
-              className={`
-                mt-2 w-full p-2 rounded-lg border transition-all flex items-center justify-center
-                ${isDark
-                  ? "border-red-500/20 text-red-400 hover:bg-red-950/30 hover:border-red-500/30"
-                  : "border-red-200 text-red-500 hover:bg-red-50"}
-              `}
-              title="Logout"
-              aria-label="Logout"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
       </aside>
 
       {/* 2. Main Work Shell */}
@@ -1170,24 +1102,50 @@ export default function CustomerDashboard() {
             >
               <RefreshCw className={`w-3.5 h-3.5 ${(loadingTickets || loadingDetails) ? "animate-spin text-[#38b1f7]" : ""}`} />
             </button>
-            {/* <div className={`flex items-center space-x-2 px-3 py-1 rounded text-[11px] font-semibold font-mono border ${
-              isDark 
-                ? 'bg-green-950/40 border-green-500/20 text-[#12B76A]' 
-                : 'bg-green-50 border-green-200 text-[#027a48]'
-            }`}>
-              <span className="w-1.5 h-1.5 rounded-full bg-[#12B76A] animate-pulse"></span>
-              <span>API: Connected</span>
-            </div> */}
-            {/* Small Mobile Logout */}
+
+            {/* Divider */}
+            <div className={`h-6 w-[1px] ${isDark ? "bg-[#1E293B]" : "bg-slate-200"} mx-0.5`} />
+
+            {/* User Profile Badge (Top Right Corner) */}
+            {user && (
+              <div className="flex items-center gap-2 px-1">
+                <div
+                  className={`
+                    w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 border
+                    ${isDark
+                      ? "bg-[#38b1f7]/15 text-[#5fc0f9] border-[#38b1f7]/20"
+                      : "bg-[#38b1f7]/10 text-[#0d7fc0] border-[#38b1f7]/15"}
+                  `}
+                  title={user.name}
+                >
+                  {user.name ? user.name.charAt(0).toUpperCase() : "C"}
+                </div>
+
+                <div className="hidden sm:flex flex-col min-w-0 max-w-[140px]">
+                  <span className={`text-xs font-bold truncate leading-tight ${isDark ? "text-white" : "text-slate-900"}`}>
+                    {user.name}
+                  </span>
+                  <span className={`text-[10px] truncate leading-tight uppercase font-mono tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    {user.role}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Logout Button (Top Right Corner) */}
             <button
               onClick={() => logout()}
-              className={`md:hidden text-xs font-bold px-3 py-1.5 rounded-lg border ${
-                isDark 
-                  ? 'bg-[#111827] border-[#1E293B] text-red-400 hover:text-white' 
-                  : 'bg-white border-slate-200 text-red-600 hover:bg-slate-50'
-              }`}
+              className={`
+                flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all duration-150 active:scale-95
+                ${isDark
+                  ? "border-red-500/20 text-red-400 hover:bg-red-950/30 hover:border-red-500/40 hover:text-red-300"
+                  : "border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"}
+              `}
+              title="Logout"
+              aria-label="Logout"
             >
-              Logout
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Logout</span>
             </button>
           </div>
         </header>
@@ -1486,7 +1444,7 @@ export default function CustomerDashboard() {
                           <h2 className={`text-xl font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-950'}`}>
                             {user.name}
                           </h2>
-                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold border flex items-center gap-1 ${
+                          <span className={`text-[10px] font-medium px-2.5 py-0.5 rounded-full font-bold border flex items-center gap-1.5 ${
                             crmDetails.customer?.customerStatus === "ACTIVE" || !crmDetails.customer
                               ? isDark ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-200"
                               : isDark ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-slate-100 text-slate-500 border-slate-200"
@@ -1494,7 +1452,7 @@ export default function CustomerDashboard() {
                             <span className={`w-1.5 h-1.5 rounded-full ${
                               crmDetails.customer?.customerStatus === "ACTIVE" || !crmDetails.customer ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
                             }`} />
-                            {crmDetails.customer?.customerStatus || "ACTIVE"}
+                            {crmDetails.customer?.customerStatus || "Active Account"}
                           </span>
                         </div>
                         {crmDetails.customer?.companyName && (
@@ -1509,11 +1467,11 @@ export default function CustomerDashboard() {
                       </div>
                     </div>
 
-                    <div className="text-left md:text-right text-xs space-y-1 font-mono text-slate-400">
-                      <div>Account ID: <span className={isDark ? 'text-slate-200' : 'text-slate-700'}>{user.id}</span></div>
-                      {crmDetails.customer && (
-                        <div>CRM ID: <span className={isDark ? 'text-slate-200' : 'text-slate-700'}>{crmDetails.customer.crmCustomerId}</span></div>
-                      )}
+                    <div className="text-left md:text-right text-xs space-y-1 text-slate-400">
+                      <div className="flex items-center md:justify-end gap-1.5 text-emerald-400 font-semibold text-[11px]">
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Verified Account</span>
+                      </div>
                       <div>Member Since: <span className={isDark ? 'text-slate-200' : 'text-slate-700'}>{formatJoinedDate(user.createdAt)}</span></div>
                     </div>
                   </div>
@@ -1549,28 +1507,12 @@ export default function CustomerDashboard() {
                     </div>
 
                     <div className="space-y-1">
-                      <span className={`block text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Secondary Phone</span>
-                      <span className={`font-semibold flex items-center gap-1.5 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-                        {crmDetails.customer?.secondaryPhone ? (
-                          <>
-                            <Phone className="w-3.5 h-3.5 text-slate-400" />
-                            <span>{crmDetails.customer.secondaryPhone}</span>
-                          </>
-                        ) : (
-                          <span className="text-slate-500 italic">None Provided</span>
-                        )}
+                      <span className={`block text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Company / Organization</span>
+                      <span className={`font-semibold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                        {crmDetails.customer?.companyName || <span className="text-slate-500 italic">Individual Account</span>}
                       </span>
                     </div>
                   </div>
-                  
-                  {crmDetails.customer && (
-                    <div className="mt-5 pt-3 border-t border-slate-100 dark:border-white/[0.03] flex justify-between items-center text-[10px] text-slate-400">
-                      <span className="flex items-center gap-1">
-                        <Activity className="w-3 h-3 text-emerald-400" /> Live Synchronized from CRM
-                      </span>
-                      <span>Last sync: {new Date(crmDetails.customer.lastSyncedAt).toLocaleString()}</span>
-                    </div>
-                  )}
                 </div>
 
                 {/* 2. KPIs Grid */}
@@ -1587,7 +1529,7 @@ export default function CustomerDashboard() {
                             ? isDark ? "bg-emerald-950/40 text-[#12B76A] border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-200"
                             : isDark ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-slate-50 text-slate-400 border-slate-200"
                         }`}>
-                          {crmDetails.subscriptions.length > 0 ? "Subscribed" : "No Plan"}
+                          {crmDetails.subscriptions.length > 0 ? "Subscribed" : "No Active Plan"}
                         </span>
                       </div>
                       
@@ -1601,7 +1543,7 @@ export default function CustomerDashboard() {
                           </p>
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-400 italic">No subscriptions registered in CRM database.</p>
+                        <p className="text-xs text-slate-400 italic">No active subscriptions registered.</p>
                       )}
                     </div>
                     
@@ -1707,160 +1649,212 @@ export default function CustomerDashboard() {
                   </div>
                 </div>
 
-                {/* 3. Detailed Data Sections */}
+                {/* 3. Main Data Grid: Subscriptions with Services + Domains & Logs */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                   
-                  {/* Left Column: Subscriptions, Services, Domains (2 cols) */}
+                  {/* Left Column: Subscriptions & Included Services (2 cols) */}
                   <div className="lg:col-span-2 space-y-6">
-                    
-                    {/* Subscriptions detail section */}
-                    <div className={`p-6 border rounded-2xl transition-all duration-300 ${
-                      isDark ? 'bg-[#0F172A]/45 border-white/[0.04]' : 'bg-white border-slate-200/80 shadow-sm'
-                    }`}>
-                      <div className="flex items-center gap-2 mb-4">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
                         <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
                           <Shield className="w-4 h-4" />
                         </div>
-                        <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Registered Subscriptions</h3>
+                        <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>My Subscriptions & Services</h3>
                       </div>
-                      
+
                       {crmDetails.subscriptions.length > 0 ? (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-xs text-left">
-                            <thead>
-                              <tr className={`border-b text-[10px] font-bold uppercase tracking-wider ${
-                                isDark ? 'border-white/[0.05] text-slate-400' : 'border-slate-100 text-slate-500'
-                              }`}>
-                                <th className="pb-3 pr-4">Plan Name</th>
-                                <th className="pb-3 pr-4">CRM ID</th>
-                                <th className="pb-3 pr-4">Status</th>
-                                <th className="pb-3 pr-4">Start Date</th>
-                                <th className="pb-3 text-right">End Date</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-white/[0.03]">
-                              {crmDetails.subscriptions.map((sub) => (
-                                <tr key={sub.id} className={`hover:bg-slate-50/50 dark:hover:bg-white/[0.01] transition-colors`}>
-                                  <td className={`py-3.5 pr-4 font-bold ${isDark ? 'text-slate-250' : 'text-slate-800'}`}>
-                                    {sub.planName}
-                                  </td>
-                                  <td className="py-3.5 pr-4 text-slate-400 font-mono text-[10px]">
-                                    {sub.crmSubscriptionId}
-                                  </td>
-                                  <td className="py-3.5 pr-4">
-                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                                      sub.status.toUpperCase() === "ACTIVE"
-                                        ? isDark ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/15" : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                        : isDark ? "bg-rose-950/40 text-rose-450 border-rose-500/15" : "bg-rose-50 text-rose-700 border-rose-200"
+                        <div className="space-y-4">
+                          {crmDetails.subscriptions.map((sub) => {
+                            // Map services for this subscription
+                            const subServices = (sub.services && sub.services.length > 0)
+                              ? sub.services.map(s => ({ name: s.serviceName || s.SKU, status: "ACTIVE", domainName: null }))
+                              : crmDetails.services;
+
+                            return (
+                              <div
+                                key={sub.id}
+                                className={`p-6 border rounded-2xl transition-all duration-300 ${
+                                  isDark
+                                    ? 'bg-[#0F172A]/45 border-white/[0.05] hover:border-emerald-500/20'
+                                    : 'bg-white border-slate-200/80 shadow-sm'
+                                }`}
+                              >
+                                {/* Header of Subscription Card */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-white/[0.04]">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 ${
+                                      isDark ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-600'
                                     }`}>
-                                      <span className={`w-1 h-1 rounded-full ${sub.status.toUpperCase() === "ACTIVE" ? "bg-emerald-400" : "bg-rose-450"}`} />
-                                      {sub.status}
-                                    </span>
-                                  </td>
-                                  <td className="py-3.5 pr-4 text-slate-400 font-mono">
-                                    {new Date(sub.startDate).toLocaleDateString()}
-                                  </td>
-                                  <td className="py-3.5 text-right text-slate-400 font-mono">
-                                    {sub.endDate ? new Date(sub.endDate).toLocaleDateString() : "Lifetime / Ongoing"}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                                      <Shield className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-2.5">
+                                        <h4 className={`text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                          {sub.planName}
+                                        </h4>
+                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                                          sub.status.toUpperCase() === "ACTIVE"
+                                            ? isDark ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/15" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                            : isDark ? "bg-rose-950/40 text-rose-450 border-rose-500/15" : "bg-rose-50 text-rose-700 border-rose-200"
+                                        }`}>
+                                          <span className={`w-1 h-1 rounded-full ${sub.status.toUpperCase() === "ACTIVE" ? "bg-emerald-400" : "bg-rose-450"}`} />
+                                          {sub.status.toUpperCase()}
+                                        </span>
+                                      </div>
+                                      <p className={`text-xs mt-0.5 flex items-center gap-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                        <span>Start: {new Date(sub.startDate).toLocaleDateString()}</span>
+                                        <span>•</span>
+                                        <span>{sub.endDate ? `End: ${new Date(sub.endDate).toLocaleDateString()}` : "Ongoing / Auto-renew"}</span>
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Included Services inside Subscription */}
+                                <div className="pt-4 space-y-3">
+                                  <span className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                                    isDark ? 'text-slate-400' : 'text-slate-500'
+                                  }`}>
+                                    <Server className="w-3.5 h-3.5 text-sky-400" />
+                                    Included Services ({subServices.length})
+                                  </span>
+
+                                  {subServices.length > 0 ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                      {subServices.map((svc, idx) => (
+                                        <div
+                                          key={idx}
+                                          className={`p-3 rounded-xl border flex items-center justify-between transition-colors ${
+                                            isDark
+                                              ? 'bg-slate-900/40 border-white/[0.04] hover:border-sky-500/30'
+                                              : 'bg-slate-50/70 border-slate-200/70 hover:border-slate-300'
+                                          }`}
+                                        >
+                                          <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                            <Server className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                                            <div className="min-w-0">
+                                              <p className={`text-xs font-bold truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                                {svc.name}
+                                              </p>
+                                              {svc.domainName && (
+                                                <p className={`text-[10px] truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                                  {svc.domainName}
+                                                </p>
+                                              )}
+                                            </div>
+                                          </div>
+                                          <span className={`shrink-0 text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                                            svc.status?.toUpperCase() === "ACTIVE"
+                                              ? isDark ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                              : isDark ? "bg-amber-950/40 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-700 border-amber-200"
+                                          }`}>
+                                            {svc.status || "Active"}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="p-3 text-center text-xs text-slate-400 italic bg-slate-50/50 dark:bg-white/[0.01] rounded-xl border border-dashed dark:border-white/[0.04]">
+                                      Standard plan services enabled.
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : (
-                        <div className="p-8 text-center text-xs text-slate-400 italic bg-slate-50/50 dark:bg-white/[0.01] rounded-xl border border-dashed dark:border-white/[0.04]">
-                          No subscriptions associated with this account.
+                        <div className={`p-8 text-center rounded-2xl border ${
+                          isDark ? 'bg-[#0F172A]/40 border-white/[0.05]' : 'bg-white border-slate-200'
+                        }`}>
+                          {crmDetails.services.length > 0 ? (
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2 mb-2 justify-center">
+                                <Server className="w-4 h-4 text-sky-400" />
+                                <h4 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>Active Services</h4>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {crmDetails.services.map((svc) => (
+                                  <div
+                                    key={svc.id}
+                                    className={`p-3 rounded-xl border flex items-center justify-between ${
+                                      isDark ? 'bg-slate-900/40 border-white/[0.05]' : 'bg-slate-50 border-slate-200'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <Server className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                                      <span className={`text-xs font-bold truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                        {svc.name}
+                                      </span>
+                                    </div>
+                                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                      {svc.status}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <Shield className="w-8 h-8 text-slate-400 mx-auto opacity-50" />
+                              <p className={`text-sm font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>No active subscriptions found</p>
+                              <p className="text-xs text-slate-400">Contact support to register a service plan.</p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
+                  </div>
 
-                    {/* Services and Domains dual grids */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {/* Services Card */}
-                      <div className={`p-6 border rounded-2xl transition-all duration-300 ${
-                        isDark ? 'bg-[#0F172A]/45 border-white/[0.04]' : 'bg-white border-slate-200/80 shadow-sm'
-                      }`}>
-                        <div className="flex items-center gap-2 mb-4">
-                          <div className="p-1.5 rounded-lg bg-sky-500/10 text-sky-400">
-                            <Server className="w-4 h-4" />
-                          </div>
-                          <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Purchased Services</h3>
-                        </div>
-
-                        {crmDetails.services.length > 0 ? (
-                          <div className="space-y-3">
-                            {crmDetails.services.map((svc) => (
-                              <div key={svc.id} className={`p-3 rounded-xl border flex items-center justify-between transition-colors hover:border-[#38b1f7]/30 ${
-                                isDark ? 'bg-white/[0.01] border-white/[0.05]' : 'bg-slate-50/50 border-slate-100'
-                              }`}>
-                                <div className="space-y-1 min-w-0 pr-2">
-                                  <span className={`block text-xs font-bold truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-                                    {svc.name}
-                                  </span>
-                                  <span className="block text-[9.5px] font-mono text-slate-455 truncate">
-                                    ID: {svc.crmServiceId}
-                                  </span>
-                                </div>
-                                <span className={`shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8.5px] font-extrabold border ${
-                                  svc.status.toUpperCase() === "ACTIVE"
-                                    ? isDark ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border-emerald-150"
-                                    : isDark ? "bg-amber-950/40 text-amber-400 border-amber-500/20" : "bg-amber-50 text-amber-700 border-amber-150"
-                                }`}>
-                                  {svc.status}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="p-8 text-center text-xs text-slate-400 italic bg-slate-50/50 dark:bg-white/[0.01] rounded-xl border border-dashed dark:border-white/[0.04]">
-                            No services registered for this account.
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Domains Card */}
-                      <div className={`p-6 border rounded-2xl transition-all duration-300 ${
-                        isDark ? 'bg-[#0F172A]/45 border-white/[0.04]' : 'bg-white border-slate-200/80 shadow-sm'
-                      }`}>
-                        <div className="flex items-center gap-2 mb-4">
+                  {/* Right Column: Associated Domains & Credit Logs (1 col) */}
+                  <div className="space-y-6">
+                    {/* Domains Card */}
+                    <div className={`p-6 border rounded-2xl transition-all duration-300 ${
+                      isDark ? 'bg-[#0F172A]/45 border-white/[0.04]' : 'bg-white border-slate-200/80 shadow-sm'
+                    }`}>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
                           <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400">
                             <Globe className="w-4 h-4" />
                           </div>
                           <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Associated Domains</h3>
                         </div>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold border ${
+                          isDark ? 'bg-indigo-950/40 text-indigo-400 border-indigo-500/20' : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                        }`}>
+                          {crmDetails.domains.length} Domain{crmDetails.domains.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
 
-                        {crmDetails.domains.length > 0 ? (
-                          <div className="space-y-3">
-                            {crmDetails.domains.map((dom) => (
-                              <div key={dom.id} className={`p-3 rounded-xl border flex items-center justify-between transition-colors hover:border-[#38b1f7]/30 ${
-                                isDark ? 'bg-white/[0.01] border-white/[0.05]' : 'bg-slate-50/50 border-slate-100'
-                              }`}>
-                                <div className="space-y-1 min-w-0 pr-2">
-                                  <span className={`block text-xs font-bold truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-                                    {dom.domainName}
-                                  </span>
-                                  <span className="block text-[9.5px] font-mono text-slate-455 truncate">
-                                    ID: {dom.crmDomainId}
-                                  </span>
-                                </div>
-                                <span className={`shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8.5px] font-mono text-slate-455 border border-slate-250 dark:border-white/5`}>
-                                  Verified
+                      {crmDetails.domains.length > 0 ? (
+                        <div className="space-y-2.5">
+                          {crmDetails.domains.map((dom) => (
+                            <div key={dom.id} className={`p-3 rounded-xl border flex items-center justify-between transition-colors hover:border-indigo-500/30 ${
+                              isDark ? 'bg-white/[0.01] border-white/[0.05]' : 'bg-slate-50/50 border-slate-100'
+                            }`}>
+                              <div className="flex items-center gap-3 min-w-0 pr-2">
+                                <Globe className="w-4 h-4 text-indigo-400 shrink-0" />
+                                <span className={`text-xs font-bold font-mono truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                  {dom.domainName}
                                 </span>
                               </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="p-8 text-center text-xs text-slate-400 italic bg-slate-50/50 dark:bg-white/[0.01] rounded-xl border border-dashed dark:border-white/[0.04]">
-                            No domains linked to this profile.
-                          </div>
-                        )}
-                      </div>
+                              <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                                isDark ? 'bg-emerald-950/40 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              }`}>
+                                <CheckCircle className="w-3 h-3 text-emerald-400" />
+                                Verified
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-6 text-center text-xs text-slate-400 italic bg-slate-50/50 dark:bg-white/[0.01] rounded-xl border border-dashed dark:border-white/[0.04]">
+                          No domains linked to this account.
+                        </div>
+                      )}
                     </div>
-                  </div>
 
-                  {/* Right Column: Billing Transactions Log (1 col) */}
-                  <div className="space-y-6">
+                    {/* Credit Logs Card */}
                     <div className={`p-6 border rounded-2xl transition-all duration-300 ${
                       isDark ? 'bg-[#0F172A]/45 border-white/[0.04]' : 'bg-white border-slate-200/80 shadow-sm'
                     }`}>
@@ -1868,11 +1862,11 @@ export default function CustomerDashboard() {
                         <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
                           <History className="w-4 h-4" />
                         </div>
-                        <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Credit Logs</h3>
+                        <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Credit Activity</h3>
                       </div>
 
                       {credits?.transactions && credits.transactions.length > 0 ? (
-                        <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
+                        <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1">
                           {credits.transactions.map((tx: any) => {
                             const isAddition = tx.hours > 0;
                             return (
@@ -1884,7 +1878,7 @@ export default function CustomerDashboard() {
 
                                 <div className="space-y-1">
                                   <div className="flex items-center justify-between text-[11px]">
-                                    <span className={`font-semibold ${isDark ? 'text-slate-355' : 'text-slate-500'}`}>
+                                    <span className={`font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                                       {new Date(tx.createdAt).toLocaleDateString()}
                                     </span>
                                     <span className={`font-bold font-mono text-xs ${isAddition ? 'text-emerald-500' : 'text-amber-500'}`}>
@@ -1900,7 +1894,7 @@ export default function CustomerDashboard() {
                           })}
                         </div>
                       ) : (
-                        <div className="p-8 text-center text-xs text-slate-400 italic bg-slate-50/50 dark:bg-white/[0.01] rounded-xl border border-dashed dark:border-white/[0.04]">
+                        <div className="p-6 text-center text-xs text-slate-400 italic bg-slate-50/50 dark:bg-white/[0.01] rounded-xl border border-dashed dark:border-white/[0.04]">
                           No credit transactions found.
                         </div>
                       )}
