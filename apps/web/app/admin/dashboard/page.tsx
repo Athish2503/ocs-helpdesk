@@ -56,6 +56,7 @@ import {
 import { useDialog } from "../../../context/DialogContext";
 import AdminShell, { AdminShellSkeleton } from "../../../components/admin/AdminShell";
 import Loader from "../../../components/Loader";
+import RolePermissionsManager from "../../../components/admin/RolePermissionsManager";
 
 // ── Types ──────────────────────────────────────────────────────────
 interface Category { 
@@ -1176,7 +1177,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleCreateCustomRole = async (roleName: string) => {
+  const handleCreateCustomRole = async (roleName: string, initialPermissions: string[] = []) => {
     const roleNameUpper = roleName.toUpperCase().replace(/[^A-Z0-9_]/g, "_");
     if (rolePermissions.some(rp => rp.role === roleNameUpper)) {
       toast.error("Role already exists.");
@@ -1186,7 +1187,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetchWithAuth("/users/role-permissions", {
         method: "PATCH",
-        body: JSON.stringify({ role: roleNameUpper, permissions: [] }),
+        body: JSON.stringify({ role: roleNameUpper, permissions: initialPermissions }),
       });
       if (res.ok) {
         toast.success(`Role ${roleNameUpper} created successfully.`);
@@ -1200,10 +1201,6 @@ export default function AdminDashboard() {
   };
 
   const handleDeleteCustomRole = async (role: string) => {
-    if (!confirm(`Are you sure you want to delete the role "${role}"? Any users currently assigned to this role will automatically fall back to AGENT.`)) {
-      return;
-    }
-
     try {
       const res = await fetchWithAuth(`/users/role-permissions/${role}`, {
         method: "DELETE",
@@ -4221,117 +4218,15 @@ export default function AdminDashboard() {
             TAB: ROLE PERMISSIONS
         ══════════════════════════════════════════════════════════ */}
         {activeTab === "permissions" && user.role === "ADMIN" && (
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-              <div>
-                <h2 className={`text-base font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Role Permissions</h2>
-                <p className={`text-sm mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>
-                  Configure access control matrix for system and custom roles. Changes are saved dynamically.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <input 
-                  type="text" 
-                  placeholder="New custom role..." 
-                  id="new-role-input"
-                  className={`admin-input ${isDark ? "admin-dark" : ""} w-48 text-sm`} 
-                  style={{ height: 40 }}
-                  onKeyDown={async (e) => {
-                    if (e.key === "Enter") {
-                      const val = (e.target as HTMLInputElement).value.trim();
-                      if (!val) return;
-                      await handleCreateCustomRole(val);
-                      (e.target as HTMLInputElement).value = "";
-                    }
-                  }}
-                />
-                <button
-                  onClick={async () => {
-                    const input = document.getElementById("new-role-input") as HTMLInputElement;
-                    const val = input?.value.trim();
-                    if (val) {
-                      await handleCreateCustomRole(val);
-                      input.value = "";
-                    }
-                  }}
-                  className="admin-btn admin-btn-primary"
-                  style={{ height: 40 }}
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Role
-                </button>
-              </div>
-            </div>
-
-            <div className={`admin-card overflow-hidden ${isDark ? "admin-dark" : ""}`}>
-              <div className="overflow-x-auto">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th className="w-[280px]">Permission Action</th>
-                      {rolePermissions.map(rp => {
-                        const isSystemRole = ["ADMIN", "CUSTOMER", "AGENT", "SUPERVISOR", "SUPPORT_L1", "SUPPORT_L2", "BILLING"].includes(rp.role);
-                        return (
-                          <th key={rp.role} className="text-center min-w-[120px] group">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span className={`admin-badge uppercase ${
-                                rp.role === "ADMIN" ? "admin-badge-admin" : "admin-badge-agent"
-                              }`}>
-                                {rp.role}
-                              </span>
-                              {!isSystemRole && (
-                                <button
-                                  onClick={() => handleDeleteCustomRole(rp.role)}
-                                  className="text-red-500 hover:text-red-700 hover:scale-110 active:scale-95 transition-all p-0.5 rounded cursor-pointer"
-                                  title={`Delete role ${rp.role}`}
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </div>
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      { key: "view_tickets", name: "View Tickets", desc: "Allows viewing ticket queues and tickets" },
-                      { key: "reply_tickets", name: "Reply to Tickets", desc: "Allows sending replies and messages in tickets" },
-                      { key: "assign_tickets", name: "Assign Tickets", desc: "Allows assigning teams or agents to support tickets" },
-                      { key: "manage_teams", name: "Manage Teams", desc: "Allows creating, updating and deleting agent groups" },
-                      { key: "manage_kb", name: "Manage KB", desc: "Allows creating/editing knowledge base articles" },
-                      { key: "adjust_credits", name: "Adjust Client Credits", desc: "Allows adjusting support credit hours" },
-                      { key: "manage_categories_rules", name: "Manage Categories & Rules", desc: "Allows CRUD on ticket categories & routing rules" },
-                      { key: "manage_permissions", name: "Manage Permissions", desc: "Allows configuring role permissions and staff" },
-                    ].map(perm => (
-                      <tr key={perm.key} className={isDark ? "hover:bg-white/[0.01]" : "hover:bg-slate-50"}>
-                        <td>
-                          <p className={`font-semibold text-sm ${isDark ? "text-slate-200" : "text-slate-800"}`}>{perm.name}</p>
-                          <p className={`text-[10px] ${isDark ? "text-slate-500" : "text-slate-400"}`}>{perm.desc}</p>
-                        </td>
-                        {rolePermissions.map(rp => {
-                          const hasPerm = rp.permissions.includes(perm.key);
-                          const isSaving = savingPermissionsRole === rp.role;
-                          return (
-                            <td key={rp.role} className="text-center">
-                              <input 
-                                type="checkbox"
-                                checked={hasPerm}
-                                disabled={isSaving || (rp.role === "ADMIN" && perm.key === "manage_permissions")}
-                                onChange={(e) => handleTogglePermission(rp.role, perm.key, e.target.checked)}
-                                className={`rounded w-4 h-4 cursor-pointer accent-[#38b1f7] disabled:opacity-40`}
-                              />
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+          <RolePermissionsManager
+            rolePermissions={rolePermissions}
+            users={users}
+            isDark={isDark}
+            savingPermissionsRole={savingPermissionsRole}
+            onTogglePermission={handleTogglePermission}
+            onCreateCustomRole={handleCreateCustomRole}
+            onDeleteCustomRole={handleDeleteCustomRole}
+          />
         )}
 
         {/* ══════════════════════════════════════════════════════════

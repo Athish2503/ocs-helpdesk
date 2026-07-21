@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
+import OcsLogo from "../../../components/OcsLogo";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../../../context/AuthContext";
 import { getCookie } from "../../../lib/cookie";
@@ -111,9 +112,7 @@ function AdminLoginForm() {
         {/* Logo */}
         <Link href="/" className="z-10">
           <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-lg ${isDark ? "bg-[#38b1f7] shadow-[#38b1f7]/25" : "bg-white shadow-white/30"}`}>
-              <Ticket className={`w-5 h-5 ${isDark ? "text-white" : "text-[#38b1f7]"}`} />
-            </div>
+            <OcsLogo className="h-8 w-auto shrink-0" color="#38b1f7" />
             <span className={`font-extrabold text-xl tracking-tight font-display ${isDark ? "text-white" : "text-white"}`}>
               OCS Helpdesk
             </span>

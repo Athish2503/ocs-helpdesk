@@ -3,6 +3,7 @@
 import { useAuth } from "../../../context/AuthContext";
 import Loader from "../../../components/Loader";
 import LogoutTransition from "../../../components/LogoutTransition";
+import OcsLogo from "../../../components/OcsLogo";
 import { useToast } from "../../../context/ToastContext";
 import React, { useState, useEffect, useCallback } from "react";
 
@@ -1047,14 +1048,12 @@ export default function CustomerDashboard() {
       }`}>
         {/* Brand Logo Header */}
         <div className={`flex items-center border-b border-inherit h-[64px] shrink-0 transition-all duration-300 ${
-          isSidebarCollapsed ? "justify-center px-2" : "justify-between px-4 py-4"
+          isSidebarCollapsed ? "justify-between px-3" : "justify-between px-4 py-4"
         }`}>
           {!isSidebarCollapsed ? (
             <>
               <div className="flex items-center gap-3 overflow-hidden min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-[#38b1f7] flex items-center justify-center shadow-[0_0_15px_rgba(56,177,247,0.4)] shrink-0">
-                  <span className="font-extrabold text-[#020617] text-md">Ω</span>
-                </div>
+                <OcsLogo className="h-7 w-auto shrink-0" color="#38b1f7" />
                 <div className="overflow-hidden">
                   <h2 className={`font-bold text-sm leading-tight truncate whitespace-nowrap ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>OCS Helpdesk</h2>
                   <p className={`text-[9px] font-mono tracking-wider uppercase whitespace-nowrap truncate ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>Portal Client</p>
@@ -1074,18 +1073,21 @@ export default function CustomerDashboard() {
               </button>
             </>
           ) : (
-            <button
-              onClick={toggleSidebar}
-              type="button"
-              className={`p-1.5 rounded-lg border transition-all duration-200 active:scale-95 shrink-0 flex items-center justify-center ${
-                isDark 
-                  ? 'border-white/10 text-[#38b1f7] hover:text-white hover:bg-white/[0.06]' 
-                  : 'border-slate-200 text-[#0d7fc0] hover:text-[#38b1f7] hover:bg-slate-100'
-              }`}
-              title="Expand Sidebar"
-            >
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center justify-between w-full">
+              <OcsLogo className="h-5 w-auto shrink-0" color="#38b1f7" />
+              <button
+                onClick={toggleSidebar}
+                type="button"
+                className={`p-1 rounded-lg border transition-all duration-200 active:scale-95 shrink-0 flex items-center justify-center ${
+                  isDark 
+                    ? 'border-white/10 text-[#38b1f7] hover:text-white hover:bg-white/[0.06]' 
+                    : 'border-slate-200 text-[#0d7fc0] hover:text-[#38b1f7] hover:bg-slate-100'
+                }`}
+                title="Expand Sidebar"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           )}
         </div>
 
@@ -1142,28 +1144,33 @@ export default function CustomerDashboard() {
       {/* 2. Main Work Shell */}
       <div className="flex-grow flex flex-col overflow-hidden z-10">
         {/* Top Bar Navigation (Height: 72px) */}
-        <header className={`h-[72px] backdrop-blur-md border-b px-8 flex items-center justify-between shrink-0 transition-colors duration-300 ${
+        <header className={`h-[72px] backdrop-blur-md border-b px-4 md:px-8 flex items-center justify-between shrink-0 transition-colors duration-300 ${
           isDark ? 'bg-[#0F172A]/70 border-[#1E293B]' : 'bg-white/80 border-slate-200/80'
         }`}>
-          <div>
-            <h1 className={`font-bold text-lg tracking-tight ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>
-              {activeTab === "dashboard" 
-                ? "Dashboard Overview" 
-                : activeTab === "tickets"
-                ? "My Support Tickets"
-                : activeTab === "kb"
-                ? "Knowledge Base"
-                : "Profile Settings"}
-            </h1>
-            <p className={`text-[10px] ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>
-              {activeTab === "dashboard" 
-                ? "Metrics and active support overview" 
-                : activeTab === "tickets"
-                ? "View, manage, and discuss your submitted issues"
-                : activeTab === "kb"
-                ? "Search and read troubleshooting guidelines and articles"
-                : "Manage your personal profile and account credentials"}
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="md:hidden shrink-0">
+              <OcsLogo className="h-6 w-auto" color="#38b1f7" />
+            </div>
+            <div>
+              <h1 className={`font-bold text-lg tracking-tight ${isDark ? 'text-[#F8FAFC]' : 'text-slate-900'}`}>
+                {activeTab === "dashboard" 
+                  ? "Dashboard Overview" 
+                  : activeTab === "tickets"
+                  ? "My Support Tickets"
+                  : activeTab === "kb"
+                  ? "Knowledge Base"
+                  : "Profile Settings"}
+              </h1>
+              <p className={`text-[10px] ${isDark ? 'text-[#94A3B8]' : 'text-slate-500'}`}>
+                {activeTab === "dashboard" 
+                  ? "Metrics and active support overview" 
+                  : activeTab === "tickets"
+                  ? "View, manage, and discuss your submitted issues"
+                  : activeTab === "kb"
+                  ? "Search and read troubleshooting guidelines and articles"
+                  : "Manage your personal profile and account credentials"}
+              </p>
+            </div>
           </div>
           <div className="flex items-center space-x-3">
             {/* Theme Toggle Button */}

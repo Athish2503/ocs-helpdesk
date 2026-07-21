@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import OcsLogo from "../../components/OcsLogo";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import { 
@@ -89,9 +90,7 @@ export default function LoginPage() {
         {/* Logo */}
         <Link href="/">
         <div className="flex items-center space-x-3 z-10 cursor-pointer">
-          <div className="w-9 h-9 bg-white flex items-center justify-center rounded-lg shadow-md">
-            <Ticket className="w-5.5 h-5.5 text-[#38b1f7]" />
-          </div>
+          <OcsLogo className="h-8 w-auto shrink-0" color="#ffffff" />
           <span className="font-extrabold text-xl tracking-tight text-white font-display" >OCS Helpdesk</span>
         </div>
         </Link>

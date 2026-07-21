@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Sun, Moon, RefreshCw, LogOut } from "lucide-react";
 import LogoutTransition from "../LogoutTransition";
+import OcsLogo from "../OcsLogo";
 
 interface AdminHeaderProps {
   title: string;
@@ -39,18 +40,23 @@ export default function AdminHeader({
             : "bg-white/90 backdrop-blur-md border-slate-200"}
         `}
       >
-        {/* Left: Title */}
-        <div className="min-w-0 flex-1 mr-4">
-          <h1
-            className={`text-base font-bold leading-tight truncate ${isDark ? "text-white" : "text-slate-900"}`}
-          >
-            {title}
-          </h1>
-          {description && (
-            <p className={`text-xs leading-tight truncate ${isDark ? "text-slate-500" : "text-slate-400"}`}>
-              {description}
-            </p>
-          )}
+        {/* Left: Title & Mobile Logo */}
+        <div className="flex items-center gap-3 min-w-0 flex-1 mr-4">
+          <div className="md:hidden shrink-0">
+            <OcsLogo className="h-6 w-auto" color="#38b1f7" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1
+              className={`text-base font-bold leading-tight truncate ${isDark ? "text-white" : "text-slate-900"}`}
+            >
+              {title}
+            </h1>
+            {description && (
+              <p className={`text-xs leading-tight truncate ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                {description}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Right: Actions */}

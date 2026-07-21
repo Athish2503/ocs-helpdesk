@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import OcsLogo from "../OcsLogo";
 import {
   LayoutDashboard,
   Ticket,
@@ -99,7 +100,7 @@ export default function AdminSidebar({
     if (itemId === "routing") return user.permissions.includes("manage_categories_rules");
     if (itemId === "permissions") return user.permissions.includes("manage_permissions");
     if (itemId === "credits") return user.permissions.includes("adjust_credits");
-    if (itemId === "sla") return user.permissions.includes("view_tickets");
+    if (itemId === "sla") return user.permissions.includes("view_sla") || user.permissions.includes("manage_sla");
     return false;
   };
 
@@ -119,12 +120,7 @@ export default function AdminSidebar({
       {/* ── Brand Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-inherit h-[64px] shrink-0">
         <div className="flex items-center gap-3 overflow-hidden min-w-0">
-          <div
-            className="w-8 h-8 rounded-xl bg-[#38b1f7] flex items-center justify-center shadow-lg shadow-[#38b1f7]/25 shrink-0"
-            aria-hidden="true"
-          >
-            <ShieldCheck className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
-          </div>
+          <OcsLogo className="h-7 w-auto shrink-0" color="#38b1f7" />
           {!isCollapsed && (
             <div className="overflow-hidden">
               <p className={`text-sm font-bold leading-tight truncate ${isDark ? "text-white" : "text-slate-900"}`}>

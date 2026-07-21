@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Loader from "../components/Loader";
+import OcsLogo from "../components/OcsLogo";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../context/AuthContext";
@@ -246,9 +247,7 @@ export default function Home() {
         isDark ? 'border-[#1E293B]/60' : 'border-[#E2E8F0]'
       }`}>
         <div className="flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-[#38B1F7] to-[#129FF0] flex items-center justify-center shadow-[0_4px_14px_rgba(95,192,249,0.2)]">
-            <span className="font-extrabold text-[#020617] text-base">Ω</span>
-          </div>
+          <OcsLogo className="h-8 w-auto shrink-0" color="#38b1f7" />
           <div>
             <h1 className={`font-bold text-sm tracking-tight transition-colors ${
               isDark ? 'text-[#F8FAFC]' : 'text-[#0F172A]'
@@ -1421,7 +1420,7 @@ export default function Home() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
           <div className="space-y-3">
             <div className="flex items-center space-x-2">
-              <div className="w-6 h-6 rounded bg-[#129FF0] flex items-center justify-center font-extrabold text-[#020617] text-xs">Ω</div>
+              <OcsLogo className="h-5 w-auto shrink-0" color="#38b1f7" />
               <span className={`font-bold transition-colors ${isDark ? 'text-[#F8FAFC]' : 'text-[#0F172A]'}`}>OCS Helpdesk</span>
             </div>
             <p className="text-[11px] leading-relaxed text-[#64748B]">

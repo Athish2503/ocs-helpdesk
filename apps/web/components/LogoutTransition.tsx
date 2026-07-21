@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ShieldCheck } from "lucide-react";
+import OcsLogo from "./OcsLogo";
 
 interface LogoutTransitionProps {
   isLoggingOut: boolean;
@@ -54,8 +54,8 @@ export default function LogoutTransition({
       <div className="relative z-10 flex flex-col items-center text-center space-y-6 max-w-sm px-6">
         {/* Brand Shield Icon */}
         <div className="relative flex items-center justify-center">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#0284c7] to-[#38b1f7] flex items-center justify-center shadow-xl shadow-[#38b1f7]/20 border border-white/20 transition-transform duration-500 scale-105">
-            <ShieldCheck className="w-9 h-9 text-white" strokeWidth={2.2} />
+          <div className="p-3 rounded-2xl bg-gradient-to-tr from-[#0284c7]/20 to-[#38b1f7]/20 flex items-center justify-center shadow-xl shadow-[#38b1f7]/20 border border-[#38b1f7]/30 transition-transform duration-500 scale-105">
+            <OcsLogo className="h-10 w-auto" color="#38b1f7" />
           </div>
         </div>
 
