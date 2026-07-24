@@ -1,20 +1,4 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.sanitizeSlug = sanitizeSlug;
-exports.validateSlugFormat = validateSlugFormat;
-exports.sanitizeHTML = sanitizeHTML;
-exports.detectSQLInjection = detectSQLInjection;
-exports.detectXSS = detectXSS;
-exports.generateCSPHeader = generateCSPHeader;
-exports.whitelistResponseFields = whitelistResponseFields;
-exports.hashIP = hashIP;
-exports.isBot = isBot;
-exports.isSuspiciousRequest = isSuspiciousRequest;
-exports.generateFingerprint = generateFingerprint;
-const crypto_1 = __importDefault(require("crypto"));
+import crypto from "crypto";
 /**
  * Security Helper Utilities
  * Provides security functions for input validation, sanitization, and threat detection
@@ -22,7 +6,7 @@ const crypto_1 = __importDefault(require("crypto"));
 /**
  * Sanitize and validate article slug
  */
-function sanitizeSlug(slug) {
+export function sanitizeSlug(slug) {
     if (!slug || typeof slug !== "string") {
         return "";
     }
@@ -39,7 +23,7 @@ function sanitizeSlug(slug) {
 /**
  * Validate slug format
  */
-function validateSlugFormat(slug) {
+export function validateSlugFormat(slug) {
     if (!slug || typeof slug !== "string") {
         return false;
     }
@@ -50,7 +34,7 @@ function validateSlugFormat(slug) {
 /**
  * Sanitize HTML content (basic XSS prevention)
  */
-function sanitizeHTML(content) {
+export function sanitizeHTML(content) {
     if (!content || typeof content !== "string") {
         return "";
     }
@@ -73,7 +57,7 @@ function sanitizeHTML(content) {
 /**
  * Detect potential SQL injection attempts
  */
-function detectSQLInjection(input) {
+export function detectSQLInjection(input) {
     if (!input || typeof input !== "string") {
         return false;
     }
@@ -96,7 +80,7 @@ function detectSQLInjection(input) {
 /**
  * Detect potential XSS attempts
  */
-function detectXSS(input) {
+export function detectXSS(input) {
     if (!input || typeof input !== "string") {
         return false;
     }
@@ -116,7 +100,7 @@ function detectXSS(input) {
 /**
  * Generate Content Security Policy header
  */
-function generateCSPHeader() {
+export function generateCSPHeader() {
     const directives = {
         "default-src": ["'self'"],
         "script-src": ["'self'", "'unsafe-inline'"], // TODO: Remove unsafe-inline in production
@@ -137,7 +121,7 @@ function generateCSPHeader() {
 /**
  * Whitelist response fields (remove sensitive data)
  */
-function whitelistResponseFields(data, allowedFields) {
+export function whitelistResponseFields(data, allowedFields) {
     if (!data || typeof data !== "object") {
         return {};
     }
@@ -152,13 +136,13 @@ function whitelistResponseFields(data, allowedFields) {
 /**
  * Hash IP address for privacy-compliant logging
  */
-function hashIP(ipAddress, salt = null) {
+export function hashIP(ipAddress, salt = null) {
     if (!ipAddress) {
         return "";
     }
     // Use daily rotating salt if not provided
     const dailySalt = salt || new Date().toISOString().split("T")[0];
-    return crypto_1.default
+    return crypto
         .createHash("sha256")
         .update(ipAddress + dailySalt)
         .digest("hex");
@@ -166,7 +150,7 @@ function hashIP(ipAddress, salt = null) {
 /**
  * Detect if user agent is a bot
  */
-function isBot(userAgent) {
+export function isBot(userAgent) {
     if (!userAgent || typeof userAgent !== "string") {
         return false;
     }
@@ -197,7 +181,7 @@ function isBot(userAgent) {
 /**
  * Detect suspicious request patterns
  */
-function isSuspiciousRequest(req) {
+export function isSuspiciousRequest(req) {
     const checks = [];
     // Check for SQL injection in query params
     if (req.query) {
@@ -236,14 +220,14 @@ function isSuspiciousRequest(req) {
 /**
  * Generate anonymous session fingerprint
  */
-function generateFingerprint(req) {
+export function generateFingerprint(req) {
     const components = [
         req.get("user-agent") || "",
         req.get("accept-language") || "",
         req.get("accept-encoding") || "",
         req.ip || "",
     ];
-    return crypto_1.default
+    return crypto
         .createHash("sha256")
         .update(components.join("|"))
         .digest("hex");

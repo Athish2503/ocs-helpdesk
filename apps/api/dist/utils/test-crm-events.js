@@ -1,9 +1,7 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-require("dotenv/config");
-const prisma_js_1 = require("../config/prisma.js");
-const crm_queue_service_js_1 = require("../services/crm-queue.service.js");
-const crm_cache_service_js_1 = require("../services/crm-cache.service.js");
+import "dotenv/config";
+import { prisma } from "../config/prisma.js";
+import { enqueueEvent } from "../services/crm-queue.service.js";
+import { getOrFetchDomains } from "../services/crm-cache.service.js";
 // CRM mock responses dictionary
 const mockCrmResponses = {
     "/api/helpdesk/customers/test-cust-123/domains": [
@@ -62,13 +60,13 @@ async function main() {
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     console.log("🚀 Starting CRM Integration Webhook and Cache Tests...");
     // Clean previous test logs and queue items
-    await prisma_js_1.prisma.crmSyncLog.deleteMany({ where: { entityId: "test-cust-123" } });
-    await prisma_js_1.prisma.crmEventQueue.deleteMany({ where: { payload: { contains: "test-cust-123" } } });
+    await prisma.crmSyncLog.deleteMany({ where: { entityId: "test-cust-123" } });
+    await prisma.crmEventQueue.deleteMany({ where: { payload: { contains: "test-cust-123" } } });
     // Setup: Delete any existing test users and customers
-    await prisma_js_1.prisma.user.deleteMany({ where: { email: "test-customer@crm.com" } });
-    await prisma_js_1.prisma.crmCustomer.deleteMany({ where: { crmCustomerId: "test-cust-123" } });
+    await prisma.user.deleteMany({ where: { email: "test-customer@crm.com" } });
+    await prisma.crmCustomer.deleteMany({ where: { crmCustomerId: "test-cust-123" } });
     // 1. Create a CrmCustomer mirror and User in the local DB
-    const crmCustomer = await prisma_js_1.prisma.crmCustomer.create({
+    const crmCustomer = await prisma.crmCustomer.create({
         data: {
             crmCustomerId: "test-cust-123",
             displayName: "Initial Customer Name",
@@ -77,7 +75,7 @@ async function main() {
             customerStatus: "ACTIVE",
         }
     });
-    const user = await prisma_js_1.prisma.user.create({
+    const user = await prisma.user.create({
         data: {
             name: "Initial Customer Name",
             email: "test-customer@crm.com",
@@ -91,7 +89,7 @@ async function main() {
     // Test Case 1: Idempotency (ignore duplicate eventIds)
     console.log("\n--- Test Case 1: Idempotency ---");
     const eventId = "evt-test-1001";
-    const ok1 = await (0, crm_queue_service_js_1.enqueueEvent)(eventId, "customer.updated", {
+    const ok1 = await enqueueEvent(eventId, "customer.updated", {
         id: "test-cust-123",
         displayName: "Updated Customer Name",
         companyName: "Updated CRM Corp",
@@ -104,7 +102,7 @@ async function main() {
         passwordHash: "hackedpasswordhash",
         role: "ADMIN"
     });
-    const ok2 = await (0, crm_queue_service_js_1.enqueueEvent)(eventId, "customer.updated", {
+    const ok2 = await enqueueEvent(eventId, "customer.updated", {
         id: "test-cust-123",
         displayName: "Duplicate Updated Name"
     });
@@ -115,7 +113,7 @@ async function main() {
         throw new Error("❌ Idempotency check failed.");
     }
     // Verify that it is currently logged as QUEUED or PROCESSED in DB
-    const initialLog = await prisma_js_1.prisma.crmSyncLog.findUnique({ where: { eventId } });
+    const initialLog = await prisma.crmSyncLog.findUnique({ where: { eventId } });
     if (initialLog && (initialLog.status === "QUEUED" || initialLog.status === "PROCESSED")) {
         console.log("✅ Event successfully logged in database.");
     }
@@ -126,7 +124,7 @@ async function main() {
     console.log("\n--- Test Case 2: Process Event & Filter Protected Fields ---");
     await sleep(200);
     // Verify updates in CrmCustomer mirror
-    const updatedCrm = await prisma_js_1.prisma.crmCustomer.findUnique({ where: { crmCustomerId: "test-cust-123" } });
+    const updatedCrm = await prisma.crmCustomer.findUnique({ where: { crmCustomerId: "test-cust-123" } });
     if (updatedCrm &&
         updatedCrm.displayName === "Updated Customer Name" &&
         updatedCrm.companyName === "Updated CRM Corp" &&
@@ -138,7 +136,7 @@ async function main() {
         throw new Error("❌ Allowed fields not updated correctly in CrmCustomer.");
     }
     // Verify updates in User mirror and check password/role security
-    const updatedUser = await prisma_js_1.prisma.user.findUnique({ where: { id: user.id } });
+    const updatedUser = await prisma.user.findUnique({ where: { id: user.id } });
     if (updatedUser) {
         if (updatedUser.name !== "Updated Customer Name" || updatedUser.email !== "test-customer@crm.com") {
             throw new Error("❌ User name or email was not synced.");
@@ -152,8 +150,8 @@ async function main() {
         throw new Error("❌ User not found after sync.");
     }
     // Verify Event Queue delete and Sync Log updated
-    const logAfterProcessing = await prisma_js_1.prisma.crmSyncLog.findUnique({ where: { eventId } });
-    const queueAfterProcessing = await prisma_js_1.prisma.crmEventQueue.findFirst({ where: { eventId } });
+    const logAfterProcessing = await prisma.crmSyncLog.findUnique({ where: { eventId } });
+    const queueAfterProcessing = await prisma.crmEventQueue.findFirst({ where: { eventId } });
     if (logAfterProcessing?.status === "PROCESSED" && !queueAfterProcessing) {
         console.log("✅ Log status updated to PROCESSED and event removed from queue.");
     }
@@ -163,7 +161,7 @@ async function main() {
     // Test Case 3: Cache Layer and TTL
     console.log("\n--- Test Case 3: Caching Layer and TTL ---");
     // First fetch (should trigger live API call)
-    const domains1 = await (0, crm_cache_service_js_1.getOrFetchDomains)("test-cust-123");
+    const domains1 = await getOrFetchDomains("test-cust-123");
     // Modify mock responses
     mockCrmResponses["/api/helpdesk/customers/test-cust-123/domains"] = [
         { domainId: "dom-1", domainName: "test-domain-1.com" },
@@ -171,7 +169,7 @@ async function main() {
         { domainId: "dom-3", domainName: "new-live-domain.com" }
     ];
     // Second fetch (should serve cached version, NOT new domain)
-    const domains2 = await (0, crm_cache_service_js_1.getOrFetchDomains)("test-cust-123");
+    const domains2 = await getOrFetchDomains("test-cust-123");
     if (domains2.length === 2 && domains2.find(d => d.domainName === "new-live-domain.com") === undefined) {
         console.log("✅ Cache hit: cached values served without contacting CRM API.");
     }
@@ -182,10 +180,10 @@ async function main() {
     console.log("\n--- Test Case 4: Cache Invalidation on Webhook Event ---");
     // Send domain event to queue
     const domainEventId = "evt-test-1002";
-    await (0, crm_queue_service_js_1.enqueueEvent)(domainEventId, "domain.created", { crmCustomerId: "test-cust-123", domainId: "dom-3", domainName: "new-live-domain.com" });
+    await enqueueEvent(domainEventId, "domain.created", { crmCustomerId: "test-cust-123", domainId: "dom-3", domainName: "new-live-domain.com" });
     await sleep(200);
     // Next fetch should retrieve fresh data from CRM API (which contains 3 domains now)
-    const domains3 = await (0, crm_cache_service_js_1.getOrFetchDomains)("test-cust-123");
+    const domains3 = await getOrFetchDomains("test-cust-123");
     if (domains3.length === 3 && domains3.find(d => d.domainName === "new-live-domain.com") !== undefined) {
         console.log("✅ Cache invalidated and fresh CRM API domains successfully fetched.");
     }
@@ -196,13 +194,13 @@ async function main() {
     console.log("\n--- Test Case 5: Error Handling and Queue Retry ---");
     const badEventId = "evt-test-1003";
     // Enqueue event with data that will trigger database transaction throw (null displayName, for instance)
-    await (0, crm_queue_service_js_1.enqueueEvent)(badEventId, "customer.updated", {
+    await enqueueEvent(badEventId, "customer.updated", {
         id: "test-cust-123",
         displayName: null, // this will fail validation or cause db failure
     });
     await sleep(200);
-    const failedLog = await prisma_js_1.prisma.crmSyncLog.findUnique({ where: { eventId: badEventId } });
-    const failedQueue = await prisma_js_1.prisma.crmEventQueue.findFirst({ where: { eventId: badEventId } });
+    const failedLog = await prisma.crmSyncLog.findUnique({ where: { eventId: badEventId } });
+    const failedQueue = await prisma.crmEventQueue.findFirst({ where: { eventId: badEventId } });
     if (failedLog?.status === "FAILED" && failedLog.errors && failedQueue?.status === "FAILED" && failedQueue.retryCount === 1) {
         console.log("✅ Event failed cleanly: saved errors in log and queued for retrying.");
     }
@@ -210,10 +208,10 @@ async function main() {
         throw new Error(`❌ Failed event handling verification failed: Log Status=${failedLog?.status}, Queue Status=${failedQueue?.status}`);
     }
     // Cleanup tests data
-    await prisma_js_1.prisma.crmSyncLog.deleteMany({ where: { entityId: "test-cust-123" } });
-    await prisma_js_1.prisma.crmEventQueue.deleteMany({ where: { payload: { contains: "test-cust-123" } } });
-    await prisma_js_1.prisma.user.deleteMany({ where: { email: "test-customer@crm.com" } });
-    await prisma_js_1.prisma.crmCustomer.deleteMany({ where: { crmCustomerId: "test-cust-123" } });
+    await prisma.crmSyncLog.deleteMany({ where: { entityId: "test-cust-123" } });
+    await prisma.crmEventQueue.deleteMany({ where: { payload: { contains: "test-cust-123" } } });
+    await prisma.user.deleteMany({ where: { email: "test-customer@crm.com" } });
+    await prisma.crmCustomer.deleteMany({ where: { crmCustomerId: "test-cust-123" } });
     console.log("\n🎉 ALL CRM WEBHOOK AND CACHE TESTS COMPLETED SUCCESSFULLY!");
     process.exit(0);
 }

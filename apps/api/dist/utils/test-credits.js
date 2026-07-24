@@ -1,12 +1,10 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-require("dotenv/config");
-const prisma_js_1 = require("../config/prisma.js");
-const tickets_service_js_1 = require("../modules/tickets/tickets.service.js");
+import "dotenv/config";
+import { prisma } from "../config/prisma.js";
+import { updateTicket } from "../modules/tickets/tickets.service.js";
 async function runTests() {
     console.log("🚀 Running Credit Calculation Integration Tests...");
     // 1. Get system admin for ticket resolution
-    const admin = await prisma_js_1.prisma.user.findFirst({
+    const admin = await prisma.user.findFirst({
         where: { role: "ADMIN" }
     });
     if (!admin) {
@@ -18,14 +16,14 @@ async function runTests() {
         email: admin.email
     };
     // Get a category for tickets
-    let category = await prisma_js_1.prisma.category.findFirst();
+    let category = await prisma.category.findFirst();
     if (!category) {
-        category = await prisma_js_1.prisma.category.create({
+        category = await prisma.category.create({
             data: { name: "Billing & Accounts", slug: "billing" }
         });
     }
     // 2. Create a customer with NO registered domains in OCS
-    const customerNoDomains = await prisma_js_1.prisma.user.upsert({
+    const customerNoDomains = await prisma.user.upsert({
         where: { email: "test-new-client@no-domains.com" },
         update: {},
         create: {
@@ -37,7 +35,7 @@ async function runTests() {
         }
     });
     // Ensure CustomerCredits is reset
-    await prisma_js_1.prisma.customerCredits.upsert({
+    await prisma.customerCredits.upsert({
         where: { customerId: customerNoDomains.id },
         update: {
             allocatedHours: 1000.0,
@@ -55,7 +53,7 @@ async function runTests() {
         }
     });
     // Create a ticket for a domain outside of OCS (e.g. external.com)
-    const ticket1 = await prisma_js_1.prisma.ticket.create({
+    const ticket1 = await prisma.ticket.create({
         data: {
             title: "Help with external domain email setup",
             description: "My email on external.com is not working",
@@ -67,7 +65,7 @@ async function runTests() {
         }
     });
     // Create a dummy attachment to pass backend screenshot validation
-    await prisma_js_1.prisma.ticketAttachment.create({
+    await prisma.ticketAttachment.create({
         data: {
             ticketId: ticket1.id,
             filename: "test-resolution-proof.png",
@@ -77,9 +75,9 @@ async function runTests() {
     });
     console.log("Resolving ticket for domain outside of OCS with 0.2 hours consumed (less than 0.5h min)...");
     // Resolve the ticket
-    await (0, tickets_service_js_1.updateTicket)(ticket1.id, { status: "RESOLVED", hoursConsumed: 0.2 }, adminCtx);
+    await updateTicket(ticket1.id, { status: "RESOLVED", hoursConsumed: 0.2 }, adminCtx);
     // Retrieve customer credits
-    const credits1 = await prisma_js_1.prisma.customerCredits.findUnique({
+    const credits1 = await prisma.customerCredits.findUnique({
         where: { customerId: customerNoDomains.id }
     });
     console.log("Credits after ticket 1 resolution:", credits1);
@@ -92,7 +90,7 @@ async function runTests() {
     }
     console.log("✅ Test Case 1 Passed: 750 hourly rate and 1/2 hour min billing applied successfully!");
     // 3. Create a Category to test the credit categories linkage
-    const bronzeCategory = await prisma_js_1.prisma.category.upsert({
+    const bronzeCategory = await prisma.category.upsert({
         where: { name: "Bronze Package" },
         update: {},
         create: {
@@ -103,7 +101,7 @@ async function runTests() {
     });
     console.log("Created Category:", bronzeCategory);
     // Assign bronze package to customerNoDomains
-    await prisma_js_1.prisma.customerCredits.update({
+    await prisma.customerCredits.update({
         where: { customerId: customerNoDomains.id },
         data: {
             creditCategoryId: bronzeCategory.id,
@@ -112,7 +110,7 @@ async function runTests() {
             billableHours: Math.max(0, credits1.usedHours - bronzeCategory.credits)
         }
     });
-    const updatedCredits = await prisma_js_1.prisma.customerCredits.findUnique({
+    const updatedCredits = await prisma.customerCredits.findUnique({
         where: { customerId: customerNoDomains.id },
         include: { creditCategory: true }
     });
@@ -122,16 +120,16 @@ async function runTests() {
     }
     console.log("✅ Test Case 2 Passed: Exclusive credit categories assigned correctly!");
     // Cleanup
-    await prisma_js_1.prisma.ticket.deleteMany({
+    await prisma.ticket.deleteMany({
         where: { customerId: customerNoDomains.id }
     });
-    await prisma_js_1.prisma.customerCredits.delete({
+    await prisma.customerCredits.delete({
         where: { customerId: customerNoDomains.id }
     });
-    await prisma_js_1.prisma.user.delete({
+    await prisma.user.delete({
         where: { id: customerNoDomains.id }
     });
-    await prisma_js_1.prisma.category.delete({
+    await prisma.category.delete({
         where: { id: bronzeCategory.id }
     });
     console.log("\n🎉 ALL credit tests passed successfully!");

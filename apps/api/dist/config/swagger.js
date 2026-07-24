@@ -1,10 +1,4 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.setupSwagger = setupSwagger;
-const swagger_ui_express_1 = __importDefault(require("swagger-ui-express"));
+import swaggerUi from "swagger-ui-express";
 const openApiSpecification = {
     openapi: "3.0.0",
     info: {
@@ -765,8 +759,8 @@ const openApiSpecification = {
 /**
  * Configures and registers Swagger UI middleware on the /docs endpoint.
  */
-function setupSwagger(app) {
-    app.use("/docs", swagger_ui_express_1.default.serve, swagger_ui_express_1.default.setup(openApiSpecification, {
+export function setupSwagger(app) {
+    app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiSpecification, {
         customSiteTitle: "OCS Helpdesk API Reference",
         swaggerOptions: {
             persistAuthorization: true,

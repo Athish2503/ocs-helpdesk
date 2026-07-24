@@ -1,21 +1,10 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.listSlaPolicies = listSlaPolicies;
-exports.getSlaPolicyById = getSlaPolicyById;
-exports.createSlaPolicy = createSlaPolicy;
-exports.updateSlaPolicy = updateSlaPolicy;
-exports.deleteSlaPolicy = deleteSlaPolicy;
-exports.toggleSlaPolicy = toggleSlaPolicy;
-exports.getActivePolicyForPriority = getActivePolicyForPriority;
-exports.computeSlaDeadlines = computeSlaDeadlines;
-exports.seedDefaultSlaPolicies = seedDefaultSlaPolicies;
-const prisma_js_1 = require("../../config/prisma.js");
+import { prisma } from "../../config/prisma.js";
 /**
  * List all SLA policies, ordered by priority tier.
  */
-async function listSlaPolicies() {
+export async function listSlaPolicies() {
     const priorityOrder = ["URGENT", "HIGH", "MEDIUM", "LOW", "ALL"];
-    const policies = await prisma_js_1.prisma.slaPolicy.findMany({
+    const policies = await prisma.slaPolicy.findMany({
         orderBy: { createdAt: "asc" },
     });
     return policies.sort((a, b) => priorityOrder.indexOf(a.priority) - priorityOrder.indexOf(b.priority));
@@ -23,8 +12,8 @@ async function listSlaPolicies() {
 /**
  * Get a single SLA policy by ID.
  */
-async function getSlaPolicyById(id) {
-    const policy = await prisma_js_1.prisma.slaPolicy.findUnique({ where: { id } });
+export async function getSlaPolicyById(id) {
+    const policy = await prisma.slaPolicy.findUnique({ where: { id } });
     if (!policy) {
         const err = new Error("SLA policy not found");
         err.statusCode = 404;
@@ -36,8 +25,8 @@ async function getSlaPolicyById(id) {
  * Create a new SLA policy.
  * Priority must be unique — only one policy per priority tier.
  */
-async function createSlaPolicy(input) {
-    const existing = await prisma_js_1.prisma.slaPolicy.findFirst({
+export async function createSlaPolicy(input) {
+    const existing = await prisma.slaPolicy.findFirst({
         where: { priority: input.priority },
     });
     if (existing) {
@@ -45,7 +34,7 @@ async function createSlaPolicy(input) {
         err.statusCode = 409;
         throw err;
     }
-    return prisma_js_1.prisma.slaPolicy.create({
+    return prisma.slaPolicy.create({
         data: {
             name: input.name,
             priority: input.priority,
@@ -58,11 +47,11 @@ async function createSlaPolicy(input) {
 /**
  * Update an existing SLA policy.
  */
-async function updateSlaPolicy(id, input) {
+export async function updateSlaPolicy(id, input) {
     await getSlaPolicyById(id); // throws 404 if not found
     // If priority is changing, ensure uniqueness
     if (input.priority) {
-        const conflicting = await prisma_js_1.prisma.slaPolicy.findFirst({
+        const conflicting = await prisma.slaPolicy.findFirst({
             where: { priority: input.priority, NOT: { id } },
         });
         if (conflicting) {
@@ -71,7 +60,7 @@ async function updateSlaPolicy(id, input) {
             throw err;
         }
     }
-    return prisma_js_1.prisma.slaPolicy.update({
+    return prisma.slaPolicy.update({
         where: { id },
         data: {
             ...(input.name !== undefined && { name: input.name }),
@@ -85,16 +74,16 @@ async function updateSlaPolicy(id, input) {
 /**
  * Delete an SLA policy by ID.
  */
-async function deleteSlaPolicy(id) {
+export async function deleteSlaPolicy(id) {
     await getSlaPolicyById(id); // throws 404 if not found
-    await prisma_js_1.prisma.slaPolicy.delete({ where: { id } });
+    await prisma.slaPolicy.delete({ where: { id } });
 }
 /**
  * Toggle the isActive status of an SLA policy.
  */
-async function toggleSlaPolicy(id, isActive) {
+export async function toggleSlaPolicy(id, isActive) {
     await getSlaPolicyById(id);
-    return prisma_js_1.prisma.slaPolicy.update({
+    return prisma.slaPolicy.update({
         where: { id },
         data: { isActive },
     });
@@ -103,15 +92,15 @@ async function toggleSlaPolicy(id, isActive) {
  * Find the active SLA policy for a given ticket priority.
  * Falls back to "ALL" policy if no priority-specific policy is found.
  */
-async function getActivePolicyForPriority(priority) {
+export async function getActivePolicyForPriority(priority) {
     // Try exact match first
-    const exact = await prisma_js_1.prisma.slaPolicy.findFirst({
+    const exact = await prisma.slaPolicy.findFirst({
         where: { priority, isActive: true },
     });
     if (exact)
         return exact;
     // Fall back to ALL
-    return prisma_js_1.prisma.slaPolicy.findFirst({
+    return prisma.slaPolicy.findFirst({
         where: { priority: "ALL", isActive: true },
     });
 }
@@ -119,7 +108,7 @@ async function getActivePolicyForPriority(priority) {
  * Compute SLA deadlines for a ticket based on its priority.
  * Returns null deadlines if no active policy is found.
  */
-async function computeSlaDeadlines(priority, createdAt) {
+export async function computeSlaDeadlines(priority, createdAt) {
     const policy = await getActivePolicyForPriority(priority);
     if (!policy) {
         return { slaResponseDeadline: null, slaResolutionDeadline: null };
@@ -134,8 +123,8 @@ async function computeSlaDeadlines(priority, createdAt) {
  * Seed default SLA policies if none exist.
  * Called during server startup or seed.
  */
-async function seedDefaultSlaPolicies() {
-    const count = await prisma_js_1.prisma.slaPolicy.count();
+export async function seedDefaultSlaPolicies() {
+    const count = await prisma.slaPolicy.count();
     if (count > 0)
         return; // already seeded
     const defaults = [
@@ -145,7 +134,7 @@ async function seedDefaultSlaPolicies() {
         { name: "Low SLA", priority: "LOW", firstResponseHours: 24, resolutionHours: 72 },
     ];
     for (const policy of defaults) {
-        await prisma_js_1.prisma.slaPolicy.create({ data: { ...policy, isActive: true } });
+        await prisma.slaPolicy.create({ data: { ...policy, isActive: true } });
     }
     console.log("🌱  Seeded default SLA policies.");
 }

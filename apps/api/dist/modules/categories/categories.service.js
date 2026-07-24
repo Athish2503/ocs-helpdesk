@@ -1,12 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.getActiveCategories = getActiveCategories;
-exports.getAllCategories = getAllCategories;
-exports.createCategory = createCategory;
-exports.updateCategory = updateCategory;
-exports.deleteCategory = deleteCategory;
-exports.bulkDeleteCategories = bulkDeleteCategories;
-const prisma_js_1 = require("../../config/prisma.js");
+import { prisma } from "../../config/prisma.js";
 function slugify(text) {
     return text
         .toString()
@@ -21,7 +13,7 @@ function slugify(text) {
 async function isDescendant(categoryId, candidateParentId) {
     let currentId = candidateParentId;
     while (currentId) {
-        const cat = await prisma_js_1.prisma.category.findUnique({
+        const cat = await prisma.category.findUnique({
             where: { id: currentId },
             select: { parentId: true },
         });
@@ -36,8 +28,8 @@ async function isDescendant(categoryId, candidateParentId) {
 /**
  * Fetch all active support categories.
  */
-async function getActiveCategories() {
-    return prisma_js_1.prisma.category.findMany({
+export async function getActiveCategories() {
+    return prisma.category.findMany({
         where: { isActive: true },
         orderBy: { name: "asc" },
     });
@@ -45,8 +37,8 @@ async function getActiveCategories() {
 /**
  * Fetch all categories with parent relationships and ticket/article usage metrics.
  */
-async function getAllCategories() {
-    const categories = await prisma_js_1.prisma.category.findMany({
+export async function getAllCategories() {
+    const categories = await prisma.category.findMany({
         include: {
             parent: {
                 select: { id: true, name: true },
@@ -69,8 +61,8 @@ async function getAllCategories() {
 /**
  * Create a new category.
  */
-async function createCategory(input) {
-    const existing = await prisma_js_1.prisma.category.findUnique({
+export async function createCategory(input) {
+    const existing = await prisma.category.findUnique({
         where: { name: input.name },
     });
     if (existing) {
@@ -79,7 +71,7 @@ async function createCategory(input) {
         throw error;
     }
     const slug = slugify(input.name) || "category";
-    return prisma_js_1.prisma.category.create({
+    return prisma.category.create({
         data: {
             name: input.name,
             slug,
@@ -93,8 +85,8 @@ async function createCategory(input) {
 /**
  * Update an existing category with duplicate check and cycle prevention.
  */
-async function updateCategory(id, input) {
-    const category = await prisma_js_1.prisma.category.findUnique({
+export async function updateCategory(id, input) {
+    const category = await prisma.category.findUnique({
         where: { id },
     });
     if (!category) {
@@ -104,7 +96,7 @@ async function updateCategory(id, input) {
     }
     // Check name uniqueness if changed
     if (input.name && input.name !== category.name) {
-        const existing = await prisma_js_1.prisma.category.findUnique({
+        const existing = await prisma.category.findUnique({
             where: { name: input.name },
         });
         if (existing) {
@@ -131,7 +123,7 @@ async function updateCategory(id, input) {
     if (input.name) {
         data.slug = slugify(input.name) || "category";
     }
-    return prisma_js_1.prisma.category.update({
+    return prisma.category.update({
         where: { id },
         data,
     });
@@ -139,8 +131,8 @@ async function updateCategory(id, input) {
 /**
  * Delete a category, optionally reassigned to a replacement category to merge usage.
  */
-async function deleteCategory(id, reassignToId) {
-    const count = await prisma_js_1.prisma.category.findUnique({
+export async function deleteCategory(id, reassignToId) {
+    const count = await prisma.category.findUnique({
         where: { id },
         select: {
             _count: {
@@ -165,7 +157,7 @@ async function deleteCategory(id, reassignToId) {
             error.statusCode = 400;
             throw error;
         }
-        const replacement = await prisma_js_1.prisma.category.findUnique({
+        const replacement = await prisma.category.findUnique({
             where: { id: reassignToId },
         });
         if (!replacement || !replacement.isActive) {
@@ -174,34 +166,34 @@ async function deleteCategory(id, reassignToId) {
             throw error;
         }
         // Reassign all associated tickets and articles in transaction
-        await prisma_js_1.prisma.$transaction([
-            prisma_js_1.prisma.ticket.updateMany({
+        await prisma.$transaction([
+            prisma.ticket.updateMany({
                 where: { categoryId: id },
                 data: { categoryId: reassignToId },
             }),
-            prisma_js_1.prisma.knowledgeBaseArticle.updateMany({
+            prisma.knowledgeBaseArticle.updateMany({
                 where: { categoryId: id },
                 data: { categoryId: reassignToId },
             }),
         ]);
     }
     // Adjust child categories to shift parent association
-    await prisma_js_1.prisma.category.updateMany({
+    await prisma.category.updateMany({
         where: { parentId: id },
         data: { parentId: reassignToId || null },
     });
-    return prisma_js_1.prisma.category.delete({
+    return prisma.category.delete({
         where: { id },
     });
 }
 /**
  * Bulk delete categories, optionally reassigned to a replacement category to merge usage.
  */
-async function bulkDeleteCategories(ids, reassignToId) {
+export async function bulkDeleteCategories(ids, reassignToId) {
     if (!ids || ids.length === 0)
         return;
     // Find all ticket and article counts for the categories to be deleted
-    const categoriesData = await prisma_js_1.prisma.category.findMany({
+    const categoriesData = await prisma.category.findMany({
         where: { id: { in: ids } },
         select: {
             id: true,
@@ -224,7 +216,7 @@ async function bulkDeleteCategories(ids, reassignToId) {
             error.statusCode = 400;
             throw error;
         }
-        const replacement = await prisma_js_1.prisma.category.findUnique({
+        const replacement = await prisma.category.findUnique({
             where: { id: reassignToId },
         });
         if (!replacement || !replacement.isActive) {
@@ -233,24 +225,24 @@ async function bulkDeleteCategories(ids, reassignToId) {
             throw error;
         }
         // Reassign all associated tickets and articles in transaction
-        await prisma_js_1.prisma.$transaction([
-            prisma_js_1.prisma.ticket.updateMany({
+        await prisma.$transaction([
+            prisma.ticket.updateMany({
                 where: { categoryId: { in: ids } },
                 data: { categoryId: reassignToId },
             }),
-            prisma_js_1.prisma.knowledgeBaseArticle.updateMany({
+            prisma.knowledgeBaseArticle.updateMany({
                 where: { categoryId: { in: ids } },
                 data: { categoryId: reassignToId },
             }),
         ]);
     }
     // Adjust child categories to shift parent association
-    await prisma_js_1.prisma.category.updateMany({
+    await prisma.category.updateMany({
         where: { parentId: { in: ids } },
         data: { parentId: reassignToId || null },
     });
     // Delete categories
-    return prisma_js_1.prisma.category.deleteMany({
+    return prisma.category.deleteMany({
         where: { id: { in: ids } },
     });
 }

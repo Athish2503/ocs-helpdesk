@@ -1,27 +1,20 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.createTicket = createTicket;
-exports.listTickets = listTickets;
-exports.getTicketById = getTicketById;
-exports.addTicketMessage = addTicketMessage;
-exports.updateTicket = updateTicket;
-const prisma_js_1 = require("../../config/prisma.js");
-const crm_cache_service_js_1 = require("../../services/crm-cache.service.js");
-const role_middleware_js_1 = require("../../middleware/role.middleware.js");
-const sla_service_js_1 = require("../sla/sla.service.js");
+import { prisma } from "../../config/prisma.js";
+import { syncUserCredits } from "../../services/crm-cache.service.js";
+import { DEFAULT_PERMISSIONS } from "../../middleware/role.middleware.js";
+import { computeSlaDeadlines } from "../sla/sla.service.js";
 /**
  * Create a new ticket for a customer.
  */
-async function createTicket(input, customerId, userRole, creatorEmail) {
+export async function createTicket(input, customerId, userRole, creatorEmail) {
     let categoryId = input.categoryId;
     if (!categoryId) {
-        let generalCategory = await prisma_js_1.prisma.category.findFirst({
+        let generalCategory = await prisma.category.findFirst({
             where: { name: "Other Services" },
-        }) || await prisma_js_1.prisma.category.findFirst({
+        }) || await prisma.category.findFirst({
             where: { name: "General Inquiry" },
         });
         if (!generalCategory) {
-            generalCategory = await prisma_js_1.prisma.category.create({
+            generalCategory = await prisma.category.create({
                 data: {
                     name: "Other Services",
                     slug: "other-services",
@@ -33,7 +26,7 @@ async function createTicket(input, customerId, userRole, creatorEmail) {
         categoryId = generalCategory.id;
     }
     // Verify category exists and is active
-    const category = await prisma_js_1.prisma.category.findUnique({
+    const category = await prisma.category.findUnique({
         where: { id: categoryId },
     });
     if (!category || !category.isActive) {
@@ -50,13 +43,13 @@ async function createTicket(input, customerId, userRole, creatorEmail) {
     const validCategories = ["Billing / Renewals", "Technical Support", "Critical Issues"];
     if (input.issueCategory && validCategories.includes(input.issueCategory)) {
         issueCategory = input.issueCategory;
-        rule = await prisma_js_1.prisma.routingRule.findUnique({
+        rule = await prisma.routingRule.findUnique({
             where: { issueCategory },
         });
     }
     else {
         // 2. Check if there is a rule matching the category name exactly
-        rule = await prisma_js_1.prisma.routingRule.findUnique({
+        rule = await prisma.routingRule.findUnique({
             where: { issueCategory: categoryName },
         });
         if (!rule) {
@@ -69,7 +62,7 @@ async function createTicket(input, customerId, userRole, creatorEmail) {
                 categoryName.toLowerCase().includes("renew")) {
                 issueCategory = "Billing / Renewals";
             }
-            rule = await prisma_js_1.prisma.routingRule.findUnique({
+            rule = await prisma.routingRule.findUnique({
                 where: { issueCategory },
             });
         }
@@ -81,7 +74,7 @@ async function createTicket(input, customerId, userRole, creatorEmail) {
         teamId = rule.teamId;
     }
     // Fetch customer's CRM Customer ID
-    const customerUser = await prisma_js_1.prisma.user.findUnique({
+    const customerUser = await prisma.user.findUnique({
         where: { id: customerId },
         select: { crmCustomerId: true, email: true }
     });
@@ -89,7 +82,7 @@ async function createTicket(input, customerId, userRole, creatorEmail) {
     let finalDescription = input.description;
     if (creatorEmail && customerUser && creatorEmail.toLowerCase() !== customerUser.email.toLowerCase()) {
         if (customerUser.crmCustomerId) {
-            const crmCust = await prisma_js_1.prisma.crmCustomer.findUnique({
+            const crmCust = await prisma.crmCustomer.findUnique({
                 where: { crmCustomerId: customerUser.crmCustomerId }
             });
             if (crmCust && crmCust.secondaryEmail && crmCust.secondaryEmail.toLowerCase() === creatorEmail.toLowerCase()) {
@@ -100,8 +93,8 @@ async function createTicket(input, customerId, userRole, creatorEmail) {
     }
     // Compute SLA deadlines based on priority
     const ticketCreatedAt = new Date();
-    const slaDeadlines = await (0, sla_service_js_1.computeSlaDeadlines)(priority, ticketCreatedAt);
-    const ticket = await prisma_js_1.prisma.ticket.create({
+    const slaDeadlines = await computeSlaDeadlines(priority, ticketCreatedAt);
+    const ticket = await prisma.ticket.create({
         data: {
             title: input.title,
             description: finalDescription,
@@ -133,7 +126,7 @@ async function createTicket(input, customerId, userRole, creatorEmail) {
         },
     });
     // Log status history
-    await prisma_js_1.prisma.ticketStatusHistory.create({
+    await prisma.ticketStatusHistory.create({
         data: {
             ticketId: ticket.id,
             toStatus: "OPEN",
@@ -157,7 +150,7 @@ async function createTicket(input, customerId, userRole, creatorEmail) {
         }
         // If it's a critical issue, escalate to Manager L2 as well
         if (issueCategory === "Critical Issues" && rule && rule.secondaryAssigneeId) {
-            const secondaryAssignee = await prisma_js_1.prisma.user.findUnique({
+            const secondaryAssignee = await prisma.user.findUnique({
                 where: { id: rule.secondaryAssigneeId },
             });
             if (secondaryAssignee && !emailRecipients.includes(secondaryAssignee.email)) {
@@ -166,10 +159,10 @@ async function createTicket(input, customerId, userRole, creatorEmail) {
         }
         // If no recipients matched, notify any system admin
         if (emailRecipients.length === 0) {
-            const admins = await prisma_js_1.prisma.user.findMany({
+            const admins = await prisma.user.findMany({
                 where: { role: "ADMIN" },
             });
-            admins.forEach((a) => emailRecipients.push(a.email));
+            (admins || []).forEach((a) => emailRecipients.push(a.email));
         }
         // Send emails using email service
         const { sendTicketNotificationEmail, sendCustomerTicketCreatedEmail } = await import("../../services/email.service.js");
@@ -205,7 +198,7 @@ async function createTicket(input, customerId, userRole, creatorEmail) {
 /**
  * List tickets based on user role and ABAC security.
  */
-async function listTickets(user) {
+export async function listTickets(user) {
     const where = {};
     if (user.role === "CUSTOMER") {
         where.customerId = user.id;
@@ -224,7 +217,7 @@ async function listTickets(user) {
             { teamId: null },
         ];
     } // ADMIN role has no where constraints
-    return prisma_js_1.prisma.ticket.findMany({
+    return prisma.ticket.findMany({
         where,
         include: {
             category: true,
@@ -257,8 +250,8 @@ async function listTickets(user) {
 /**
  * Get ticket by ID with ownership verification and ABAC checks.
  */
-async function getTicketById(id, user) {
-    const ticket = await prisma_js_1.prisma.ticket.findUnique({
+export async function getTicketById(id, user) {
+    const ticket = await prisma.ticket.findUnique({
         where: { id },
         include: {
             category: true,
@@ -362,7 +355,7 @@ async function getTicketById(id, user) {
         const isAssignedAgent = ticket.agentId === user.id;
         let isTeamMember = false;
         if (ticket.teamId) {
-            const teamMembership = await prisma_js_1.prisma.team.findFirst({
+            const teamMembership = await prisma.team.findFirst({
                 where: {
                     id: ticket.teamId,
                     members: { some: { id: user.id } },
@@ -382,18 +375,18 @@ async function getTicketById(id, user) {
 /**
  * Add a message reply to a ticket.
  */
-async function addTicketMessage(ticketId, input, senderId, user) {
+export async function addTicketMessage(ticketId, input, senderId, user) {
     // Verify ticket exists and user has access (triggers getTicketById checks)
     const ticket = await getTicketById(ticketId, user);
     // If sender is staff and firstResponseAt is not set, set it now
     const isStaff = user.role === "ADMIN" || user.role === "AGENT" || user.role === "SUPPORT_L1" || user.role === "SUPPORT_L2" || user.role === "BILLING";
     if (isStaff && !ticket.firstResponseAt) {
-        await prisma_js_1.prisma.ticket.update({
+        await prisma.ticket.update({
             where: { id: ticketId },
             data: { firstResponseAt: new Date() },
         });
     }
-    const message = await prisma_js_1.prisma.ticketMessage.create({
+    const message = await prisma.ticketMessage.create({
         data: {
             ticketId,
             senderId,
@@ -411,7 +404,7 @@ async function addTicketMessage(ticketId, input, senderId, user) {
         },
     });
     // Touch ticket updatedAt time to raise it in active queues
-    await prisma_js_1.prisma.ticket.update({
+    await prisma.ticket.update({
         where: { id: ticketId },
         data: { updatedAt: new Date() },
     });
@@ -420,7 +413,7 @@ async function addTicketMessage(ticketId, input, senderId, user) {
 /**
  * Update ticket status, priority, team, or agent.
  */
-async function updateTicket(id, input, user) {
+export async function updateTicket(id, input, user) {
     const ticket = await getTicketById(id, user);
     // 1. Optimistic Concurrency Control (Prevent race conditions)
     if (input.updatedAt) {
@@ -464,11 +457,11 @@ async function updateTicket(id, input, user) {
             }
             // If assigned to a team, make sure agent is a member of that team, unless they have assign_tickets or are ADMIN
             if (ticket.teamId) {
-                const rolePerm = await prisma_js_1.prisma.rolePermission.findUnique({ where: { role: user.role } });
-                const userPermissions = rolePerm?.permissions ?? role_middleware_js_1.DEFAULT_PERMISSIONS[user.role] ?? [];
+                const rolePerm = await prisma.rolePermission.findUnique({ where: { role: user.role } });
+                const userPermissions = rolePerm?.permissions ?? DEFAULT_PERMISSIONS[user.role] ?? [];
                 const hasAssignPermission = user.role === "ADMIN" || userPermissions.includes("assign_tickets");
                 if (!hasAssignPermission) {
-                    const isMember = await prisma_js_1.prisma.team.findFirst({
+                    const isMember = await prisma.team.findFirst({
                         where: {
                             id: ticket.teamId,
                             members: { some: { id: user.id } },
@@ -484,8 +477,8 @@ async function updateTicket(id, input, user) {
         }
         else {
             // Reassigning to another agent requires assign_tickets permission or ADMIN role
-            const rolePerm = await prisma_js_1.prisma.rolePermission.findUnique({ where: { role: user.role } });
-            const userPermissions = rolePerm?.permissions ?? role_middleware_js_1.DEFAULT_PERMISSIONS[user.role] ?? [];
+            const rolePerm = await prisma.rolePermission.findUnique({ where: { role: user.role } });
+            const userPermissions = rolePerm?.permissions ?? DEFAULT_PERMISSIONS[user.role] ?? [];
             const hasAssignPermission = user.role === "ADMIN" || userPermissions.includes("assign_tickets");
             if (!hasAssignPermission) {
                 const error = new Error("Access denied: You do not have permission to assign tickets to other agents");
@@ -495,8 +488,8 @@ async function updateTicket(id, input, user) {
         }
     }
     if (input.teamId !== undefined && input.teamId !== ticket.teamId) {
-        const rolePerm = await prisma_js_1.prisma.rolePermission.findUnique({ where: { role: user.role } });
-        const userPermissions = rolePerm?.permissions ?? role_middleware_js_1.DEFAULT_PERMISSIONS[user.role] ?? [];
+        const rolePerm = await prisma.rolePermission.findUnique({ where: { role: user.role } });
+        const userPermissions = rolePerm?.permissions ?? DEFAULT_PERMISSIONS[user.role] ?? [];
         const hasAssignPermission = user.role === "ADMIN" || userPermissions.includes("assign_tickets");
         if (!hasAssignPermission) {
             const error = new Error("Access denied: You do not have permission to assign teams");
@@ -521,7 +514,7 @@ async function updateTicket(id, input, user) {
         }
         isEscalating = true;
         // Find the configured routing rule to determine L2 escalation
-        const rule = await prisma_js_1.prisma.routingRule.findUnique({
+        const rule = await prisma.routingRule.findUnique({
             where: { issueCategory: ticket.issueCategory || ticket.category.name },
         });
         if (rule && rule.secondaryAssigneeId) {
@@ -532,7 +525,7 @@ async function updateTicket(id, input, user) {
             escalatedPriority = "HIGH";
         }
         // Write system log message on timeline
-        await prisma_js_1.prisma.ticketMessage.create({
+        await prisma.ticketMessage.create({
             data: {
                 ticketId: id,
                 senderId: user.id,
@@ -540,7 +533,7 @@ async function updateTicket(id, input, user) {
             },
         });
         // Write audit log entry
-        await prisma_js_1.prisma.auditLog.create({
+        await prisma.auditLog.create({
             data: {
                 action: "TICKET_ESCALATED",
                 entity: "Ticket",
@@ -558,7 +551,7 @@ async function updateTicket(id, input, user) {
     }
     // 4. Assignment History Audit Logging
     if (input.agentId !== undefined && input.agentId !== ticket.agentId && !isEscalating) {
-        await prisma_js_1.prisma.auditLog.create({
+        await prisma.auditLog.create({
             data: {
                 action: "TICKET_ASSIGNED",
                 entity: "Ticket",
@@ -573,7 +566,7 @@ async function updateTicket(id, input, user) {
         });
     }
     if (input.teamId !== undefined && input.teamId !== ticket.teamId) {
-        await prisma_js_1.prisma.auditLog.create({
+        await prisma.auditLog.create({
             data: {
                 action: "TICKET_TEAM_ASSIGNED",
                 entity: "Ticket",
@@ -592,7 +585,7 @@ async function updateTicket(id, input, user) {
     let ttrHours = undefined;
     if (input.status && input.status !== ticket.status) {
         // Audit log
-        await prisma_js_1.prisma.ticketStatusHistory.create({
+        await prisma.ticketStatusHistory.create({
             data: {
                 ticketId: id,
                 fromStatus: ticket.status,
@@ -615,7 +608,7 @@ async function updateTicket(id, input, user) {
                 // Check if the ticket's domain is outside of OCS (not in our CrmDomain database)
                 let isDomainOutsideOcs = true;
                 if (ticket.affectedDomain) {
-                    const domainInDb = await prisma_js_1.prisma.crmDomain.findFirst({
+                    const domainInDb = await prisma.crmDomain.findFirst({
                         where: { domainName: { equals: ticket.affectedDomain, mode: "insensitive" } }
                     });
                     if (domainInDb) {
@@ -631,13 +624,13 @@ async function updateTicket(id, input, user) {
                     hours = hours * 750; // Charge Per hour(750) Credits
                     txDescription = `Consumed ${hours} credits resolving ticket: ${ticket.title} (Charged at 750 credits/hr rate for domain outside of OCS. Raw hours: ${rawHours}, min billing 1/2 hr applied)`;
                 }
-                const crmCustId = ticket.customer?.crmCustomerId || (await prisma_js_1.prisma.user.findUnique({
+                const crmCustId = ticket.customer?.crmCustomerId || (await prisma.user.findUnique({
                     where: { id: ticket.customerId },
                     select: { crmCustomerId: true }
                 }))?.crmCustomerId;
                 if (crmCustId) {
                     // Write to CreditUsage table (consumption)
-                    await prisma_js_1.prisma.creditUsage.create({
+                    await prisma.creditUsage.create({
                         data: {
                             crmCustomerId: crmCustId,
                             ticketId: id,
@@ -647,9 +640,9 @@ async function updateTicket(id, input, user) {
                         }
                     });
                     // Recalculate balance dynamically and sync to customerCredits
-                    const credits = await (0, crm_cache_service_js_1.syncUserCredits)(ticket.customerId, crmCustId);
+                    const credits = await syncUserCredits(ticket.customerId, crmCustId);
                     // Write to CreditTransaction for backward compatibility/history
-                    await prisma_js_1.prisma.creditTransaction.create({
+                    await prisma.creditTransaction.create({
                         data: {
                             customerCreditsId: credits.id,
                             ticketId: id,
@@ -666,7 +659,7 @@ async function updateTicket(id, input, user) {
     const finalAgentId = isEscalating
         ? (escalatedAgentId !== null ? escalatedAgentId : ticket.agentId)
         : (input.agentId !== undefined ? input.agentId : undefined);
-    const updatedTicket = await prisma_js_1.prisma.ticket.update({
+    const updatedTicket = await prisma.ticket.update({
         where: { id },
         data: {
             ...(input.status ? { status: input.status } : {}),
@@ -685,7 +678,7 @@ async function updateTicket(id, input, user) {
             ...await (async () => {
                 const newPriority = escalatedPriority || input.priority;
                 if (newPriority && newPriority !== ticket.priority) {
-                    const sla = await (0, sla_service_js_1.computeSlaDeadlines)(newPriority, new Date(ticket.createdAt));
+                    const sla = await computeSlaDeadlines(newPriority, new Date(ticket.createdAt));
                     return {
                         slaResponseDeadline: sla.slaResponseDeadline,
                         slaResolutionDeadline: sla.slaResolutionDeadline,
@@ -731,7 +724,7 @@ async function updateTicket(id, input, user) {
         const { sendTicketNotificationEmail, sendCustomerTicketResolvedEmail } = await import("../../services/email.service.js");
         // Notify newly assigned agent if it was changed
         if (finalAgentId && finalAgentId !== ticket.agentId) {
-            const newAgent = await prisma_js_1.prisma.user.findUnique({ where: { id: finalAgentId } });
+            const newAgent = await prisma.user.findUnique({ where: { id: finalAgentId } });
             if (newAgent) {
                 await sendTicketNotificationEmail(newAgent.email, {
                     id: updatedTicket.id,

@@ -1,6 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-const prisma_js_1 = require("../config/prisma.js");
+import { prisma } from "../config/prisma.js";
 async function main() {
     const email = process.argv[2];
     if (!email) {
@@ -8,7 +6,7 @@ async function main() {
         process.exit(1);
     }
     try {
-        const user = await prisma_js_1.prisma.user.update({
+        const user = await prisma.user.update({
             where: { email: email.toLowerCase().trim() },
             data: {
                 role: "ADMIN",

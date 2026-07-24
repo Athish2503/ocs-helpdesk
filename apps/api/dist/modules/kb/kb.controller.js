@@ -1,76 +1,16 @@
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.listArticlesHandler = listArticlesHandler;
-exports.getArticleByIdOrSlugHandler = getArticleByIdOrSlugHandler;
-exports.createArticleHandler = createArticleHandler;
-exports.updateArticleHandler = updateArticleHandler;
-exports.deleteArticleHandler = deleteArticleHandler;
-exports.listCategoriesHandler = listCategoriesHandler;
-exports.createCategoryHandler = createCategoryHandler;
-exports.updateCategoryHandler = updateCategoryHandler;
-exports.deleteCategoryHandler = deleteCategoryHandler;
-exports.listTagsHandler = listTagsHandler;
-exports.listVersionsHandler = listVersionsHandler;
-exports.recordArticleReadHandler = recordArticleReadHandler;
-exports.getArticleAnalyticsHandler = getArticleAnalyticsHandler;
-exports.getArticleSEOHandler = getArticleSEOHandler;
-exports.updateArticleSEOHandler = updateArticleSEOHandler;
-exports.listSecurityEventsHandler = listSecurityEventsHandler;
-exports.uploadKBImageHandler = uploadKBImageHandler;
-exports.listAttachmentsHandler = listAttachmentsHandler;
-exports.deleteAttachmentHandler = deleteAttachmentHandler;
-exports.setFeaturedImageHandler = setFeaturedImageHandler;
-exports.reorderAttachmentsHandler = reorderAttachmentsHandler;
-exports.promoteTicketToKbHandler = promoteTicketToKbHandler;
-exports.getPublicSitemapHandler = getPublicSitemapHandler;
-exports.getPublicArticleBySlugHandler = getPublicArticleBySlugHandler;
-exports.getArticleSuggestionsHandler = getArticleSuggestionsHandler;
-const kb_schemas_js_1 = require("./kb.schemas.js");
-const KbService = __importStar(require("./kb.service.js"));
-const abac_middleware_js_1 = require("../../middleware/abac.middleware.js");
-const seoHelper_js_1 = require("../../utils/seoHelper.js");
-const securityHelper_js_1 = require("../../utils/securityHelper.js");
-const uploadMiddleware_js_1 = require("../../middleware/uploadMiddleware.js");
-const publicSecurity_js_1 = require("../../middleware/publicSecurity.js");
-const prisma_js_1 = require("../../config/prisma.js");
+import { createArticleSchema, updateArticleSchema, createCategorySchema, updateCategorySchema, updateArticleSEOSchema, } from "./kb.schemas.js";
+import * as KbService from "./kb.service.js";
+import { canAccessArticle } from "../../middleware/abac.middleware.js";
+import { generateSitemap, extractKeywords } from "../../utils/seoHelper.js";
+import { generateFingerprint, hashIP } from "../../utils/securityHelper.js";
+import { getImageDimensions, deleteUploadedFile } from "../../middleware/uploadMiddleware.js";
+import { sanitizeResponse } from "../../middleware/publicSecurity.js";
+import { prisma } from "../../config/prisma.js";
 function ok(res, data, statusCode = 200) {
     res.status(statusCode).json({ success: true, data });
 }
 // --- ARTICLES ---
-async function listArticlesHandler(req, res, next) {
+export async function listArticlesHandler(req, res, next) {
     try {
         const { search, categoryId, isInternal, isPublished, tag } = req.query;
         const result = await KbService.listArticles(req.user, {
@@ -86,7 +26,7 @@ async function listArticlesHandler(req, res, next) {
         next(err);
     }
 }
-async function getArticleByIdOrSlugHandler(req, res, next) {
+export async function getArticleByIdOrSlugHandler(req, res, next) {
     try {
         const { idOrSlug } = req.params;
         let article;
@@ -98,7 +38,7 @@ async function getArticleByIdOrSlugHandler(req, res, next) {
             article = await KbService.getArticleBySlug(idOrSlug);
         }
         // ABAC Verification
-        const allowed = await (0, abac_middleware_js_1.canAccessArticle)(req.user?.id, req.user?.role, article.id);
+        const allowed = await canAccessArticle(req.user?.id, req.user?.role, article.id);
         if (!allowed) {
             res.status(403).json({
                 success: false,
@@ -112,9 +52,9 @@ async function getArticleByIdOrSlugHandler(req, res, next) {
         next(err);
     }
 }
-async function createArticleHandler(req, res, next) {
+export async function createArticleHandler(req, res, next) {
     try {
-        const input = kb_schemas_js_1.createArticleSchema.parse(req.body);
+        const input = createArticleSchema.parse(req.body);
         const article = await KbService.createArticle(input, req.user.id);
         ok(res, { article }, 201);
     }
@@ -122,10 +62,10 @@ async function createArticleHandler(req, res, next) {
         next(err);
     }
 }
-async function updateArticleHandler(req, res, next) {
+export async function updateArticleHandler(req, res, next) {
     try {
         const { id } = req.params;
-        const input = kb_schemas_js_1.updateArticleSchema.parse(req.body);
+        const input = updateArticleSchema.parse(req.body);
         const article = await KbService.getArticleById(id);
         if (req.user.role !== "ADMIN" && article.authorId !== req.user.id) {
             res.status(403).json({
@@ -141,7 +81,7 @@ async function updateArticleHandler(req, res, next) {
         next(err);
     }
 }
-async function deleteArticleHandler(req, res, next) {
+export async function deleteArticleHandler(req, res, next) {
     try {
         const { id } = req.params;
         const article = await KbService.getArticleById(id);
@@ -160,7 +100,7 @@ async function deleteArticleHandler(req, res, next) {
     }
 }
 // --- CATEGORIES ---
-async function listCategoriesHandler(req, res, next) {
+export async function listCategoriesHandler(req, res, next) {
     try {
         const categories = await KbService.listCategories(req.user);
         ok(res, { categories });
@@ -169,9 +109,9 @@ async function listCategoriesHandler(req, res, next) {
         next(err);
     }
 }
-async function createCategoryHandler(req, res, next) {
+export async function createCategoryHandler(req, res, next) {
     try {
-        const input = kb_schemas_js_1.createCategorySchema.parse(req.body);
+        const input = createCategorySchema.parse(req.body);
         const category = await KbService.createCategory(input);
         ok(res, { category }, 201);
     }
@@ -179,10 +119,10 @@ async function createCategoryHandler(req, res, next) {
         next(err);
     }
 }
-async function updateCategoryHandler(req, res, next) {
+export async function updateCategoryHandler(req, res, next) {
     try {
         const { id } = req.params;
-        const input = kb_schemas_js_1.updateCategorySchema.parse(req.body);
+        const input = updateCategorySchema.parse(req.body);
         const category = await KbService.updateCategory(id, input);
         ok(res, { category });
     }
@@ -190,7 +130,7 @@ async function updateCategoryHandler(req, res, next) {
         next(err);
     }
 }
-async function deleteCategoryHandler(req, res, next) {
+export async function deleteCategoryHandler(req, res, next) {
     try {
         const { id } = req.params;
         await KbService.deleteCategory(id);
@@ -201,7 +141,7 @@ async function deleteCategoryHandler(req, res, next) {
     }
 }
 // --- TAGS ---
-async function listTagsHandler(req, res, next) {
+export async function listTagsHandler(req, res, next) {
     try {
         const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
         const tags = await KbService.listTags(limit);
@@ -212,7 +152,7 @@ async function listTagsHandler(req, res, next) {
     }
 }
 // --- VERSIONS ---
-async function listVersionsHandler(req, res, next) {
+export async function listVersionsHandler(req, res, next) {
     try {
         const { articleId } = req.params;
         const versions = await KbService.listVersions(articleId);
@@ -223,12 +163,12 @@ async function listVersionsHandler(req, res, next) {
     }
 }
 // --- TELEMETRY READ TRACKING ---
-async function recordArticleReadHandler(req, res, next) {
+export async function recordArticleReadHandler(req, res, next) {
     try {
         const { articleId } = req.params;
         const { utmSource, utmMedium, utmCampaign, readDuration, scrollDepth } = req.body;
-        const sessionFingerprint = (0, securityHelper_js_1.generateFingerprint)(req);
-        const ipHash = (0, securityHelper_js_1.hashIP)(req.ip || "");
+        const sessionFingerprint = generateFingerprint(req);
+        const ipHash = hashIP(req.ip || "");
         const read = await KbService.recordArticleRead(articleId, {
             sessionFingerprint,
             ipHash,
@@ -247,7 +187,7 @@ async function recordArticleReadHandler(req, res, next) {
     }
 }
 // --- ANALYTICS ---
-async function getArticleAnalyticsHandler(req, res, next) {
+export async function getArticleAnalyticsHandler(req, res, next) {
     try {
         const { articleId } = req.params;
         const { startDate, endDate } = req.query;
@@ -263,7 +203,7 @@ async function getArticleAnalyticsHandler(req, res, next) {
     }
 }
 // --- SEO MANAGEMENT ---
-async function getArticleSEOHandler(req, res, next) {
+export async function getArticleSEOHandler(req, res, next) {
     try {
         const { articleId } = req.params;
         const seo = await KbService.getArticleSEO(articleId);
@@ -273,10 +213,10 @@ async function getArticleSEOHandler(req, res, next) {
         next(err);
     }
 }
-async function updateArticleSEOHandler(req, res, next) {
+export async function updateArticleSEOHandler(req, res, next) {
     try {
         const { articleId } = req.params;
-        const input = kb_schemas_js_1.updateArticleSEOSchema.parse(req.body);
+        const input = updateArticleSEOSchema.parse(req.body);
         const seo = await KbService.updateArticleSEO(articleId, input);
         ok(res, { seo });
     }
@@ -285,7 +225,7 @@ async function updateArticleSEOHandler(req, res, next) {
     }
 }
 // --- SECURITY MONITORING ---
-async function listSecurityEventsHandler(req, res, next) {
+export async function listSecurityEventsHandler(req, res, next) {
     try {
         const { eventType, severity, isResolved, limit } = req.query;
         const filters = {
@@ -302,14 +242,14 @@ async function listSecurityEventsHandler(req, res, next) {
     }
 }
 // --- ATTACHMENTS (IMAGE UPLOAD) ---
-async function uploadKBImageHandler(req, res, next) {
+export async function uploadKBImageHandler(req, res, next) {
     try {
         const { articleId } = req.params;
         if (!req.file) {
             res.status(400).json({ success: false, error: { message: "No file uploaded" } });
             return;
         }
-        const { width, height } = await (0, uploadMiddleware_js_1.getImageDimensions)(req.file.path);
+        const { width, height } = await getImageDimensions(req.file.path);
         const attachment = await KbService.createAttachment(articleId, {
             filename: req.file.filename,
             originalFilename: req.file.originalname,
@@ -326,7 +266,7 @@ async function uploadKBImageHandler(req, res, next) {
         next(err);
     }
 }
-async function listAttachmentsHandler(req, res, next) {
+export async function listAttachmentsHandler(req, res, next) {
     try {
         const { articleId } = req.params;
         const attachments = await KbService.listAttachments(articleId);
@@ -336,10 +276,10 @@ async function listAttachmentsHandler(req, res, next) {
         next(err);
     }
 }
-async function deleteAttachmentHandler(req, res, next) {
+export async function deleteAttachmentHandler(req, res, next) {
     try {
         const { id } = req.params;
-        const attachment = await prisma_js_1.prisma.knowledgeBaseArticleAttachment.findUnique({
+        const attachment = await prisma.knowledgeBaseArticleAttachment.findUnique({
             where: { id: id },
         });
         if (!attachment) {
@@ -347,14 +287,14 @@ async function deleteAttachmentHandler(req, res, next) {
             return;
         }
         await KbService.deleteAttachment(id);
-        (0, uploadMiddleware_js_1.deleteUploadedFile)(attachment.filePath);
+        deleteUploadedFile(attachment.filePath);
         ok(res, { message: "Attachment deleted successfully" });
     }
     catch (err) {
         next(err);
     }
 }
-async function setFeaturedImageHandler(req, res, next) {
+export async function setFeaturedImageHandler(req, res, next) {
     try {
         const { articleId, attachmentId } = req.params;
         const attachment = await KbService.setFeaturedImage(articleId, attachmentId);
@@ -364,7 +304,7 @@ async function setFeaturedImageHandler(req, res, next) {
         next(err);
     }
 }
-async function reorderAttachmentsHandler(req, res, next) {
+export async function reorderAttachmentsHandler(req, res, next) {
     try {
         const { articleId } = req.params;
         const { orderPairs } = req.body;
@@ -380,7 +320,7 @@ async function reorderAttachmentsHandler(req, res, next) {
     }
 }
 // --- ADAPTED TICKET PROMOTION ---
-async function promoteTicketToKbHandler(req, res, next) {
+export async function promoteTicketToKbHandler(req, res, next) {
     try {
         const { ticketId } = req.params;
         const article = await KbService.promoteTicketToKb(ticketId, req.user.id);
@@ -391,7 +331,7 @@ async function promoteTicketToKbHandler(req, res, next) {
     }
 }
 // --- PUBLIC VIEW ---
-async function getPublicSitemapHandler(req, res, next) {
+export async function getPublicSitemapHandler(req, res, next) {
     try {
         const articles = await KbService.getPublicArticlesForSitemap();
         const mapped = articles.map((a) => ({
@@ -401,7 +341,7 @@ async function getPublicSitemapHandler(req, res, next) {
             updated_at: a.updatedAt,
             isPublished: a.isPublished,
         }));
-        const xml = (0, seoHelper_js_1.generateSitemap)(mapped);
+        const xml = generateSitemap(mapped);
         res.header("Content-Type", "application/xml");
         res.status(200).send(xml);
     }
@@ -409,7 +349,7 @@ async function getPublicSitemapHandler(req, res, next) {
         next(err);
     }
 }
-async function getPublicArticleBySlugHandler(req, res, next) {
+export async function getPublicArticleBySlugHandler(req, res, next) {
     try {
         const { slug } = req.params;
         const article = await KbService.getPublicArticleBySlug(slug);
@@ -417,14 +357,14 @@ async function getPublicArticleBySlugHandler(req, res, next) {
             res.status(404).json({ success: false, error: { code: "NOT_FOUND", message: "Article not found" } });
             return;
         }
-        const sanitized = (0, publicSecurity_js_1.sanitizeResponse)(article);
+        const sanitized = sanitizeResponse(article);
         ok(res, { article: sanitized });
     }
     catch (err) {
         next(err);
     }
 }
-async function getArticleSuggestionsHandler(req, res, next) {
+export async function getArticleSuggestionsHandler(req, res, next) {
     try {
         const text = req.query["text"] || "";
         const categoryId = req.query["categoryId"] || undefined;
@@ -432,7 +372,7 @@ async function getArticleSuggestionsHandler(req, res, next) {
             res.status(200).json({ success: true, data: { articles: [] } });
             return;
         }
-        const keywords = (0, seoHelper_js_1.extractKeywords)(text, 5);
+        const keywords = extractKeywords(text, 5);
         if (keywords.length === 0) {
             res.status(200).json({ success: true, data: { articles: [] } });
             return;
@@ -448,7 +388,7 @@ async function getArticleSuggestionsHandler(req, res, next) {
             { title: { contains: keyword, mode: "insensitive" } },
             { content: { contains: keyword, mode: "insensitive" } },
         ]);
-        const articles = await prisma_js_1.prisma.knowledgeBaseArticle.findMany({
+        const articles = await prisma.knowledgeBaseArticle.findMany({
             where,
             include: {
                 category: { select: { id: true, name: true } },

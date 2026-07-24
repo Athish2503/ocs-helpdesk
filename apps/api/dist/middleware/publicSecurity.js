@@ -1,16 +1,5 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.ALLOWED_PUBLIC_FIELDS = void 0;
-exports.setSecurityHeaders = setSecurityHeaders;
-exports.configureCORS = configureCORS;
-exports.validateSlug = validateSlug;
-exports.detectSuspiciousActivity = detectSuspiciousActivity;
-exports.sanitizeResponse = sanitizeResponse;
-exports.logPublicAccess = logPublicAccess;
-exports.publicErrorHandler = publicErrorHandler;
-exports.publicSecurityMiddleware = publicSecurityMiddleware;
-const prisma_js_1 = require("../config/prisma.js");
-const securityHelper_js_1 = require("../utils/securityHelper.js");
+import { prisma } from "../config/prisma.js";
+import { generateCSPHeader, isSuspiciousRequest, validateSlugFormat, whitelistResponseFields, hashIP, isBot, } from "../utils/securityHelper.js";
 /**
  * Public Security Middleware
  * Comprehensive security middleware for public KB routes
@@ -18,7 +7,7 @@ const securityHelper_js_1 = require("../utils/securityHelper.js");
 /**
  * Allowed response fields for public articles
  */
-exports.ALLOWED_PUBLIC_FIELDS = [
+export const ALLOWED_PUBLIC_FIELDS = [
     "id",
     "title",
     "slug",
@@ -39,9 +28,9 @@ exports.ALLOWED_PUBLIC_FIELDS = [
 /**
  * Set security headers
  */
-function setSecurityHeaders(req, res, next) {
+export function setSecurityHeaders(req, res, next) {
     // Content Security Policy
-    res.set("Content-Security-Policy", (0, securityHelper_js_1.generateCSPHeader)());
+    res.set("Content-Security-Policy", generateCSPHeader());
     // Prevent clickjacking
     res.set("X-Frame-Options", "DENY");
     // Prevent MIME type sniffing
@@ -61,7 +50,7 @@ function setSecurityHeaders(req, res, next) {
 /**
  * CORS middleware for public endpoints
  */
-function configureCORS(req, res, next) {
+export function configureCORS(req, res, next) {
     const allowedOrigins = process.env["ALLOWED_ORIGINS"]?.split(",") || [];
     const origin = req.get("origin");
     // Allow requests without origin (direct browser access)
@@ -85,7 +74,7 @@ function configureCORS(req, res, next) {
 /**
  * Validate slug parameter
  */
-function validateSlug(req, res, next) {
+export function validateSlug(req, res, next) {
     const slug = req.params["slug"];
     if (!slug) {
         res.status(400).json({
@@ -94,7 +83,7 @@ function validateSlug(req, res, next) {
         });
         return;
     }
-    if (!(0, securityHelper_js_1.validateSlugFormat)(slug)) {
+    if (!validateSlugFormat(slug)) {
         // Log suspicious activity
         logSecurityEvent("SUSPICIOUS_PATTERN", "MEDIUM", req.ip || "", req.get("user-agent") || "", req.path, "Invalid slug format").catch((err) => console.error("Failed to log security event:", err));
         res.status(400).json({
@@ -108,8 +97,8 @@ function validateSlug(req, res, next) {
 /**
  * Detect and log suspicious requests
  */
-function detectSuspiciousActivity(req, res, next) {
-    const suspicion = (0, securityHelper_js_1.isSuspiciousRequest)(req);
+export function detectSuspiciousActivity(req, res, next) {
+    const suspicion = isSuspiciousRequest(req);
     if (suspicion.isSuspicious) {
         // Log security event
         logSecurityEvent(suspicion.reasons.some((r) => r.includes("SQL"))
@@ -128,32 +117,32 @@ function detectSuspiciousActivity(req, res, next) {
 /**
  * Sanitize response data (whitelist fields)
  */
-function sanitizeResponse(data) {
+export function sanitizeResponse(data) {
     if (Array.isArray(data)) {
-        return data.map((item) => (0, securityHelper_js_1.whitelistResponseFields)(item, exports.ALLOWED_PUBLIC_FIELDS));
+        return data.map((item) => whitelistResponseFields(item, ALLOWED_PUBLIC_FIELDS));
     }
-    return (0, securityHelper_js_1.whitelistResponseFields)(data, exports.ALLOWED_PUBLIC_FIELDS);
+    return whitelistResponseFields(data, ALLOWED_PUBLIC_FIELDS);
 }
 /**
  * Log access to public articles
  */
-function logPublicAccess(req, res, next) {
+export function logPublicAccess(req, res, next) {
     const ipAddress = req.ip || req.socket.remoteAddress || "";
     const userAgent = req.get("user-agent") || "";
     const articleSlug = req.params["slug"] || null;
     // Don't block the request, log asynchronously
     setImmediate(async () => {
         try {
-            await prisma_js_1.prisma.knowledgeBaseArticleAccessLog.create({
+            await prisma.knowledgeBaseArticleAccessLog.create({
                 data: {
                     articleSlug,
                     ipAddress,
-                    ipHash: (0, securityHelper_js_1.hashIP)(ipAddress),
+                    ipHash: hashIP(ipAddress),
                     userAgent,
                     requestMethod: req.method,
                     requestPath: req.path,
                     queryParams: JSON.stringify(req.query),
-                    isBot: (0, securityHelper_js_1.isBot)(userAgent),
+                    isBot: isBot(userAgent),
                 },
             });
         }
@@ -166,7 +155,7 @@ function logPublicAccess(req, res, next) {
 /**
  * Error handler for public routes (sanitize error messages)
  */
-function publicErrorHandler(err, req, res, next) {
+export function publicErrorHandler(err, req, res, next) {
     // Log the actual error server-side
     console.error("Public route error:", err);
     const status = err.status || 500;
@@ -188,7 +177,7 @@ function publicErrorHandler(err, req, res, next) {
  */
 async function logSecurityEvent(eventType, severity, ipAddress, userAgent, requestPath, description) {
     try {
-        await prisma_js_1.prisma.knowledgeBaseSecurityEvent.create({
+        await prisma.knowledgeBaseSecurityEvent.create({
             data: {
                 eventType,
                 severity,
@@ -206,6 +195,6 @@ async function logSecurityEvent(eventType, severity, ipAddress, userAgent, reque
 /**
  * Combine all public security middleware
  */
-function publicSecurityMiddleware() {
+export function publicSecurityMiddleware() {
     return [setSecurityHeaders, configureCORS, detectSuspiciousActivity];
 }

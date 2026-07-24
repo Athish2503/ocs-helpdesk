@@ -1,11 +1,5 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.errorHandler = errorHandler;
-const zod_1 = require("zod");
-const multer_1 = __importDefault(require("multer"));
+import { ZodError } from "zod";
+import multer from "multer";
 /**
  * Centralised Express error-handling middleware.
  * Must be registered LAST (after all routes).
@@ -16,9 +10,9 @@ const multer_1 = __importDefault(require("multer"));
  *  - AppError  → statusCode from the thrown error
  *  - Unknown   → 500 Internal Server Error
  */
-function errorHandler(err, _req, res, _next) {
+export function errorHandler(err, _req, res, _next) {
     // ── Zod validation errors ────────────────────────────────────────────────
-    if (err instanceof zod_1.ZodError) {
+    if (err instanceof ZodError) {
         console.log("[ZodError] Validation failed details:", JSON.stringify(err.issues, null, 2));
         res.status(422).json({
             success: false,
@@ -34,7 +28,7 @@ function errorHandler(err, _req, res, _next) {
         return;
     }
     // ── Multer errors ────────────────────────────────────────────────────────
-    if (err instanceof multer_1.default.MulterError) {
+    if (err instanceof multer.MulterError) {
         let message = err.message;
         if (err.code === "LIMIT_FILE_SIZE") {
             message = "File too large. Maximum size allowed is 5MB.";

@@ -1,44 +1,7 @@
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.crmWebhookHandler = crmWebhookHandler;
-exports.bulkImportCustomersHandler = bulkImportCustomersHandler;
-const SyncService = __importStar(require("./sync.service.js"));
-const crmService = __importStar(require("../../services/crm.service.js"));
-const prisma_js_1 = require("../../config/prisma.js");
-async function crmWebhookHandler(req, res, next) {
+import * as SyncService from "./sync.service.js";
+import * as crmService from "../../services/crm.service.js";
+import { prisma } from "../../config/prisma.js";
+export async function crmWebhookHandler(req, res, next) {
     try {
         const { event, data } = req.body;
         if (!event || !data) {
@@ -70,7 +33,7 @@ async function crmWebhookHandler(req, res, next) {
  * Bulk import all customers from the CRM into the local helpdesk database.
  * Fetches customers in pages of 100 until all are retrieved, then syncs each one.
  */
-async function bulkImportCustomersHandler(req, res, next) {
+export async function bulkImportCustomersHandler(req, res, next) {
     try {
         const PAGE_SIZE = 100;
         let page = 1;
@@ -115,7 +78,7 @@ async function bulkImportCustomersHandler(req, res, next) {
                 }
                 // Optimization: skip sync if customer exists and has not been updated in CRM
                 try {
-                    const existingLocal = await prisma_js_1.prisma.crmCustomer.findUnique({
+                    const existingLocal = await prisma.crmCustomer.findUnique({
                         where: { crmCustomerId: customerId },
                         select: { crmUpdatedAt: true },
                     });

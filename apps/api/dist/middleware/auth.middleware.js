@@ -1,8 +1,5 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireAuth = requireAuth;
-const jwt_js_1 = require("../utils/jwt.js");
-require("../modules/auth/auth.types.js"); // ensure Express.Request augmentation is loaded
+import { verifyAccessToken } from "../utils/jwt.js";
+import "../modules/auth/auth.types.js"; // ensure Express.Request augmentation is loaded
 /**
  * requireAuth — verifies the JWT access token in the Authorization header.
  *
@@ -12,7 +9,7 @@ require("../modules/auth/auth.types.js"); // ensure Express.Request augmentation
  * Usage:
  *   router.get("/protected", requireAuth, handler)
  */
-function requireAuth(req, res, next) {
+export function requireAuth(req, res, next) {
     const authHeader = req.headers["authorization"];
     // SSE connections (EventSource) cannot set custom headers.
     // Allow token via query parameter ?t= exclusively for SSE streaming endpoints.
@@ -30,7 +27,7 @@ function requireAuth(req, res, next) {
     }
     const token = queryToken || authHeader.slice(7); // strip "Bearer " or use query token
     try {
-        const payload = (0, jwt_js_1.verifyAccessToken)(token);
+        const payload = verifyAccessToken(token);
         req.user = {
             id: payload.sub,
             email: payload.email,

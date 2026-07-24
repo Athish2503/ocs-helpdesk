@@ -1,49 +1,8 @@
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.listUsers = listUsers;
-exports.getUserById = getUserById;
-exports.createUser = createUser;
-exports.updateUser = updateUser;
-exports.getAgents = getAgents;
-exports.updateProfile = updateProfile;
-const prisma_js_1 = require("../../config/prisma.js");
-const password_js_1 = require("../../utils/password.js");
-const crmService = __importStar(require("../../services/crm.service.js"));
-const crm_cache_service_js_1 = require("../../services/crm-cache.service.js");
-async function listUsers(query) {
+import { prisma } from "../../config/prisma.js";
+import { hashPassword } from "../../utils/password.js";
+import * as crmService from "../../services/crm.service.js";
+import { getOrFetchDomains, getOrFetchServices, getOrFetchSubscriptions, syncUserCredits } from "../../services/crm-cache.service.js";
+export async function listUsers(query) {
     const where = {};
     if (query.search) {
         where.OR = [
@@ -57,7 +16,7 @@ async function listUsers(query) {
     if (query.isActive !== undefined) {
         where.isActive = query.isActive === "true";
     }
-    return prisma_js_1.prisma.user.findMany({
+    return prisma.user.findMany({
         where,
         select: {
             id: true,
@@ -102,17 +61,17 @@ async function listUsers(query) {
         orderBy: { createdAt: "desc" },
     });
 }
-async function getUserById(id) {
-    const existing = await prisma_js_1.prisma.user.findUnique({
+export async function getUserById(id) {
+    const existing = await prisma.user.findUnique({
         where: { id },
         select: { crmCustomerId: true }
     });
     if (existing) {
-        await (0, crm_cache_service_js_1.syncUserCredits)(id, existing.crmCustomerId).catch(err => {
+        await syncUserCredits(id, existing.crmCustomerId).catch(err => {
             console.error(`[Users Service] Error syncing user credits for user ${id}:`, err);
         });
     }
-    const user = await prisma_js_1.prisma.user.findUnique({
+    const user = await prisma.user.findUnique({
         where: { id },
         select: {
             id: true,
@@ -161,9 +120,9 @@ async function getUserById(id) {
     if (user.crmCustomerId) {
         try {
             const [domains, subscriptions, services] = await Promise.all([
-                (0, crm_cache_service_js_1.getOrFetchDomains)(user.crmCustomerId),
-                (0, crm_cache_service_js_1.getOrFetchSubscriptions)(user.crmCustomerId),
-                (0, crm_cache_service_js_1.getOrFetchServices)(user.crmCustomerId),
+                getOrFetchDomains(user.crmCustomerId),
+                getOrFetchSubscriptions(user.crmCustomerId),
+                getOrFetchServices(user.crmCustomerId),
             ]);
             if (!user.crmCustomer) {
                 user.crmCustomer = {
@@ -187,7 +146,7 @@ async function getUserById(id) {
         }
     }
     // Fetch independent audit logs
-    const auditLogs = await prisma_js_1.prisma.auditLog.findMany({
+    const auditLogs = await prisma.auditLog.findMany({
         where: {
             OR: [
                 { entityId: id },
@@ -201,13 +160,13 @@ async function getUserById(id) {
 async function ensureCrmCustomerExists(crmCustomerId) {
     if (!crmCustomerId)
         return;
-    const localCrmCust = await prisma_js_1.prisma.crmCustomer.findUnique({
+    const localCrmCust = await prisma.crmCustomer.findUnique({
         where: { crmCustomerId }
     });
     if (!localCrmCust) {
         try {
             await crmService.syncCustomerData(crmCustomerId);
-            const verified = await prisma_js_1.prisma.crmCustomer.findUnique({
+            const verified = await prisma.crmCustomer.findUnique({
                 where: { crmCustomerId }
             });
             if (!verified) {
@@ -221,8 +180,8 @@ async function ensureCrmCustomerExists(crmCustomerId) {
         }
     }
 }
-async function createUser(input) {
-    const existing = await prisma_js_1.prisma.user.findUnique({ where: { email: input.email } });
+export async function createUser(input) {
+    const existing = await prisma.user.findUnique({ where: { email: input.email } });
     if (existing) {
         const error = new Error("An account with this email already exists");
         error.statusCode = 409;
@@ -231,8 +190,8 @@ async function createUser(input) {
     if (input.crmCustomerId) {
         await ensureCrmCustomerExists(input.crmCustomerId);
     }
-    const passwordHash = await (0, password_js_1.hashPassword)(input.password);
-    return prisma_js_1.prisma.user.create({
+    const passwordHash = await hashPassword(input.password);
+    return prisma.user.create({
         data: {
             name: input.name,
             email: input.email,
@@ -265,7 +224,7 @@ async function createUser(input) {
         },
     });
 }
-async function updateUser(id, input) {
+export async function updateUser(id, input) {
     // Verify existence
     await getUserById(id);
     if (input.crmCustomerId) {
@@ -273,7 +232,7 @@ async function updateUser(id, input) {
     }
     const data = { ...input };
     if (input.password) {
-        data.passwordHash = await (0, password_js_1.hashPassword)(input.password);
+        data.passwordHash = await hashPassword(input.password);
         delete data.password;
     }
     if (input.teamIds !== undefined) {
@@ -282,7 +241,7 @@ async function updateUser(id, input) {
         };
         delete data.teamIds;
     }
-    return prisma_js_1.prisma.user.update({
+    return prisma.user.update({
         where: { id },
         data,
         select: {
@@ -302,8 +261,8 @@ async function updateUser(id, input) {
         },
     });
 }
-async function getAgents() {
-    return prisma_js_1.prisma.user.findMany({
+export async function getAgents() {
+    return prisma.user.findMany({
         where: {
             role: {
                 in: ["AGENT", "SUPPORT_L1", "SUPPORT_L2", "BILLING", "ADMIN"]
@@ -313,7 +272,7 @@ async function getAgents() {
         orderBy: { name: "asc" },
     });
 }
-async function updateProfile(id, input) {
+export async function updateProfile(id, input) {
     // Verify user exists
     await getUserById(id);
     const data = {};
@@ -321,9 +280,9 @@ async function updateProfile(id, input) {
         data.name = input.name;
     }
     if (input.password) {
-        data.passwordHash = await (0, password_js_1.hashPassword)(input.password);
+        data.passwordHash = await hashPassword(input.password);
     }
-    return prisma_js_1.prisma.user.update({
+    return prisma.user.update({
         where: { id },
         data,
         select: {

@@ -1,46 +1,4 @@
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.getCustomers = getCustomers;
-exports.getCustomerById = getCustomerById;
-exports.getCustomerDomains = getCustomerDomains;
-exports.getCustomerSubscriptions = getCustomerSubscriptions;
-exports.getCustomerServices = getCustomerServices;
-exports.getCustomerSummary = getCustomerSummary;
-exports.syncCustomerData = syncCustomerData;
-const SyncService = __importStar(require("../modules/sync/sync.service.js"));
+import * as SyncService from "../modules/sync/sync.service.js";
 const CRM_API_URL = process.env.CRM_API_URL || "http://localhost:3000";
 const CRM_API_KEY = process.env.CRM_API_KEY || "dev-crm-api-key";
 /**
@@ -63,7 +21,7 @@ async function crmRequest(path, options = {}) {
 /**
  * Fetch all customers with optional pagination, search, and status.
  */
-async function getCustomers(params) {
+export async function getCustomers(params) {
     const searchParams = new URLSearchParams();
     if (params?.page)
         searchParams.append("page", params.page.toString());
@@ -79,37 +37,37 @@ async function getCustomers(params) {
 /**
  * Fetch customer profile details by ID.
  */
-async function getCustomerById(customerId) {
+export async function getCustomerById(customerId) {
     return crmRequest(`/api/helpdesk/customers/${customerId}`);
 }
 /**
  * Fetch list of domains for a customer.
  */
-async function getCustomerDomains(customerId) {
+export async function getCustomerDomains(customerId) {
     return crmRequest(`/api/helpdesk/customers/${customerId}/domains`);
 }
 /**
  * Fetch list of subscriptions for a customer.
  */
-async function getCustomerSubscriptions(customerId) {
+export async function getCustomerSubscriptions(customerId) {
     return crmRequest(`/api/helpdesk/customers/${customerId}/subscriptions`);
 }
 /**
  * Fetch list of services for a customer.
  */
-async function getCustomerServices(customerId) {
+export async function getCustomerServices(customerId) {
     return crmRequest(`/api/helpdesk/customers/${customerId}/services`);
 }
 /**
  * Fetch consolidated customer summary (Profile, Domains, Subscriptions, Services).
  */
-async function getCustomerSummary(customerId) {
+export async function getCustomerSummary(customerId) {
     return crmRequest(`/api/helpdesk/customers/${customerId}/summary`);
 }
 /**
  * Ingest summary payload from CRM and run local upsert/deactivation logic.
  */
-async function syncCustomerData(customerId) {
+export async function syncCustomerData(customerId) {
     try {
         const response = await getCustomerSummary(customerId);
         if (!response || !response.success || !response.summary) {

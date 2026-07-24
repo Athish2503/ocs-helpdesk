@@ -1,15 +1,5 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.signAccessToken = signAccessToken;
-exports.verifyAccessToken = verifyAccessToken;
-exports.signRefreshToken = signRefreshToken;
-exports.verifyRefreshToken = verifyRefreshToken;
-exports.refreshTokenExpiresAt = refreshTokenExpiresAt;
-const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const crypto_1 = __importDefault(require("crypto"));
+import jwt from "jsonwebtoken";
+import crypto from "crypto";
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
@@ -27,15 +17,15 @@ const REFRESH_TOKEN_TTL = "7d";
 /**
  * Sign a short-lived access token (15 minutes).
  */
-function signAccessToken(payload) {
-    return jsonwebtoken_1.default.sign(payload, getSecret(), { expiresIn: ACCESS_TOKEN_TTL });
+export function signAccessToken(payload) {
+    return jwt.sign(payload, getSecret(), { expiresIn: ACCESS_TOKEN_TTL });
 }
 /**
  * Verify and decode an access token.
  * Throws JsonWebTokenError / TokenExpiredError on failure.
  */
-function verifyAccessToken(token) {
-    return jsonwebtoken_1.default.verify(token, getSecret());
+export function verifyAccessToken(token) {
+    return jwt.verify(token, getSecret());
 }
 // ---------------------------------------------------------------------------
 // Refresh Token
@@ -44,20 +34,20 @@ function verifyAccessToken(token) {
  * Sign a long-lived refresh token (7 days).
  * Embeds the userId (sub) and a unique jti identifier to prevent generation collisions.
  */
-function signRefreshToken(userId) {
-    const jti = crypto_1.default.randomUUID();
-    return jsonwebtoken_1.default.sign({ sub: userId, jti }, getSecret(), { expiresIn: REFRESH_TOKEN_TTL });
+export function signRefreshToken(userId) {
+    const jti = crypto.randomUUID();
+    return jwt.sign({ sub: userId, jti }, getSecret(), { expiresIn: REFRESH_TOKEN_TTL });
 }
 /**
  * Verify a refresh token and return the userId (sub).
  */
-function verifyRefreshToken(token) {
-    return jsonwebtoken_1.default.verify(token, getSecret());
+export function verifyRefreshToken(token) {
+    return jwt.verify(token, getSecret());
 }
 /**
  * Calculate the absolute expiry Date for a refresh token (7 days from now).
  */
-function refreshTokenExpiresAt() {
+export function refreshTokenExpiresAt() {
     const d = new Date();
     d.setDate(d.getDate() + 7);
     return d;

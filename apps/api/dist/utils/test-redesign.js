@@ -1,29 +1,27 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-const prisma_js_1 = require("../config/prisma.js");
-const tickets_service_js_1 = require("../modules/tickets/tickets.service.js");
+import { prisma } from "../config/prisma.js";
+import { createTicket, updateTicket, addTicketMessage } from "../modules/tickets/tickets.service.js";
 async function runTests() {
     console.log("🧪 Starting Automated Redesign Workflow Tests...");
     // 1. Fetch Seeded Users
-    const customer = await prisma_js_1.prisma.user.findUnique({ where: { email: "customer@company.com" } });
-    const l1 = await prisma_js_1.prisma.user.findUnique({ where: { email: "support-l1@ocs.company.com" } });
-    const l2 = await prisma_js_1.prisma.user.findUnique({ where: { email: "manager-l2@ocs.company.com" } });
-    const billing = await prisma_js_1.prisma.user.findUnique({ where: { email: "manjula@ocs.company.com" } });
-    const admin = await prisma_js_1.prisma.user.findUnique({ where: { email: "admin@ocs.company.com" } });
+    const customer = await prisma.user.findUnique({ where: { email: "customer@company.com" } });
+    const l1 = await prisma.user.findUnique({ where: { email: "support-l1@ocs.company.com" } });
+    const l2 = await prisma.user.findUnique({ where: { email: "manager-l2@ocs.company.com" } });
+    const billing = await prisma.user.findUnique({ where: { email: "manjula@ocs.company.com" } });
+    const admin = await prisma.user.findUnique({ where: { email: "admin@ocs.company.com" } });
     if (!customer || !l1 || !l2 || !billing || !admin) {
         throw new Error("❌ Required seeded users are missing! Please seed the database first.");
     }
     // Fetch a Category
-    const emailCat = await prisma_js_1.prisma.category.findFirst({ where: { name: "Email" } });
+    const emailCat = await prisma.category.findFirst({ where: { name: "Email" } });
     if (!emailCat) {
         throw new Error("❌ 'Email' category is missing.");
     }
     // Update routing rules for test users
-    await prisma_js_1.prisma.routingRule.update({
+    await prisma.routingRule.update({
         where: { issueCategory: "Billing / Renewals" },
         data: { assigneeId: billing.id }
     });
-    await prisma_js_1.prisma.routingRule.update({
+    await prisma.routingRule.update({
         where: { issueCategory: "Critical Issues" },
         data: {
             assigneeId: l1.id,
@@ -34,7 +32,7 @@ async function runTests() {
     let crmCustomerId = customer.crmCustomerId;
     if (!crmCustomerId) {
         crmCustomerId = "test-customer-crm-id";
-        await prisma_js_1.prisma.crmCustomer.upsert({
+        await prisma.crmCustomer.upsert({
             where: { crmCustomerId },
             update: {},
             create: {
@@ -43,13 +41,13 @@ async function runTests() {
                 primaryEmail: customer.email,
             }
         });
-        await prisma_js_1.prisma.user.update({
+        await prisma.user.update({
             where: { id: customer.id },
             data: { crmCustomerId }
         });
     }
     else {
-        await prisma_js_1.prisma.crmCustomer.upsert({
+        await prisma.crmCustomer.upsert({
             where: { crmCustomerId },
             update: {},
             create: {
@@ -59,7 +57,7 @@ async function runTests() {
             }
         });
     }
-    await prisma_js_1.prisma.crmDomain.upsert({
+    await prisma.crmDomain.upsert({
         where: { crmDomainId: "test-domain-id" },
         update: {},
         create: {
@@ -70,7 +68,7 @@ async function runTests() {
     });
     console.log("✅ Seeded users and categories loaded.");
     // Clean up existing test tickets if any
-    await prisma_js_1.prisma.ticket.deleteMany({
+    await prisma.ticket.deleteMany({
         where: {
             customerId: customer.id,
             title: { startsWith: "[TEST]" },
@@ -83,7 +81,7 @@ async function runTests() {
     // ==========================================
     console.log("\n--- Test Case 1: Routing Logic ---");
     // A. Billing Route
-    const billingTicket = await (0, tickets_service_js_1.createTicket)({
+    const billingTicket = await createTicket({
         title: "[TEST] Billing Issue",
         description: "Please check my recent renewal payment credit hours.",
         categoryId: emailCat.id,
@@ -96,7 +94,7 @@ async function runTests() {
     }
     console.log("✅ Billing routing successful: Routed to Manjula.");
     // B. Critical Escalation Route (High Priority)
-    const criticalTicket = await (0, tickets_service_js_1.createTicket)({
+    const criticalTicket = await createTicket({
         title: "[TEST] Server Down",
         description: "Database connection failed. Entire system is down.",
         categoryId: emailCat.id,
@@ -108,13 +106,13 @@ async function runTests() {
         throw new Error(`❌ Critical routing assignee failed. Expected L1 ${l1.id}, got ${criticalTicket.agentId}`);
     }
     // Let's verify rule matches: Primary L1, Secondary L2.
-    const checkRule = await prisma_js_1.prisma.routingRule.findUnique({
+    const checkRule = await prisma.routingRule.findUnique({
         where: { issueCategory: "Critical Issues" }
     });
     console.log("Critical routing rule config:", checkRule);
     console.log("✅ Critical routing successful.");
     // C. Technical Support Route
-    const techTicket = await (0, tickets_service_js_1.createTicket)({
+    const techTicket = await createTicket({
         title: "[TEST] Outlook Config",
         description: "How to configure Outlook IMAP client?",
         categoryId: emailCat.id,
@@ -124,7 +122,7 @@ async function runTests() {
     }, customer.id, customer.role);
     console.log(`Technical ticket created. Assigned Agent: ${techTicket.agentId}, Assigned Team: ${techTicket.teamId}`);
     // Technical Support category should route to Support Team
-    const supportTeam = await prisma_js_1.prisma.team.findUnique({ where: { name: "Support Team" } });
+    const supportTeam = await prisma.team.findUnique({ where: { name: "Support Team" } });
     if (supportTeam && techTicket.teamId !== supportTeam.id) {
         throw new Error(`❌ Tech routing failed. Expected team ${supportTeam.id}, got team ${techTicket.teamId}`);
     }
@@ -139,14 +137,14 @@ async function runTests() {
     }
     // Reply by staff
     console.log("Adding reply by support L1 agent...");
-    await (0, tickets_service_js_1.addTicketMessage)(techTicket.id, { message: "Hello! Try checking Port 993 SSL." }, l1.id, l1Ctx);
-    const updatedTechTicket = await prisma_js_1.prisma.ticket.findUnique({ where: { id: techTicket.id } });
+    await addTicketMessage(techTicket.id, { message: "Hello! Try checking Port 993 SSL." }, l1.id, l1Ctx);
+    const updatedTechTicket = await prisma.ticket.findUnique({ where: { id: techTicket.id } });
     if (!updatedTechTicket?.firstResponseAt) {
         throw new Error(`❌ firstResponseAt was not updated upon staff reply.`);
     }
     console.log(`✅ firstResponseAt updated: ${updatedTechTicket.firstResponseAt.toISOString()}`);
     // Create a dummy attachment to pass backend screenshot validation
-    await prisma_js_1.prisma.ticketAttachment.create({
+    await prisma.ticketAttachment.create({
         data: {
             ticketId: techTicket.id,
             filename: "test-resolution-proof.png",
@@ -156,14 +154,14 @@ async function runTests() {
     });
     // Update Status to RESOLVED, prompt resolution hours consumed
     console.log("Resolving ticket...");
-    await (0, tickets_service_js_1.updateTicket)(techTicket.id, { status: "RESOLVED", hoursConsumed: 2.0 }, adminCtx);
-    const resolvedTechTicket = await prisma_js_1.prisma.ticket.findUnique({ where: { id: techTicket.id } });
+    await updateTicket(techTicket.id, { status: "RESOLVED", hoursConsumed: 2.0 }, adminCtx);
+    const resolvedTechTicket = await prisma.ticket.findUnique({ where: { id: techTicket.id } });
     if (!resolvedTechTicket?.resolvedAt || !resolvedTechTicket?.ttrHours) {
         throw new Error(`❌ resolvedAt or ttrHours is null upon resolution.`);
     }
     console.log(`✅ resolvedAt set: ${resolvedTechTicket.resolvedAt.toISOString()}, ttrHours calculated: ${resolvedTechTicket.ttrHours} hrs.`);
     // Check audit history
-    const statusHistories = await prisma_js_1.prisma.ticketStatusHistory.findMany({
+    const statusHistories = await prisma.ticketStatusHistory.findMany({
         where: { ticketId: techTicket.id },
     });
     if (statusHistories.length === 0) {
@@ -174,12 +172,12 @@ async function runTests() {
     // Test Case 3: Customer Credits
     // ==========================================
     console.log("\n--- Test Case 3: Customer Credits Decrement ---");
-    const initialCredits = await prisma_js_1.prisma.customerCredits.findUnique({
+    const initialCredits = await prisma.customerCredits.findUnique({
         where: { customerId: customer.id },
     });
     console.log("Initial credits:", initialCredits);
     // Let's reset credits to 5.0 remaining for testing overage
-    await prisma_js_1.prisma.customerCredits.update({
+    await prisma.customerCredits.update({
         where: { customerId: customer.id },
         data: {
             allocatedHours: 5.0,
@@ -189,7 +187,7 @@ async function runTests() {
         },
     });
     // Create another ticket and resolve with 6.0 hours (exceeding remaining 5.0 credits)
-    const overTicket = await (0, tickets_service_js_1.createTicket)({
+    const overTicket = await createTicket({
         title: "[TEST] Heavy Setup Support",
         description: "Requires migrations of complete databases.",
         categoryId: emailCat.id,
@@ -198,7 +196,7 @@ async function runTests() {
         affectedDomain: "company.com",
     }, customer.id, customer.role);
     // Create a dummy attachment to pass backend screenshot validation
-    await prisma_js_1.prisma.ticketAttachment.create({
+    await prisma.ticketAttachment.create({
         data: {
             ticketId: overTicket.id,
             filename: "test-resolution-proof.png",
@@ -207,8 +205,8 @@ async function runTests() {
         }
     });
     console.log("Resolving ticket with 6.0 consumed hours...");
-    await (0, tickets_service_js_1.updateTicket)(overTicket.id, { status: "RESOLVED", hoursConsumed: 6.0 }, adminCtx);
-    const finalCredits = await prisma_js_1.prisma.customerCredits.findUnique({
+    await updateTicket(overTicket.id, { status: "RESOLVED", hoursConsumed: 6.0 }, adminCtx);
+    const finalCredits = await prisma.customerCredits.findUnique({
         where: { customerId: customer.id },
     });
     console.log("Final credits after 6.0 hrs usage:", finalCredits);
@@ -220,7 +218,7 @@ async function runTests() {
     }
     console.log("✅ Credit Hours decrement and billable overage calculated correctly!");
     // Cleanup test tickets
-    await prisma_js_1.prisma.ticket.deleteMany({
+    await prisma.ticket.deleteMany({
         where: {
             customerId: customer.id,
             title: { startsWith: "[TEST]" },

@@ -1,20 +1,18 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = require("express");
-const auth_controller_js_1 = require("./auth.controller.js");
-const auth_middleware_js_1 = require("../../middleware/auth.middleware.js");
-const router = (0, express_1.Router)();
+import { Router } from "express";
+import { registerHandler, loginHandler, refreshHandler, meHandler, logoutHandler, requestMagicLinkHandler, magicLoginHandler, forgotPasswordHandler, resetPasswordHandler, setupPasswordHandler, verifyInvitationTokenHandler, } from "./auth.controller.js";
+import { requireAuth } from "../../middleware/auth.middleware.js";
+const router = Router();
 // Public routes
-router.post("/register", auth_controller_js_1.registerHandler);
-router.post("/login", auth_controller_js_1.loginHandler);
-router.post("/refresh", auth_controller_js_1.refreshHandler);
-router.post("/logout", auth_controller_js_1.logoutHandler);
-router.post("/magic-link", auth_controller_js_1.requestMagicLinkHandler);
-router.post("/magic-login", auth_controller_js_1.magicLoginHandler);
-router.post("/forgot-password", auth_controller_js_1.forgotPasswordHandler);
-router.post("/reset-password", auth_controller_js_1.resetPasswordHandler);
-router.get("/invitation/verify-token", auth_controller_js_1.verifyInvitationTokenHandler);
-router.post("/invitation/setup-password", auth_controller_js_1.setupPasswordHandler);
+router.post("/register", registerHandler);
+router.post("/login", loginHandler);
+router.post("/refresh", refreshHandler);
+router.post("/logout", logoutHandler);
+router.post("/magic-link", requestMagicLinkHandler);
+router.post("/magic-login", magicLoginHandler);
+router.post("/forgot-password", forgotPasswordHandler);
+router.post("/reset-password", resetPasswordHandler);
+router.get("/invitation/verify-token", verifyInvitationTokenHandler);
+router.post("/invitation/setup-password", setupPasswordHandler);
 // Protected routes (requires a valid access token)
-router.get("/me", auth_middleware_js_1.requireAuth, auth_controller_js_1.meHandler);
-exports.default = router;
+router.get("/me", requireAuth, meHandler);
+export default router;

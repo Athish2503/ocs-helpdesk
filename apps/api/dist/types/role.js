@@ -1,7 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.SystemRoles = void 0;
-exports.SystemRoles = {
+export const SystemRoles = {
     CUSTOMER: "CUSTOMER",
     AGENT: "AGENT",
     SUPERVISOR: "SUPERVISOR",

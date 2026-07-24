@@ -1,36 +1,17 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.register = register;
-exports.login = login;
-exports.refresh = refresh;
-exports.getMe = getMe;
-exports.logout = logout;
-exports.logoutAll = logoutAll;
-exports.requestMagicLink = requestMagicLink;
-exports.magicLogin = magicLogin;
-exports.forgotPassword = forgotPassword;
-exports.resetPassword = resetPassword;
-exports.sendInvitation = sendInvitation;
-exports.resendInvitation = resendInvitation;
-exports.setupPassword = setupPassword;
-exports.verifyInvitationToken = verifyInvitationToken;
-const crypto_1 = __importDefault(require("crypto"));
-const prisma_js_1 = require("../../config/prisma.js");
-const password_js_1 = require("../../utils/password.js");
-const jwt_js_1 = require("../../utils/jwt.js");
-const email_service_js_1 = require("../../services/email.service.js");
+import crypto from "crypto";
+import { prisma } from "../../config/prisma.js";
+import { hashPassword, verifyPassword } from "../../utils/password.js";
+import { signAccessToken, signRefreshToken, verifyRefreshToken, refreshTokenExpiresAt, } from "../../utils/jwt.js";
+import { sendMagicLinkEmail, sendPasswordResetEmail, sendInvitationEmail } from "../../services/email.service.js";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-const role_middleware_js_1 = require("../../middleware/role.middleware.js");
+import { DEFAULT_PERMISSIONS } from "../../middleware/role.middleware.js";
 async function toPublicUser(user) {
-    const rolePerm = await prisma_js_1.prisma.rolePermission.findUnique({
+    const rolePerm = await prisma.rolePermission.findUnique({
         where: { role: user.role },
     });
-    const permissions = rolePerm?.permissions ?? role_middleware_js_1.DEFAULT_PERMISSIONS[user.role] ?? [];
+    const permissions = rolePerm?.permissions ?? DEFAULT_PERMISSIONS[user.role] ?? [];
     return {
         id: user.id,
         name: user.name,
@@ -43,14 +24,14 @@ async function toPublicUser(user) {
     };
 }
 function buildTokens(user, overrideEmail) {
-    const accessToken = (0, jwt_js_1.signAccessToken)({ sub: user.id, email: overrideEmail || user.email, role: user.role });
-    const refreshToken = (0, jwt_js_1.signRefreshToken)(user.id);
+    const accessToken = signAccessToken({ sub: user.id, email: overrideEmail || user.email, role: user.role });
+    const refreshToken = signRefreshToken(user.id);
     return { accessToken, refreshToken };
 }
 // ---------------------------------------------------------------------------
 // Register
 // ---------------------------------------------------------------------------
-async function register(input) {
+export async function register(input) {
     const error = new Error("Self-registration is disabled. Customer accounts must be created in the CRM and invited.");
     error.statusCode = 400;
     throw error;
@@ -58,7 +39,7 @@ async function register(input) {
 // ---------------------------------------------------------------------------
 // Login
 // ---------------------------------------------------------------------------
-async function login(input) {
+export async function login(input) {
     // 1. Look up user by email or phone format
     const identifier = input.email.trim();
     const isEmail = identifier.includes("@");
@@ -66,10 +47,10 @@ async function login(input) {
     let loggedInWithSecondaryEmail = false;
     let secondaryEmailValue = "";
     if (isEmail) {
-        user = await prisma_js_1.prisma.user.findUnique({ where: { email: identifier.toLowerCase() } });
+        user = await prisma.user.findUnique({ where: { email: identifier.toLowerCase() } });
         if (!user) {
             // Find CRM Customer by secondary email (case-insensitive)
-            const crmCustomer = await prisma_js_1.prisma.crmCustomer.findFirst({
+            const crmCustomer = await prisma.crmCustomer.findFirst({
                 where: {
                     secondaryEmail: {
                         equals: identifier,
@@ -87,12 +68,12 @@ async function login(input) {
     }
     else {
         // Search by user's direct phone number
-        user = await prisma_js_1.prisma.user.findFirst({
+        user = await prisma.user.findFirst({
             where: { phoneNumber: identifier }
         });
         // Fallback: search crm customer records
         if (!user) {
-            const crmCustomer = await prisma_js_1.prisma.crmCustomer.findFirst({
+            const crmCustomer = await prisma.crmCustomer.findFirst({
                 where: {
                     OR: [
                         { primaryPhone: identifier },
@@ -117,7 +98,7 @@ async function login(input) {
         err.statusCode = 401;
         throw err;
     }
-    const passwordValid = await (0, password_js_1.verifyPassword)(input.password, user.passwordHash);
+    const passwordValid = await verifyPassword(input.password, user.passwordHash);
     if (!passwordValid)
         throw invalidCredentials;
     // 3. Ensure email is verified (only for non-customers)
@@ -133,18 +114,18 @@ async function login(input) {
         throw err;
     }
     // Update lastLoginAt
-    await prisma_js_1.prisma.user.update({
+    await prisma.user.update({
         where: { id: user.id },
         data: { lastLoginAt: new Date() }
     });
     // 5. Issue tokens
     const { accessToken, refreshToken } = buildTokens(user, loggedInWithSecondaryEmail ? secondaryEmailValue : undefined);
     // 6. Persist refresh token
-    await prisma_js_1.prisma.refreshToken.create({
+    await prisma.refreshToken.create({
         data: {
             token: refreshToken,
             userId: user.id,
-            expiresAt: (0, jwt_js_1.refreshTokenExpiresAt)(),
+            expiresAt: refreshTokenExpiresAt(),
         },
     });
     return {
@@ -155,11 +136,11 @@ async function login(input) {
 // ---------------------------------------------------------------------------
 // Refresh
 // ---------------------------------------------------------------------------
-async function refresh(token) {
+export async function refresh(token) {
     // 1. Verify the JWT signature & expiry
     let payload;
     try {
-        payload = (0, jwt_js_1.verifyRefreshToken)(token);
+        payload = verifyRefreshToken(token);
     }
     catch {
         const err = new Error("Invalid or expired refresh token");
@@ -167,28 +148,28 @@ async function refresh(token) {
         throw err;
     }
     // 2. Check the token exists in the DB (rotation check)
-    const stored = await prisma_js_1.prisma.refreshToken.findUnique({ where: { token } });
+    const stored = await prisma.refreshToken.findUnique({ where: { token } });
     if (!stored || stored.expiresAt < new Date()) {
         const err = new Error("Refresh token not found or has expired");
         err.statusCode = 401;
         throw err;
     }
     // 3. Fetch the user
-    const user = await prisma_js_1.prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
     if (!user || !user.isActive) {
         const err = new Error("User not found or account deactivated");
         err.statusCode = 401;
         throw err;
     }
     // 4. Issue a fresh access token (refresh token is NOT rotated here — single rotation strategy)
-    const accessToken = (0, jwt_js_1.signAccessToken)({ sub: user.id, email: user.email, role: user.role });
+    const accessToken = signAccessToken({ sub: user.id, email: user.email, role: user.role });
     return { accessToken };
 }
 // ---------------------------------------------------------------------------
 // Me
 // ---------------------------------------------------------------------------
-async function getMe(userId) {
-    const user = await prisma_js_1.prisma.user.findUnique({ where: { id: userId } });
+export async function getMe(userId) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
         const err = new Error("User not found");
         err.statusCode = 404;
@@ -199,24 +180,24 @@ async function getMe(userId) {
 // ---------------------------------------------------------------------------
 // Logout
 // ---------------------------------------------------------------------------
-async function logout(token) {
+export async function logout(token) {
     // Delete the specific refresh token. Silently ignore if already gone.
-    await prisma_js_1.prisma.refreshToken.deleteMany({ where: { token } });
+    await prisma.refreshToken.deleteMany({ where: { token } });
 }
 // ---------------------------------------------------------------------------
 // Logout all sessions
 // ---------------------------------------------------------------------------
-async function logoutAll(userId) {
-    await prisma_js_1.prisma.refreshToken.deleteMany({ where: { userId } });
+export async function logoutAll(userId) {
+    await prisma.refreshToken.deleteMany({ where: { userId } });
 }
 // ---------------------------------------------------------------------------
 // Magic Link Actions
 // ---------------------------------------------------------------------------
-async function requestMagicLink(input) {
+export async function requestMagicLink(input) {
     // 1. Check if it's register vs login
-    let existingUser = await prisma_js_1.prisma.user.findUnique({ where: { email: input.email.toLowerCase() } });
+    let existingUser = await prisma.user.findUnique({ where: { email: input.email.toLowerCase() } });
     if (!existingUser) {
-        const crmCustomer = await prisma_js_1.prisma.crmCustomer.findFirst({
+        const crmCustomer = await prisma.crmCustomer.findFirst({
             where: { secondaryEmail: { equals: input.email, mode: "insensitive" } },
             include: { user: true }
         });
@@ -235,10 +216,10 @@ async function requestMagicLink(input) {
         throw error;
     }
     // 2. Generate secure token
-    const token = crypto_1.default.randomBytes(32).toString("hex");
+    const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
     // 3. Persist the magic token
-    await prisma_js_1.prisma.magicToken.create({
+    await prisma.magicToken.create({
         data: {
             token,
             email: input.email,
@@ -250,7 +231,7 @@ async function requestMagicLink(input) {
     const frontendUrl = process.env["FRONTEND_URL"] || "http://localhost:3000";
     const magicLink = `${frontendUrl}/auth/callback?token=${token}`;
     // 5. Send email
-    await (0, email_service_js_1.sendMagicLinkEmail)(input.email, magicLink, input.name || existingUser?.name);
+    await sendMagicLinkEmail(input.email, magicLink, input.name || existingUser?.name);
     // In development, return the link in the response body for easier manual verification
     if (process.env["NODE_ENV"] === "development") {
         return {
@@ -262,9 +243,9 @@ async function requestMagicLink(input) {
         message: "Magic link sent successfully. Please check your inbox.",
     };
 }
-async function magicLogin(token) {
+export async function magicLogin(token) {
     // 1. Retrieve the token details
-    const magicToken = await prisma_js_1.prisma.magicToken.findUnique({ where: { token } });
+    const magicToken = await prisma.magicToken.findUnique({ where: { token } });
     if (!magicToken) {
         const err = new Error("Invalid or expired magic link token");
         err.statusCode = 401;
@@ -273,19 +254,22 @@ async function magicLogin(token) {
     // 2. Check expiration
     if (magicToken.expiresAt < new Date()) {
         // Clean up expired token
-        await prisma_js_1.prisma.magicToken.delete({ where: { id: magicToken.id } }).catch(() => { });
+        try {
+            await prisma.magicToken.delete({ where: { id: magicToken.id } });
+        }
+        catch { }
         const err = new Error("This magic link has expired. Please request a new one.");
         err.statusCode = 401;
         throw err;
     }
     // Consume the token immediately (single-use constraint)
-    await prisma_js_1.prisma.magicToken.delete({ where: { id: magicToken.id } });
+    await prisma.magicToken.delete({ where: { id: magicToken.id } });
     // 3. Find or create the user
-    let user = await prisma_js_1.prisma.user.findUnique({ where: { email: magicToken.email.toLowerCase() } });
+    let user = await prisma.user.findUnique({ where: { email: magicToken.email.toLowerCase() } });
     let loggedInWithSecondaryEmail = false;
     let secondaryEmailValue = "";
     if (!user) {
-        const crmCustomer = await prisma_js_1.prisma.crmCustomer.findFirst({
+        const crmCustomer = await prisma.crmCustomer.findFirst({
             where: { secondaryEmail: { equals: magicToken.email, mode: "insensitive" } },
             include: { user: true }
         });
@@ -298,7 +282,7 @@ async function magicLogin(token) {
     if (!user) {
         // Must be registration flow. Name should be present, otherwise fallback
         const name = magicToken.name || magicToken.email.split("@")[0] || "User";
-        user = await prisma_js_1.prisma.user.create({
+        user = await prisma.user.create({
             data: {
                 name,
                 email: magicToken.email,
@@ -317,7 +301,7 @@ async function magicLogin(token) {
         }
         // Mark email as verified if it wasn't
         if (!user.emailVerified) {
-            user = await prisma_js_1.prisma.user.update({
+            user = await prisma.user.update({
                 where: { id: user.id },
                 data: { emailVerified: true },
             });
@@ -326,11 +310,11 @@ async function magicLogin(token) {
     // 4. Issue tokens
     const { accessToken, refreshToken } = buildTokens(user, loggedInWithSecondaryEmail ? secondaryEmailValue : undefined);
     // 5. Persist refresh token
-    await prisma_js_1.prisma.refreshToken.create({
+    await prisma.refreshToken.create({
         data: {
             token: refreshToken,
             userId: user.id,
-            expiresAt: (0, jwt_js_1.refreshTokenExpiresAt)(),
+            expiresAt: refreshTokenExpiresAt(),
         },
     });
     return {
@@ -338,9 +322,10 @@ async function magicLogin(token) {
         tokens: { accessToken, refreshToken },
     };
 }
-async function forgotPassword(input) {
+export async function forgotPassword(input) {
+    const normalizedEmail = input.email.trim().toLowerCase();
     // 1. Check if user exists
-    const user = await prisma_js_1.prisma.user.findUnique({ where: { email: input.email } });
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     // For security, return a success message even if the user doesn't exist
     // to prevent email enumeration.
     const successResponse = {
@@ -350,14 +335,14 @@ async function forgotPassword(input) {
         return successResponse;
     }
     // 2. Generate secure token
-    const token = crypto_1.default.randomBytes(32).toString("hex");
+    const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
     // 3. Persist the reset token (delete any existing ones first to prevent clutter)
-    await prisma_js_1.prisma.passwordResetToken.deleteMany({ where: { email: input.email } });
-    await prisma_js_1.prisma.passwordResetToken.create({
+    await prisma.passwordResetToken.deleteMany({ where: { email: normalizedEmail } });
+    await prisma.passwordResetToken.create({
         data: {
             token,
-            email: input.email,
+            email: normalizedEmail,
             expiresAt,
         },
     });
@@ -365,7 +350,7 @@ async function forgotPassword(input) {
     const frontendUrl = process.env["FRONTEND_URL"] || "http://localhost:3000";
     const resetLink = `${frontendUrl}/reset-password?token=${token}`;
     // 5. Send email
-    await (0, email_service_js_1.sendPasswordResetEmail)(input.email, resetLink, user.name);
+    await sendPasswordResetEmail(input.email, resetLink, user.name);
     // In development, return the link in the response body for easier manual verification
     if (process.env["NODE_ENV"] === "development") {
         return {
@@ -375,9 +360,9 @@ async function forgotPassword(input) {
     }
     return successResponse;
 }
-async function resetPassword(input) {
+export async function resetPassword(input) {
     // 1. Retrieve the token record
-    const resetToken = await prisma_js_1.prisma.passwordResetToken.findUnique({
+    const resetToken = await prisma.passwordResetToken.findUnique({
         where: { token: input.token },
     });
     if (!resetToken) {
@@ -387,22 +372,25 @@ async function resetPassword(input) {
     }
     // 2. Check expiration
     if (resetToken.expiresAt < new Date()) {
-        await prisma_js_1.prisma.passwordResetToken.delete({ where: { id: resetToken.id } }).catch(() => { });
+        try {
+            await prisma.passwordResetToken.delete({ where: { id: resetToken.id } });
+        }
+        catch { }
         const err = new Error("This password reset link has expired. Please request a new one.");
         err.statusCode = 400;
         throw err;
     }
     // 3. Find user
-    const user = await prisma_js_1.prisma.user.findUnique({ where: { email: resetToken.email } });
+    const user = await prisma.user.findUnique({ where: { email: resetToken.email } });
     if (!user) {
         const err = new Error("User not found");
         err.statusCode = 404;
         throw err;
     }
     // 4. Hash new password & update user password + make sure email is verified
-    const passwordHash = await (0, password_js_1.hashPassword)(input.password);
-    await prisma_js_1.prisma.$transaction([
-        prisma_js_1.prisma.user.update({
+    const passwordHash = await hashPassword(input.password);
+    await prisma.$transaction([
+        prisma.user.update({
             where: { id: user.id },
             data: {
                 passwordHash,
@@ -410,14 +398,14 @@ async function resetPassword(input) {
             },
         }),
         // Consume the token (single use)
-        prisma_js_1.prisma.passwordResetToken.delete({ where: { id: resetToken.id } }),
+        prisma.passwordResetToken.delete({ where: { id: resetToken.id } }),
         // Revoke all sessions for security
-        prisma_js_1.prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
+        prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
     ]);
     return { message: "Password reset successful. You can now log in with your new password." };
 }
-async function sendInvitation(userId, currentUserId, generateTempPassword = false) {
-    const user = await prisma_js_1.prisma.user.findUnique({
+export async function sendInvitation(userId, currentUserId, generateTempPassword = false) {
+    const user = await prisma.user.findUnique({
         where: { id: userId },
         include: { crmCustomer: true }
     });
@@ -431,14 +419,14 @@ async function sendInvitation(userId, currentUserId, generateTempPassword = fals
         error.statusCode = 400;
         throw error;
     }
-    const token = crypto_1.default.randomBytes(32).toString("hex");
+    const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
     let tempPassword = undefined;
     if (generateTempPassword) {
-        tempPassword = crypto_1.default.randomBytes(6).toString("hex"); // e.g. "a1b2c3"
+        tempPassword = crypto.randomBytes(6).toString("hex"); // e.g. "a1b2c3"
     }
     // Create Invitation record
-    const invitation = await prisma_js_1.prisma.invitation.create({
+    const invitation = await prisma.invitation.create({
         data: {
             crmCustomerId: user.crmCustomerId,
             email: user.email,
@@ -452,9 +440,9 @@ async function sendInvitation(userId, currentUserId, generateTempPassword = fals
     const frontendUrl = process.env["FRONTEND_URL"] || "http://localhost:3000";
     const invitationLink = `${frontendUrl}/setup-password?token=${token}`;
     // Send Email
-    await (0, email_service_js_1.sendInvitationEmail)(user.email, invitationLink, tempPassword, user.name);
+    await sendInvitationEmail(user.email, invitationLink, tempPassword, user.name);
     // Log in AuditLog
-    await prisma_js_1.prisma.auditLog.create({
+    await prisma.auditLog.create({
         data: {
             action: "INVITATION_SENT",
             entity: "User",
@@ -465,8 +453,8 @@ async function sendInvitation(userId, currentUserId, generateTempPassword = fals
     });
     return invitation;
 }
-async function resendInvitation(userId, currentUserId) {
-    const user = await prisma_js_1.prisma.user.findUnique({
+export async function resendInvitation(userId, currentUserId) {
+    const user = await prisma.user.findUnique({
         where: { id: userId },
         include: { crmCustomer: true }
     });
@@ -476,7 +464,7 @@ async function resendInvitation(userId, currentUserId) {
         throw error;
     }
     // Find latest invitation
-    const lastInvite = await prisma_js_1.prisma.invitation.findFirst({
+    const lastInvite = await prisma.invitation.findFirst({
         where: { crmCustomerId: user.crmCustomerId },
         orderBy: { createdAt: "desc" }
     });
@@ -485,9 +473,9 @@ async function resendInvitation(userId, currentUserId) {
         error.statusCode = 400;
         throw error;
     }
-    const token = crypto_1.default.randomBytes(32).toString("hex");
+    const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-    const invitation = await prisma_js_1.prisma.invitation.create({
+    const invitation = await prisma.invitation.create({
         data: {
             crmCustomerId: user.crmCustomerId,
             email: user.email,
@@ -499,8 +487,8 @@ async function resendInvitation(userId, currentUserId) {
     });
     const frontendUrl = process.env["FRONTEND_URL"] || "http://localhost:3000";
     const invitationLink = `${frontendUrl}/setup-password?token=${token}`;
-    await (0, email_service_js_1.sendInvitationEmail)(user.email, invitationLink, lastInvite.temporaryPassword || undefined, user.name);
-    await prisma_js_1.prisma.auditLog.create({
+    await sendInvitationEmail(user.email, invitationLink, lastInvite.temporaryPassword || undefined, user.name);
+    await prisma.auditLog.create({
         data: {
             action: "INVITATION_RESENT",
             entity: "User",
@@ -511,8 +499,8 @@ async function resendInvitation(userId, currentUserId) {
     });
     return invitation;
 }
-async function setupPassword(token, passwordString) {
-    const invitation = await prisma_js_1.prisma.invitation.findUnique({
+export async function setupPassword(token, passwordString) {
+    const invitation = await prisma.invitation.findUnique({
         where: { setupToken: token },
         include: { crmCustomer: true }
     });
@@ -531,7 +519,7 @@ async function setupPassword(token, passwordString) {
         error.statusCode = 400;
         throw error;
     }
-    const user = await prisma_js_1.prisma.user.findFirst({
+    const user = await prisma.user.findFirst({
         where: { crmCustomerId: invitation.crmCustomerId }
     });
     if (!user) {
@@ -539,9 +527,9 @@ async function setupPassword(token, passwordString) {
         error.statusCode = 404;
         throw error;
     }
-    const passwordHash = await (0, password_js_1.hashPassword)(passwordString);
-    await prisma_js_1.prisma.$transaction([
-        prisma_js_1.prisma.user.update({
+    const passwordHash = await hashPassword(passwordString);
+    await prisma.$transaction([
+        prisma.user.update({
             where: { id: user.id },
             data: {
                 passwordHash,
@@ -549,11 +537,11 @@ async function setupPassword(token, passwordString) {
                 emailVerified: true
             }
         }),
-        prisma_js_1.prisma.invitation.update({
+        prisma.invitation.update({
             where: { id: invitation.id },
             data: { usedAt: new Date() }
         }),
-        prisma_js_1.prisma.auditLog.create({
+        prisma.auditLog.create({
             data: {
                 action: "PASSWORD_SETUP",
                 entity: "User",
@@ -564,8 +552,8 @@ async function setupPassword(token, passwordString) {
     ]);
     return { email: invitation.email };
 }
-async function verifyInvitationToken(token) {
-    const invitation = await prisma_js_1.prisma.invitation.findUnique({
+export async function verifyInvitationToken(token) {
+    const invitation = await prisma.invitation.findUnique({
         where: { setupToken: token },
         include: { crmCustomer: true }
     });

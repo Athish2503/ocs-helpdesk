@@ -1,17 +1,15 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = require("express");
-const teams_controller_js_1 = require("./teams.controller.js");
-const auth_middleware_js_1 = require("../../middleware/auth.middleware.js");
-const role_middleware_js_1 = require("../../middleware/role.middleware.js");
-const router = (0, express_1.Router)();
+import { Router } from "express";
+import { listTeamsHandler, getTeamByIdHandler, createTeamHandler, updateTeamHandler, deleteTeamHandler, } from "./teams.controller.js";
+import { requireAuth } from "../../middleware/auth.middleware.js";
+import { requireRole, requirePermission } from "../../middleware/role.middleware.js";
+const router = Router();
 // Secure all team routes
-router.use(auth_middleware_js_1.requireAuth);
+router.use(requireAuth);
 // Read-only access for ADMIN and AGENT
-router.get("/", (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), teams_controller_js_1.listTeamsHandler);
-router.get("/:id", (0, role_middleware_js_1.requireRole)("ADMIN", "AGENT"), teams_controller_js_1.getTeamByIdHandler);
+router.get("/", requireRole("ADMIN", "AGENT"), listTeamsHandler);
+router.get("/:id", requireRole("ADMIN", "AGENT"), getTeamByIdHandler);
 // Administrative mutations
-router.post("/", (0, role_middleware_js_1.requirePermission)("manage_teams"), teams_controller_js_1.createTeamHandler);
-router.patch("/:id", (0, role_middleware_js_1.requirePermission)("manage_teams"), teams_controller_js_1.updateTeamHandler);
-router.delete("/:id", (0, role_middleware_js_1.requirePermission)("manage_teams"), teams_controller_js_1.deleteTeamHandler);
-exports.default = router;
+router.post("/", requirePermission("manage_teams"), createTeamHandler);
+router.patch("/:id", requirePermission("manage_teams"), updateTeamHandler);
+router.delete("/:id", requirePermission("manage_teams"), deleteTeamHandler);
+export default router;

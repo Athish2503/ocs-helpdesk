@@ -1,70 +1,15 @@
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.createUserHandler = createUserHandler;
-exports.listUsersHandler = listUsersHandler;
-exports.getAgentsHandler = getAgentsHandler;
-exports.getUserByIdHandler = getUserByIdHandler;
-exports.updateUserHandler = updateUserHandler;
-exports.updateProfileHandler = updateProfileHandler;
-exports.getMyCreditsHandler = getMyCreditsHandler;
-exports.updateCustomerCreditsHandler = updateCustomerCreditsHandler;
-exports.listRoutingRulesHandler = listRoutingRulesHandler;
-exports.updateRoutingRuleHandler = updateRoutingRuleHandler;
-exports.createRoutingRuleHandler = createRoutingRuleHandler;
-exports.deleteRoutingRuleHandler = deleteRoutingRuleHandler;
-exports.listRolePermissionsHandler = listRolePermissionsHandler;
-exports.updateRolePermissionsHandler = updateRolePermissionsHandler;
-exports.deleteRolePermissionHandler = deleteRolePermissionHandler;
-exports.inviteUserHandler = inviteUserHandler;
-exports.resendInviteUserHandler = resendInviteUserHandler;
-exports.sendResetPasswordLinkHandler = sendResetPasswordLinkHandler;
-exports.getCrmCustomersHandler = getCrmCustomersHandler;
-exports.getMyCrmDetailsHandler = getMyCrmDetailsHandler;
-const users_schemas_js_1 = require("./users.schemas.js");
-const UsersService = __importStar(require("./users.service.js"));
-const crmService = __importStar(require("../../services/crm.service.js"));
-const AuthService = __importStar(require("../auth/auth.service.js"));
-const role_middleware_js_1 = require("../../middleware/role.middleware.js");
-const crm_cache_service_js_1 = require("../../services/crm-cache.service.js");
+import { createUserSchema, updateUserSchema } from "./users.schemas.js";
+import * as UsersService from "./users.service.js";
+import * as crmService from "../../services/crm.service.js";
+import * as AuthService from "../auth/auth.service.js";
+import { DEFAULT_PERMISSIONS } from "../../middleware/role.middleware.js";
+import { getOrFetchDomains, getOrFetchServices, getOrFetchSubscriptions, syncUserCredits } from "../../services/crm-cache.service.js";
 function ok(res, data) {
     res.status(200).json({ success: true, data });
 }
-async function createUserHandler(req, res, next) {
+export async function createUserHandler(req, res, next) {
     try {
-        const input = users_schemas_js_1.createUserSchema.parse(req.body);
+        const input = createUserSchema.parse(req.body);
         const user = await UsersService.createUser(input);
         ok(res, { user });
     }
@@ -72,7 +17,7 @@ async function createUserHandler(req, res, next) {
         next(err);
     }
 }
-async function listUsersHandler(req, res, next) {
+export async function listUsersHandler(req, res, next) {
     try {
         const { search, role, isActive } = req.query;
         const users = await UsersService.listUsers({
@@ -86,7 +31,7 @@ async function listUsersHandler(req, res, next) {
         next(err);
     }
 }
-async function getAgentsHandler(req, res, next) {
+export async function getAgentsHandler(req, res, next) {
     try {
         const agents = await UsersService.getAgents();
         ok(res, { agents });
@@ -95,7 +40,7 @@ async function getAgentsHandler(req, res, next) {
         next(err);
     }
 }
-async function getUserByIdHandler(req, res, next) {
+export async function getUserByIdHandler(req, res, next) {
     try {
         const { id } = req.params;
         const user = await UsersService.getUserById(id);
@@ -105,10 +50,10 @@ async function getUserByIdHandler(req, res, next) {
         next(err);
     }
 }
-async function updateUserHandler(req, res, next) {
+export async function updateUserHandler(req, res, next) {
     try {
         const { id } = req.params;
-        const input = users_schemas_js_1.updateUserSchema.parse(req.body);
+        const input = updateUserSchema.parse(req.body);
         const user = await UsersService.updateUser(id, input);
         ok(res, { user });
     }
@@ -116,7 +61,7 @@ async function updateUserHandler(req, res, next) {
         next(err);
     }
 }
-async function updateProfileHandler(req, res, next) {
+export async function updateProfileHandler(req, res, next) {
     try {
         const userId = req.user.id;
         const { name, password } = req.body;
@@ -127,18 +72,18 @@ async function updateProfileHandler(req, res, next) {
         next(err);
     }
 }
-const prisma_js_1 = require("../../config/prisma.js");
-async function getMyCreditsHandler(req, res, next) {
+import { prisma } from "../../config/prisma.js";
+export async function getMyCreditsHandler(req, res, next) {
     try {
         const customerId = req.user.id;
-        const user = await prisma_js_1.prisma.user.findUnique({
+        const user = await prisma.user.findUnique({
             where: { id: customerId },
             select: { crmCustomerId: true }
         });
-        await (0, crm_cache_service_js_1.syncUserCredits)(customerId, user?.crmCustomerId || null).catch(err => {
+        await syncUserCredits(customerId, user?.crmCustomerId || null).catch(err => {
             console.error(`[Users Controller] Error syncing user credits:`, err);
         });
-        const credits = await prisma_js_1.prisma.customerCredits.findUnique({
+        const credits = await prisma.customerCredits.findUnique({
             where: { customerId },
             include: {
                 transactions: {
@@ -152,11 +97,11 @@ async function getMyCreditsHandler(req, res, next) {
         next(err);
     }
 }
-async function updateCustomerCreditsHandler(req, res, next) {
+export async function updateCustomerCreditsHandler(req, res, next) {
     try {
         const id = req.params.id; // customer user ID
         const { allocatedHours, description } = req.body;
-        const user = await prisma_js_1.prisma.user.findUnique({
+        const user = await prisma.user.findUnique({
             where: { id },
             select: { crmCustomerId: true }
         });
@@ -172,12 +117,12 @@ async function updateCustomerCreditsHandler(req, res, next) {
             throw error;
         }
         // Sync first to get the most updated base allocated credits from CRM
-        const syncedCredits = await (0, crm_cache_service_js_1.syncUserCredits)(id, crmCustomerId);
+        const syncedCredits = await syncUserCredits(id, crmCustomerId);
         const oldAllocated = syncedCredits.allocatedHours;
         const diff = (allocatedHours ?? oldAllocated) - oldAllocated;
         if (diff !== 0) {
             // Retain manual adjustments as separate audit entries only
-            await prisma_js_1.prisma.creditUsage.create({
+            await prisma.creditUsage.create({
                 data: {
                     crmCustomerId,
                     hoursConsumed: 0.0,
@@ -187,10 +132,10 @@ async function updateCustomerCreditsHandler(req, res, next) {
             });
         }
         // Recalculate everything and sync to database
-        const credits = await (0, crm_cache_service_js_1.syncUserCredits)(id, crmCustomerId);
+        const credits = await syncUserCredits(id, crmCustomerId);
         if (diff !== 0) {
             // Record transaction for backward compatibility/history
-            await prisma_js_1.prisma.creditTransaction.create({
+            await prisma.creditTransaction.create({
                 data: {
                     customerCreditsId: credits.id,
                     hours: diff,
@@ -199,7 +144,7 @@ async function updateCustomerCreditsHandler(req, res, next) {
                 },
             });
         }
-        const updatedCredits = await prisma_js_1.prisma.customerCredits.findUnique({
+        const updatedCredits = await prisma.customerCredits.findUnique({
             where: { id: credits.id },
             include: {
                 transactions: {
@@ -213,9 +158,9 @@ async function updateCustomerCreditsHandler(req, res, next) {
         next(err);
     }
 }
-async function listRoutingRulesHandler(req, res, next) {
+export async function listRoutingRulesHandler(req, res, next) {
     try {
-        const rules = await prisma_js_1.prisma.routingRule.findMany({
+        const rules = await prisma.routingRule.findMany({
             include: {
                 assignee: { select: { id: true, name: true, email: true } },
                 secondaryAssignee: { select: { id: true, name: true, email: true } },
@@ -229,11 +174,11 @@ async function listRoutingRulesHandler(req, res, next) {
         next(err);
     }
 }
-async function updateRoutingRuleHandler(req, res, next) {
+export async function updateRoutingRuleHandler(req, res, next) {
     try {
         const id = req.params.id;
         const { assigneeId, teamId, secondaryAssigneeId } = req.body;
-        const rule = await prisma_js_1.prisma.routingRule.update({
+        const rule = await prisma.routingRule.update({
             where: { id },
             data: {
                 assigneeId: assigneeId !== undefined ? assigneeId : undefined,
@@ -252,14 +197,14 @@ async function updateRoutingRuleHandler(req, res, next) {
         next(err);
     }
 }
-async function createRoutingRuleHandler(req, res, next) {
+export async function createRoutingRuleHandler(req, res, next) {
     try {
         const { issueCategory, assigneeId, teamId, secondaryAssigneeId } = req.body;
         if (!issueCategory || !issueCategory.trim()) {
             res.status(400).json({ success: false, error: { message: "Issue category name is required" } });
             return;
         }
-        const rule = await prisma_js_1.prisma.routingRule.create({
+        const rule = await prisma.routingRule.create({
             data: {
                 issueCategory: issueCategory.trim(),
                 assigneeId: assigneeId || null,
@@ -282,10 +227,10 @@ async function createRoutingRuleHandler(req, res, next) {
         next(err);
     }
 }
-async function deleteRoutingRuleHandler(req, res, next) {
+export async function deleteRoutingRuleHandler(req, res, next) {
     try {
         const id = req.params.id;
-        await prisma_js_1.prisma.routingRule.delete({
+        await prisma.routingRule.delete({
             where: { id },
         });
         ok(res, { message: "Routing rule deleted successfully" });
@@ -294,9 +239,9 @@ async function deleteRoutingRuleHandler(req, res, next) {
         next(err);
     }
 }
-async function listRolePermissionsHandler(req, res, next) {
+export async function listRolePermissionsHandler(req, res, next) {
     try {
-        const dbPermissions = await prisma_js_1.prisma.rolePermission.findMany();
+        const dbPermissions = await prisma.rolePermission.findMany();
         const systemRoles = ["ADMIN", "CUSTOMER", "AGENT", "SUPERVISOR", "SUPPORT_L1", "SUPPORT_L2", "BILLING"];
         // Get unique list of all roles in DB + system roles
         const allRoles = Array.from(new Set([...systemRoles, ...dbPermissions.map(p => p.role)]));
@@ -304,7 +249,7 @@ async function listRolePermissionsHandler(req, res, next) {
             const dbRecord = dbPermissions.find(p => p.role === role);
             return {
                 role,
-                permissions: dbRecord?.permissions ?? role_middleware_js_1.DEFAULT_PERMISSIONS[role] ?? [],
+                permissions: dbRecord?.permissions ?? DEFAULT_PERMISSIONS[role] ?? [],
             };
         });
         ok(res, { permissions });
@@ -313,7 +258,7 @@ async function listRolePermissionsHandler(req, res, next) {
         next(err);
     }
 }
-async function updateRolePermissionsHandler(req, res, next) {
+export async function updateRolePermissionsHandler(req, res, next) {
     try {
         const { role, permissions } = req.body;
         if (!role || typeof role !== "string" || role.trim() === "") {
@@ -325,7 +270,7 @@ async function updateRolePermissionsHandler(req, res, next) {
             return;
         }
         const trimmedRole = role.trim();
-        const record = await prisma_js_1.prisma.rolePermission.upsert({
+        const record = await prisma.rolePermission.upsert({
             where: { role: trimmedRole },
             update: { permissions },
             create: { role: trimmedRole, permissions },
@@ -336,7 +281,7 @@ async function updateRolePermissionsHandler(req, res, next) {
         next(err);
     }
 }
-async function deleteRolePermissionHandler(req, res, next) {
+export async function deleteRolePermissionHandler(req, res, next) {
     try {
         const role = req.params.role;
         if (!role) {
@@ -349,11 +294,11 @@ async function deleteRolePermissionHandler(req, res, next) {
             return;
         }
         // Delete role permission record
-        await prisma_js_1.prisma.rolePermission.delete({
+        await prisma.rolePermission.delete({
             where: { role },
         });
         // Fall back all users with this role to 'AGENT'
-        await prisma_js_1.prisma.user.updateMany({
+        await prisma.user.updateMany({
             where: { role },
             data: { role: "AGENT" },
         });
@@ -363,7 +308,7 @@ async function deleteRolePermissionHandler(req, res, next) {
         next(err);
     }
 }
-async function inviteUserHandler(req, res, next) {
+export async function inviteUserHandler(req, res, next) {
     try {
         const { id } = req.params;
         const currentUserId = req.user.id;
@@ -375,7 +320,7 @@ async function inviteUserHandler(req, res, next) {
         next(err);
     }
 }
-async function resendInviteUserHandler(req, res, next) {
+export async function resendInviteUserHandler(req, res, next) {
     try {
         const { id } = req.params;
         const currentUserId = req.user.id;
@@ -386,7 +331,7 @@ async function resendInviteUserHandler(req, res, next) {
         next(err);
     }
 }
-async function sendResetPasswordLinkHandler(req, res, next) {
+export async function sendResetPasswordLinkHandler(req, res, next) {
     try {
         const { id } = req.params;
         const user = await UsersService.getUserById(id);
@@ -397,7 +342,7 @@ async function sendResetPasswordLinkHandler(req, res, next) {
         next(err);
     }
 }
-async function getCrmCustomersHandler(req, res, next) {
+export async function getCrmCustomersHandler(req, res, next) {
     try {
         const search = req.query.search || "";
         const limitQuery = req.query.limit ? parseInt(req.query.limit, 10) : 1000;
@@ -408,10 +353,10 @@ async function getCrmCustomersHandler(req, res, next) {
         next(err);
     }
 }
-async function getMyCrmDetailsHandler(req, res, next) {
+export async function getMyCrmDetailsHandler(req, res, next) {
     try {
         const userId = req.user.id;
-        const user = await prisma_js_1.prisma.user.findUnique({
+        const user = await prisma.user.findUnique({
             where: { id: userId },
             select: { crmCustomerId: true },
         });
@@ -421,10 +366,10 @@ async function getMyCrmDetailsHandler(req, res, next) {
         }
         const crmCustomerId = user.crmCustomerId;
         const [customer, domains, subscriptions, services] = await Promise.all([
-            prisma_js_1.prisma.crmCustomer.findUnique({ where: { crmCustomerId } }),
-            (0, crm_cache_service_js_1.getOrFetchDomains)(crmCustomerId),
-            (0, crm_cache_service_js_1.getOrFetchSubscriptions)(crmCustomerId),
-            (0, crm_cache_service_js_1.getOrFetchServices)(crmCustomerId),
+            prisma.crmCustomer.findUnique({ where: { crmCustomerId } }),
+            getOrFetchDomains(crmCustomerId),
+            getOrFetchSubscriptions(crmCustomerId),
+            getOrFetchServices(crmCustomerId),
         ]);
         ok(res, { customer, domains, subscriptions, services });
     }

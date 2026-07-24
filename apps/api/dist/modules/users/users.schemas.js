@@ -1,23 +1,20 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateUserSchema = exports.createUserSchema = void 0;
-const zod_1 = require("zod");
-exports.createUserSchema = zod_1.z.object({
-    name: zod_1.z.string().min(1, "Name is required"),
-    email: zod_1.z.string().email("Invalid email address"),
-    role: zod_1.z.string().min(1, "Role is required"),
-    password: zod_1.z.string().min(6, "Password must be at least 6 characters"),
-    phoneNumber: zod_1.z.string().optional().nullable(),
-    crmCustomerId: zod_1.z.string().optional().nullable(),
-    teamIds: zod_1.z.array(zod_1.z.string()).optional(),
+import { z } from "zod";
+export const createUserSchema = z.object({
+    name: z.string().min(1, "Name is required"),
+    email: z.string().email("Invalid email address"),
+    role: z.string().min(1, "Role is required"),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    phoneNumber: z.string().optional().nullable(),
+    crmCustomerId: z.string().optional().nullable(),
+    teamIds: z.array(z.string()).optional(),
 });
-exports.updateUserSchema = zod_1.z.object({
-    name: zod_1.z.string().min(1).optional(),
-    email: zod_1.z.string().email().optional(),
-    role: zod_1.z.string().min(1).optional(),
-    isActive: zod_1.z.boolean().optional(),
-    password: zod_1.z.string().min(6).optional(),
-    phoneNumber: zod_1.z.string().optional().nullable(),
-    crmCustomerId: zod_1.z.string().optional().nullable(),
-    teamIds: zod_1.z.array(zod_1.z.string()).optional(),
+export const updateUserSchema = z.object({
+    name: z.string().min(1).optional(),
+    email: z.string().email().optional(),
+    role: z.string().min(1).optional(),
+    isActive: z.boolean().optional(),
+    password: z.string().min(6).optional(),
+    phoneNumber: z.string().optional().nullable(),
+    crmCustomerId: z.string().optional().nullable(),
+    teamIds: z.array(z.string()).optional(),
 });

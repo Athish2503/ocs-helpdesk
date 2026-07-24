@@ -1,20 +1,17 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.seedInitialData = seedInitialData;
-const prisma_js_1 = require("../config/prisma.js");
-const password_js_1 = require("./password.js");
-const role_middleware_js_1 = require("../middleware/role.middleware.js");
-async function seedInitialData() {
+import { prisma } from "../config/prisma.js";
+import { hashPassword } from "./password.js";
+import { DEFAULT_PERMISSIONS } from "../middleware/role.middleware.js";
+export async function seedInitialData() {
     console.log("🌱  Seeding default role permissions...");
-    for (const [role, permissions] of Object.entries(role_middleware_js_1.DEFAULT_PERMISSIONS)) {
-        await prisma_js_1.prisma.rolePermission.upsert({
+    for (const [role, permissions] of Object.entries(DEFAULT_PERMISSIONS)) {
+        await prisma.rolePermission.upsert({
             where: { role },
             update: { permissions },
             create: { role, permissions },
         });
     }
     console.log("🌱  Seeding initial users...");
-    const defaultPasswordHash = await (0, password_js_1.hashPassword)("Password123!");
+    const defaultPasswordHash = await hashPassword("Password123!");
     const usersToSeed = [
         { email: "admin@ocs.company.com", name: "System Administrator", role: "ADMIN" },
         { email: "support-l1@ocs.company.com", name: "L1 Support Agent", role: "SUPPORT_L1" },
@@ -24,7 +21,7 @@ async function seedInitialData() {
     ];
     const seededUsers = {};
     for (const u of usersToSeed) {
-        const user = await prisma_js_1.prisma.user.upsert({
+        const user = await prisma.user.upsert({
             where: { email: u.email },
             update: { role: u.role },
             create: {
@@ -39,7 +36,7 @@ async function seedInitialData() {
         seededUsers[u.email] = user;
     }
     console.log("🌱  Seeding default teams...");
-    const supportTeam = await prisma_js_1.prisma.team.upsert({
+    const supportTeam = await prisma.team.upsert({
         where: { name: "Support Team" },
         update: {
             members: {
@@ -60,7 +57,7 @@ async function seedInitialData() {
             },
         },
     });
-    const billingTeam = await prisma_js_1.prisma.team.upsert({
+    const billingTeam = await prisma.team.upsert({
         where: { name: "Billing Team" },
         update: {
             members: {
@@ -89,7 +86,7 @@ async function seedInitialData() {
     ];
     const seededCategories = {};
     for (const c of categoriesToSeed) {
-        const cat = await prisma_js_1.prisma.category.upsert({
+        const cat = await prisma.category.upsert({
             where: { name: c.name },
             update: {},
             create: {
@@ -102,7 +99,7 @@ async function seedInitialData() {
         seededCategories[c.name] = cat;
     }
     console.log("🌱  Seeding routing rules...");
-    await prisma_js_1.prisma.routingRule.upsert({
+    await prisma.routingRule.upsert({
         where: { issueCategory: "Billing / Renewals" },
         update: {
             assigneeId: seededUsers["manjula@ocs.company.com"].id,
@@ -114,7 +111,7 @@ async function seedInitialData() {
             teamId: billingTeam.id,
         },
     });
-    await prisma_js_1.prisma.routingRule.upsert({
+    await prisma.routingRule.upsert({
         where: { issueCategory: "Technical Support" },
         update: {
             teamId: supportTeam.id,
@@ -125,7 +122,7 @@ async function seedInitialData() {
             teamId: supportTeam.id,
         },
     });
-    await prisma_js_1.prisma.routingRule.upsert({
+    await prisma.routingRule.upsert({
         where: { issueCategory: "Critical Issues" },
         update: {
             assigneeId: seededUsers["support-l1@ocs.company.com"].id,

@@ -1,18 +1,16 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = require("express");
-const categories_controller_js_1 = require("./categories.controller.js");
-const auth_middleware_js_1 = require("../../middleware/auth.middleware.js");
-const role_middleware_js_1 = require("../../middleware/role.middleware.js");
-const router = (0, express_1.Router)();
+import { Router } from "express";
+import { getCategoriesHandler, createCategoryHandler, updateCategoryHandler, deleteCategoryHandler, bulkDeleteCategoriesHandler, } from "./categories.controller.js";
+import { requireAuth } from "../../middleware/auth.middleware.js";
+import { requirePermission } from "../../middleware/role.middleware.js";
+const router = Router();
 // Retrieve categories - accessible by any logged-in user (filtered or unfiltered based on role/query)
-router.get("/", auth_middleware_js_1.requireAuth, categories_controller_js_1.getCategoriesHandler);
+router.get("/", requireAuth, getCategoriesHandler);
 // Create a new category - ADMIN only (with permission)
-router.post("/", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requirePermission)("manage_categories_rules"), categories_controller_js_1.createCategoryHandler);
+router.post("/", requireAuth, requirePermission("manage_categories_rules"), createCategoryHandler);
 // Bulk delete categories - ADMIN only (with permission)
-router.post("/bulk-delete", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requirePermission)("manage_categories_rules"), categories_controller_js_1.bulkDeleteCategoriesHandler);
+router.post("/bulk-delete", requireAuth, requirePermission("manage_categories_rules"), bulkDeleteCategoriesHandler);
 // Update a category - ADMIN only (with permission)
-router.patch("/:id", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requirePermission)("manage_categories_rules"), categories_controller_js_1.updateCategoryHandler);
+router.patch("/:id", requireAuth, requirePermission("manage_categories_rules"), updateCategoryHandler);
 // Delete a category - ADMIN only (with permission)
-router.delete("/:id", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requirePermission)("manage_categories_rules"), categories_controller_js_1.deleteCategoryHandler);
-exports.default = router;
+router.delete("/:id", requireAuth, requirePermission("manage_categories_rules"), deleteCategoryHandler);
+export default router;

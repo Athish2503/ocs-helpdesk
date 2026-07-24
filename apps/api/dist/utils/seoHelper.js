@@ -1,20 +1,11 @@
-"use strict";
 /**
  * SEO Helper Utilities
  * Provides functions for generating SEO metadata, structured data, and sitemaps
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateMetaTags = generateMetaTags;
-exports.generateStructuredData = generateStructuredData;
-exports.generateSitemap = generateSitemap;
-exports.sanitizeMetaContent = sanitizeMetaContent;
-exports.extractKeywords = extractKeywords;
-exports.generateRobotsTxt = generateRobotsTxt;
-exports.validateSEOMetadata = validateSEOMetadata;
 /**
  * Generate meta tags for an article
  */
-function generateMetaTags(article) {
+export function generateMetaTags(article) {
     const baseUrl = process.env["PUBLIC_KB_BASE_URL"] || "https://yourdomain.com/kb/p";
     const canonicalUrl = article.canonical_url || `${baseUrl}/${article.slug}`;
     const authorName = article.author_name || article.author?.name || "System";
@@ -44,7 +35,7 @@ function generateMetaTags(article) {
 /**
  * Generate JSON-LD structured data for an article
  */
-function generateStructuredData(article) {
+export function generateStructuredData(article) {
     const baseUrl = process.env["PUBLIC_KB_BASE_URL"] || "https://yourdomain.com/kb/p";
     const canonicalUrl = article.canonical_url || `${baseUrl}/${article.slug}`;
     const authorName = article.author_name || article.author?.name || "System";
@@ -81,7 +72,7 @@ function generateStructuredData(article) {
 /**
  * Generate XML sitemap for public articles
  */
-function generateSitemap(articles) {
+export function generateSitemap(articles) {
     const baseUrl = process.env["PUBLIC_KB_BASE_URL"] || "https://yourdomain.com/kb/p";
     const urls = articles
         .map((article) => {
@@ -105,7 +96,7 @@ ${urls}
 /**
  * Sanitize meta content (remove HTML, limit length)
  */
-function sanitizeMetaContent(content, maxLength = 160) {
+export function sanitizeMetaContent(content, maxLength = 160) {
     if (!content || typeof content !== "string") {
         return "";
     }
@@ -129,7 +120,7 @@ function sanitizeMetaContent(content, maxLength = 160) {
 /**
  * Extract keywords from content
  */
-function extractKeywords(content, maxKeywords = 10) {
+export function extractKeywords(content, maxKeywords = 10) {
     if (!content || typeof content !== "string") {
         return [];
     }
@@ -181,7 +172,7 @@ function escapeXml(str) {
 /**
  * Generate robots.txt content
  */
-function generateRobotsTxt() {
+export function generateRobotsTxt() {
     const baseUrl = process.env["PUBLIC_KB_BASE_URL"] || "https://yourdomain.com";
     return `User-agent: *
 Allow: /kb/public/
@@ -195,7 +186,7 @@ Sitemap: ${baseUrl}/kb/public/sitemap.xml
 /**
  * Validate SEO metadata
  */
-function validateSEOMetadata(seoData) {
+export function validateSEOMetadata(seoData) {
     const errors = [];
     // Meta title validation
     if (seoData.meta_title) {

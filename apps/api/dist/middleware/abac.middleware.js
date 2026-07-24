@@ -1,16 +1,11 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.canAccessTicket = canAccessTicket;
-exports.canAccessArticle = canAccessArticle;
-exports.checkTicketAccess = checkTicketAccess;
-const prisma_js_1 = require("../config/prisma.js");
+import { prisma } from "../config/prisma.js";
 /**
  * Checks if a user has access to a specific ticket based on RBAC and ABAC rules.
  */
-async function canAccessTicket(userId, userRole, ticketId) {
+export async function canAccessTicket(userId, userRole, ticketId) {
     if (userRole === "ADMIN")
         return true;
-    const ticket = await prisma_js_1.prisma.ticket.findUnique({
+    const ticket = await prisma.ticket.findUnique({
         where: { id: ticketId },
         select: { customerId: true, agentId: true, teamId: true },
     });
@@ -25,7 +20,7 @@ async function canAccessTicket(userId, userRole, ticketId) {
             return true;
         // Team membership check
         if (ticket.teamId) {
-            const teamMembership = await prisma_js_1.prisma.team.findFirst({
+            const teamMembership = await prisma.team.findFirst({
                 where: {
                     id: ticket.teamId,
                     members: { some: { id: userId } },
@@ -41,8 +36,8 @@ async function canAccessTicket(userId, userRole, ticketId) {
 /**
  * Checks if a user can access a Knowledge Base article.
  */
-async function canAccessArticle(userId, userRole, articleId) {
-    const article = await prisma_js_1.prisma.knowledgeBaseArticle.findUnique({
+export async function canAccessArticle(userId, userRole, articleId) {
+    const article = await prisma.knowledgeBaseArticle.findUnique({
         where: { id: articleId },
         select: { isPublished: true, isInternal: true, authorId: true },
     });
@@ -62,7 +57,7 @@ async function canAccessArticle(userId, userRole, articleId) {
 /**
  * Express middleware to enforce ticket ABAC security on route parameters.
  */
-function checkTicketAccess(paramName = "id") {
+export function checkTicketAccess(paramName = "id") {
     return async (req, res, next) => {
         try {
             if (!req.user) {

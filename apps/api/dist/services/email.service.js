@@ -1,17 +1,5 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendEmail = sendEmail;
-exports.sendMagicLinkEmail = sendMagicLinkEmail;
-exports.sendInvitationEmail = sendInvitationEmail;
-exports.sendPasswordResetEmail = sendPasswordResetEmail;
-exports.sendTicketNotificationEmail = sendTicketNotificationEmail;
-exports.sendCustomerTicketCreatedEmail = sendCustomerTicketCreatedEmail;
-exports.sendCustomerTicketResolvedEmail = sendCustomerTicketResolvedEmail;
-const nodemailer_1 = __importDefault(require("nodemailer"));
-async function sendEmail(input) {
+import nodemailer from "nodemailer";
+export async function sendEmail(input) {
     const host = process.env["SMTP_HOST"];
     const port = process.env["SMTP_PORT"];
     const user = process.env["SMTP_USER"];
@@ -19,7 +7,7 @@ async function sendEmail(input) {
     const from = process.env["SMTP_FROM"] || '"OCS Helpdesk" <noreply@ocs-helpdesk.local>';
     if (host && port && user && pass) {
         try {
-            const transporter = nodemailer_1.default.createTransport({
+            const transporter = nodemailer.createTransport({
                 host,
                 port: parseInt(port, 10),
                 secure: parseInt(port, 10) === 465,
@@ -64,7 +52,7 @@ ${input.text
 └${line}┘
 `);
 }
-async function sendMagicLinkEmail(email, magicLink, name) {
+export async function sendMagicLinkEmail(email, magicLink, name) {
     const greeting = name ? `Hello ${name},` : "Hello,";
     const text = `
 ${greeting}
@@ -111,7 +99,7 @@ If you did not request this email, you can safely ignore it.
         text,
     });
 }
-async function sendInvitationEmail(email, invitationLink, tempPassword, name) {
+export async function sendInvitationEmail(email, invitationLink, tempPassword, name) {
     const greeting = name ? `Hello ${name},` : "Hello,";
     const tempPassMessage = tempPassword
         ? `\nWe have generated a temporary password for you: ${tempPassword}\n`
@@ -169,7 +157,7 @@ If you did not expect this invitation, you can safely ignore this email.
         text,
     });
 }
-async function sendPasswordResetEmail(email, resetLink, name) {
+export async function sendPasswordResetEmail(email, resetLink, name) {
     const greeting = name ? `Hello ${name},` : "Hello,";
     const text = `
 ${greeting}
@@ -216,7 +204,7 @@ If you did not request a password reset, you can safely ignore this email.
         text,
     });
 }
-async function sendTicketNotificationEmail(email, ticketDetails) {
+export async function sendTicketNotificationEmail(email, ticketDetails) {
     const text = `
 New ticket assigned to you/your team:
 Ticket ID: ${ticketDetails.id}
@@ -284,7 +272,7 @@ Please check your portal to respond.
         text,
     });
 }
-async function sendCustomerTicketCreatedEmail(email, ticketDetails) {
+export async function sendCustomerTicketCreatedEmail(email, ticketDetails) {
     const text = `
 Dear ${ticketDetails.customerName},
 
@@ -357,7 +345,7 @@ OCS Helpdesk Team
         text,
     });
 }
-async function sendCustomerTicketResolvedEmail(email, ticketDetails) {
+export async function sendCustomerTicketResolvedEmail(email, ticketDetails) {
     const text = `
 Dear ${ticketDetails.customerName},
 

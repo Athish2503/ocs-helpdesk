@@ -1,46 +1,5 @@
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.CrmCacheManager = void 0;
-exports.getOrFetchDomains = getOrFetchDomains;
-exports.getOrFetchServices = getOrFetchServices;
-exports.getOrFetchSubscriptions = getOrFetchSubscriptions;
-exports.getOrFetchCustomerCredits = getOrFetchCustomerCredits;
-exports.syncUserCredits = syncUserCredits;
-const prisma_js_1 = require("../config/prisma.js");
-const crmService = __importStar(require("./crm.service.js"));
+import { prisma } from "../config/prisma.js";
+import * as crmService from "./crm.service.js";
 /**
  * In-memory read-through cache for CRM entity data.
  *
@@ -69,7 +28,7 @@ const domainCache = new MemoryCache();
 const serviceCache = new MemoryCache();
 const subscriptionCache = new MemoryCache();
 const creditCache = new MemoryCache();
-class CrmCacheManager {
+export class CrmCacheManager {
     // Invalidate all caches for a given customer ID
     static invalidateAll(crmCustomerId) {
         console.log(`[CRM Cache] Invalidating all caches for customer: ${crmCustomerId}`);
@@ -94,11 +53,10 @@ class CrmCacheManager {
         creditCache.delete(crmCustomerId);
     }
 }
-exports.CrmCacheManager = CrmCacheManager;
 /**
  * Get customer domains from cache or fetch live from CRM APIs.
  */
-async function getOrFetchDomains(crmCustomerId) {
+export async function getOrFetchDomains(crmCustomerId) {
     const cached = domainCache.get(crmCustomerId);
     if (cached) {
         console.log(`[CRM Cache] Serving domains from cache for customer: ${crmCustomerId}`);
@@ -129,7 +87,7 @@ async function getOrFetchDomains(crmCustomerId) {
 /**
  * Get customer services from cache or fetch live from CRM APIs.
  */
-async function getOrFetchServices(crmCustomerId) {
+export async function getOrFetchServices(crmCustomerId) {
     const cached = serviceCache.get(crmCustomerId);
     if (cached) {
         console.log(`[CRM Cache] Serving services from cache for customer: ${crmCustomerId}`);
@@ -160,7 +118,7 @@ async function getOrFetchServices(crmCustomerId) {
 /**
  * Get customer subscriptions from cache or fetch live from CRM APIs.
  */
-async function getOrFetchSubscriptions(crmCustomerId) {
+export async function getOrFetchSubscriptions(crmCustomerId) {
     const cached = subscriptionCache.get(crmCustomerId);
     if (cached) {
         console.log(`[CRM Cache] Serving subscriptions from cache for customer: ${crmCustomerId}`);
@@ -190,7 +148,7 @@ async function getOrFetchSubscriptions(crmCustomerId) {
     });
     return mappedSubscriptions;
 }
-async function getOrFetchCustomerCredits(crmCustomerId) {
+export async function getOrFetchCustomerCredits(crmCustomerId) {
     const cached = creditCache.get(crmCustomerId);
     if (cached) {
         console.log(`[CRM Cache] Serving customer credits from cache for customer: ${crmCustomerId}`);
@@ -219,7 +177,7 @@ async function getOrFetchCustomerCredits(crmCustomerId) {
     creditCache.set(crmCustomerId, creditData);
     return creditData;
 }
-async function syncUserCredits(userId, crmCustomerId) {
+export async function syncUserCredits(userId, crmCustomerId) {
     let allocatedCredits = 0.0;
     if (crmCustomerId) {
         try {
@@ -231,7 +189,7 @@ async function syncUserCredits(userId, crmCustomerId) {
         }
     }
     // Calculate consumed and adjustments from credit_usages
-    const usages = await prisma_js_1.prisma.creditUsage.findMany({
+    const usages = await prisma.creditUsage.findMany({
         where: { crmCustomerId: crmCustomerId || "" }
     });
     const consumed = usages.reduce((sum, u) => sum + u.hoursConsumed, 0);
@@ -243,7 +201,7 @@ async function syncUserCredits(userId, crmCustomerId) {
         billable = Math.abs(remaining);
         remaining = 0.0;
     }
-    return await prisma_js_1.prisma.customerCredits.upsert({
+    return await prisma.customerCredits.upsert({
         where: { customerId: userId },
         update: {
             allocatedHours: allocatedCredits,
@@ -265,7 +223,7 @@ async function syncUserCredits(userId, crmCustomerId) {
  */
 async function syncDomainsToDb(crmCustomerId, domains) {
     const syncedDomainIds = domains.map((d) => d.crmDomainId);
-    await prisma_js_1.prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
         // Delete local domains not in CRM anymore
         await tx.crmDomain.deleteMany({
             where: {
@@ -305,7 +263,7 @@ async function syncServicesToDb(crmCustomerId, services) {
     }
     const uniqueServices = Array.from(uniqueServiceMap.values());
     const syncedServiceIds = uniqueServices.map((s) => s.crmServiceId);
-    await prisma_js_1.prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
         await tx.crmService.deleteMany({
             where: {
                 crmCustomerId,
@@ -335,7 +293,7 @@ async function syncServicesToDb(crmCustomerId, services) {
 }
 async function syncSubscriptionsToDb(crmCustomerId, subscriptions) {
     const syncedSubIds = subscriptions.map((s) => s.crmSubscriptionId);
-    await prisma_js_1.prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
         await tx.crmSubscription.deleteMany({
             where: {
                 crmCustomerId,

@@ -1,13 +1,6 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.listTeams = listTeams;
-exports.getTeamById = getTeamById;
-exports.createTeam = createTeam;
-exports.updateTeam = updateTeam;
-exports.deleteTeam = deleteTeam;
-const prisma_js_1 = require("../../config/prisma.js");
-async function listTeams() {
-    return prisma_js_1.prisma.team.findMany({
+import { prisma } from "../../config/prisma.js";
+export async function listTeams() {
+    return prisma.team.findMany({
         include: {
             members: {
                 select: {
@@ -24,8 +17,8 @@ async function listTeams() {
         orderBy: { name: "asc" },
     });
 }
-async function getTeamById(id) {
-    const team = await prisma_js_1.prisma.team.findUnique({
+export async function getTeamById(id) {
+    const team = await prisma.team.findUnique({
         where: { id },
         include: {
             members: {
@@ -46,15 +39,15 @@ async function getTeamById(id) {
     }
     return team;
 }
-async function createTeam(input) {
+export async function createTeam(input) {
     const { name, description, memberIds } = input;
-    const existing = await prisma_js_1.prisma.team.findUnique({ where: { name } });
+    const existing = await prisma.team.findUnique({ where: { name } });
     if (existing) {
         const error = new Error("A team with this name already exists");
         error.statusCode = 409;
         throw error;
     }
-    return prisma_js_1.prisma.team.create({
+    return prisma.team.create({
         data: {
             name,
             description,
@@ -71,18 +64,18 @@ async function createTeam(input) {
         },
     });
 }
-async function updateTeam(id, input) {
+export async function updateTeam(id, input) {
     const { name, description, memberIds } = input;
     const team = await getTeamById(id);
     if (name && name !== team.name) {
-        const existing = await prisma_js_1.prisma.team.findUnique({ where: { name } });
+        const existing = await prisma.team.findUnique({ where: { name } });
         if (existing) {
             const error = new Error("A team with this name already exists");
             error.statusCode = 409;
             throw error;
         }
     }
-    return prisma_js_1.prisma.team.update({
+    return prisma.team.update({
         where: { id },
         data: {
             name,
@@ -100,14 +93,14 @@ async function updateTeam(id, input) {
         },
     });
 }
-async function deleteTeam(id) {
+export async function deleteTeam(id) {
     await getTeamById(id);
     // Unassign tickets from this team first to prevent foreign key errors if cascade is not set
-    await prisma_js_1.prisma.ticket.updateMany({
+    await prisma.ticket.updateMany({
         where: { teamId: id },
         data: { teamId: null },
     });
-    return prisma_js_1.prisma.team.delete({
+    return prisma.team.delete({
         where: { id },
     });
 }

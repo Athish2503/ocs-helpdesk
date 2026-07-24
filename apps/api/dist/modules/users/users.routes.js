@@ -1,60 +1,55 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = require("express");
-const crypto_1 = __importDefault(require("crypto"));
-const users_controller_js_1 = require("./users.controller.js");
-const auth_middleware_js_1 = require("../../middleware/auth.middleware.js");
-const role_middleware_js_1 = require("../../middleware/role.middleware.js");
-const sse_service_js_1 = require("../../services/sse.service.js");
-const prisma_js_1 = require("../../config/prisma.js");
-const router = (0, express_1.Router)();
+import { Router } from "express";
+import crypto from "crypto";
+import { createUserHandler, listUsersHandler, getAgentsHandler, getUserByIdHandler, updateUserHandler, updateProfileHandler, getMyCreditsHandler, updateCustomerCreditsHandler, listRoutingRulesHandler, updateRoutingRuleHandler, createRoutingRuleHandler, deleteRoutingRuleHandler, listRolePermissionsHandler, updateRolePermissionsHandler, deleteRolePermissionHandler, inviteUserHandler, resendInviteUserHandler, sendResetPasswordLinkHandler, getCrmCustomersHandler, getMyCrmDetailsHandler, } from "./users.controller.js";
+import { requireAuth } from "../../middleware/auth.middleware.js";
+import { requireRole, requirePermission } from "../../middleware/role.middleware.js";
+import { sseManager } from "../../services/sse.service.js";
+import { prisma } from "../../config/prisma.js";
+const router = Router();
 // Secure all user routes
-router.use(auth_middleware_js_1.requireAuth);
+router.use(requireAuth);
 // Profile update accessible to any authenticated user
-router.patch("/me/profile", users_controller_js_1.updateProfileHandler);
+router.patch("/me/profile", updateProfileHandler);
 // Credits check for current user
-router.get("/me/credits", users_controller_js_1.getMyCreditsHandler);
+router.get("/me/credits", getMyCreditsHandler);
 // CRM details for current user (domains, subscriptions, services)
-router.get("/me/crm-details", users_controller_js_1.getMyCrmDetailsHandler);
+router.get("/me/crm-details", getMyCrmDetailsHandler);
 // ── SSE: Real-time CRM sync stream ─────────────────────────────────────────
 // GET /api/users/me/events — establishes a persistent SSE connection.
 // The server will push 'crm.sync' events whenever CRM data for this customer changes.
 router.get("/me/events", async (req, res, _next) => {
     const userId = req.user.id;
     // Resolve crmCustomerId for targeted broadcast routing
-    const user = await prisma_js_1.prisma.user.findUnique({
+    const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { crmCustomerId: true },
     }).catch(() => null);
     const crmCustomerId = user?.crmCustomerId ?? null;
     // Generate a unique connection ID so the same user can open multiple tabs
-    const connectionId = crypto_1.default.randomUUID();
+    const connectionId = crypto.randomUUID();
     // Register and start streaming — sseManager handles headers, ping, and cleanup
-    sse_service_js_1.sseManager.addClient(connectionId, userId, crmCustomerId, res);
+    sseManager.addClient(connectionId, userId, crmCustomerId, res);
 });
 // Agents listing can be accessed by both admins and agents (or anyone with staff view access)
-router.get("/agents", (0, role_middleware_js_1.requireRole)("ADMIN", "SUPPORT_L1", "SUPPORT_L2", "BILLING", "AGENT"), users_controller_js_1.getAgentsHandler);
+router.get("/agents", requireRole("ADMIN", "SUPPORT_L1", "SUPPORT_L2", "BILLING", "AGENT"), getAgentsHandler);
 // Admin / Permissions operations
-router.get("/role-permissions", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.listRolePermissionsHandler);
-router.patch("/role-permissions", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.updateRolePermissionsHandler);
-router.delete("/role-permissions/:role", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.deleteRolePermissionHandler);
+router.get("/role-permissions", requirePermission("manage_permissions"), listRolePermissionsHandler);
+router.patch("/role-permissions", requirePermission("manage_permissions"), updateRolePermissionsHandler);
+router.delete("/role-permissions/:role", requirePermission("manage_permissions"), deleteRolePermissionHandler);
 // Routing rules operations
-router.get("/routing-rules", (0, role_middleware_js_1.requirePermission)("manage_categories_rules"), users_controller_js_1.listRoutingRulesHandler);
-router.post("/routing-rules", (0, role_middleware_js_1.requirePermission)("manage_categories_rules"), users_controller_js_1.createRoutingRuleHandler);
-router.patch("/routing-rules/:id", (0, role_middleware_js_1.requirePermission)("manage_categories_rules"), users_controller_js_1.updateRoutingRuleHandler);
-router.delete("/routing-rules/:id", (0, role_middleware_js_1.requirePermission)("manage_categories_rules"), users_controller_js_1.deleteRoutingRuleHandler);
+router.get("/routing-rules", requirePermission("manage_categories_rules"), listRoutingRulesHandler);
+router.post("/routing-rules", requirePermission("manage_categories_rules"), createRoutingRuleHandler);
+router.patch("/routing-rules/:id", requirePermission("manage_categories_rules"), updateRoutingRuleHandler);
+router.delete("/routing-rules/:id", requirePermission("manage_categories_rules"), deleteRoutingRuleHandler);
 // Credits adjustments
-router.patch("/:id/credits", (0, role_middleware_js_1.requirePermission)("adjust_credits"), users_controller_js_1.updateCustomerCreditsHandler);
+router.patch("/:id/credits", requirePermission("adjust_credits"), updateCustomerCreditsHandler);
 // User CRUD operations
-router.post("/", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.createUserHandler);
-router.get("/", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.listUsersHandler);
-router.get("/crm-customers", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.getCrmCustomersHandler);
-router.get("/:id", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.getUserByIdHandler);
-router.patch("/:id", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.updateUserHandler);
-router.post("/:id/invite", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.inviteUserHandler);
-router.post("/:id/resend-invite", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.resendInviteUserHandler);
-router.post("/:id/reset-password-link", (0, role_middleware_js_1.requirePermission)("manage_permissions"), users_controller_js_1.sendResetPasswordLinkHandler);
-exports.default = router;
+router.post("/", requirePermission("manage_permissions"), createUserHandler);
+router.get("/", requirePermission("manage_permissions"), listUsersHandler);
+router.get("/crm-customers", requirePermission("manage_permissions"), getCrmCustomersHandler);
+router.get("/:id", requirePermission("manage_permissions"), getUserByIdHandler);
+router.patch("/:id", requirePermission("manage_permissions"), updateUserHandler);
+router.post("/:id/invite", requirePermission("manage_permissions"), inviteUserHandler);
+router.post("/:id/resend-invite", requirePermission("manage_permissions"), resendInviteUserHandler);
+router.post("/:id/reset-password-link", requirePermission("manage_permissions"), sendResetPasswordLinkHandler);
+export default router;

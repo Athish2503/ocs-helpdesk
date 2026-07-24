@@ -1,6 +1,3 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.sseManager = void 0;
 class SseManager {
     /** Map of connectionId → SseClient. Supports multiple tabs per user. */
     clients = new Map();
@@ -104,4 +101,4 @@ class SseManager {
     }
 }
 // Singleton instance shared across the application
-exports.sseManager = new SseManager();
+export const sseManager = new SseManager();

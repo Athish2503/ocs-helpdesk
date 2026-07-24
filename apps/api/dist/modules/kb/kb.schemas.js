@@ -1,54 +1,51 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateCategorySchema = exports.createCategorySchema = exports.updateArticleSEOSchema = exports.updateArticleSchema = exports.createArticleSchema = void 0;
-const zod_1 = require("zod");
-exports.createArticleSchema = zod_1.z.object({
-    title: zod_1.z.string({ error: "Title is required" }).trim().min(2).max(200),
-    content: zod_1.z.string({ error: "Content is required" }).trim().min(10),
-    isPublished: zod_1.z.boolean().optional(),
-    isInternal: zod_1.z.boolean().optional(),
-    categoryId: zod_1.z.string().uuid().optional().nullable(),
-    tags: zod_1.z.array(zod_1.z.string().trim()).optional(),
-    source: zod_1.z
+import { z } from "zod";
+export const createArticleSchema = z.object({
+    title: z.string({ error: "Title is required" }).trim().min(2).max(200),
+    content: z.string({ error: "Content is required" }).trim().min(10),
+    isPublished: z.boolean().optional(),
+    isInternal: z.boolean().optional(),
+    categoryId: z.string().uuid().optional().nullable(),
+    tags: z.array(z.string().trim()).optional(),
+    source: z
         .object({
-        type: zod_1.z.string(),
-        id: zod_1.z.string(),
+        type: z.string(),
+        id: z.string(),
     })
         .optional()
         .nullable(),
-    metaTitle: zod_1.z.string().trim().max(60).optional().nullable(),
-    metaDescription: zod_1.z.string().trim().max(160).optional().nullable(),
-    keywords: zod_1.z.string().trim().optional().nullable(),
-    canonicalUrl: zod_1.z.string().trim().url().optional().nullable(),
-    ogImage: zod_1.z.string().trim().url().optional().nullable(),
+    metaTitle: z.string().trim().max(60).optional().nullable(),
+    metaDescription: z.string().trim().max(160).optional().nullable(),
+    keywords: z.string().trim().optional().nullable(),
+    canonicalUrl: z.string().trim().url().optional().nullable(),
+    ogImage: z.string().trim().url().optional().nullable(),
 });
-exports.updateArticleSchema = zod_1.z.object({
-    title: zod_1.z.string().trim().min(2).max(200).optional(),
-    content: zod_1.z.string().trim().min(10).optional(),
-    isPublished: zod_1.z.boolean().optional(),
-    isInternal: zod_1.z.boolean().optional(),
-    categoryId: zod_1.z.string().uuid().optional().nullable(),
-    tags: zod_1.z.array(zod_1.z.string().trim()).optional(),
-    metaTitle: zod_1.z.string().trim().max(60).optional().nullable(),
-    metaDescription: zod_1.z.string().trim().max(160).optional().nullable(),
-    keywords: zod_1.z.string().trim().optional().nullable(),
-    canonicalUrl: zod_1.z.string().trim().url().or(zod_1.z.string().length(0)).optional().nullable(),
-    ogImage: zod_1.z.string().trim().url().or(zod_1.z.string().length(0)).optional().nullable(),
+export const updateArticleSchema = z.object({
+    title: z.string().trim().min(2).max(200).optional(),
+    content: z.string().trim().min(10).optional(),
+    isPublished: z.boolean().optional(),
+    isInternal: z.boolean().optional(),
+    categoryId: z.string().uuid().optional().nullable(),
+    tags: z.array(z.string().trim()).optional(),
+    metaTitle: z.string().trim().max(60).optional().nullable(),
+    metaDescription: z.string().trim().max(160).optional().nullable(),
+    keywords: z.string().trim().optional().nullable(),
+    canonicalUrl: z.string().trim().url().or(z.string().length(0)).optional().nullable(),
+    ogImage: z.string().trim().url().or(z.string().length(0)).optional().nullable(),
 });
-exports.updateArticleSEOSchema = zod_1.z.object({
-    metaTitle: zod_1.z.string().trim().max(60).optional().nullable(),
-    metaDescription: zod_1.z.string().trim().max(160).optional().nullable(),
-    keywords: zod_1.z.string().trim().optional().nullable(),
-    canonicalUrl: zod_1.z.string().trim().url().or(zod_1.z.string().length(0)).optional().nullable(),
-    ogImage: zod_1.z.string().trim().url().or(zod_1.z.string().length(0)).optional().nullable(),
+export const updateArticleSEOSchema = z.object({
+    metaTitle: z.string().trim().max(60).optional().nullable(),
+    metaDescription: z.string().trim().max(160).optional().nullable(),
+    keywords: z.string().trim().optional().nullable(),
+    canonicalUrl: z.string().trim().url().or(z.string().length(0)).optional().nullable(),
+    ogImage: z.string().trim().url().or(z.string().length(0)).optional().nullable(),
 });
-exports.createCategorySchema = zod_1.z.object({
-    name: zod_1.z.string({ error: "Name is required" }).trim().min(2).max(100),
-    description: zod_1.z.string().trim().optional().nullable(),
-    parentId: zod_1.z.string().uuid().optional().nullable(),
+export const createCategorySchema = z.object({
+    name: z.string({ error: "Name is required" }).trim().min(2).max(100),
+    description: z.string().trim().optional().nullable(),
+    parentId: z.string().uuid().optional().nullable(),
 });
-exports.updateCategorySchema = zod_1.z.object({
-    name: zod_1.z.string().trim().min(2).max(100).optional(),
-    description: zod_1.z.string().trim().optional().nullable(),
-    parentId: zod_1.z.string().uuid().optional().nullable(),
+export const updateCategorySchema = z.object({
+    name: z.string().trim().min(2).max(100).optional(),
+    description: z.string().trim().optional().nullable(),
+    parentId: z.string().uuid().optional().nullable(),
 });

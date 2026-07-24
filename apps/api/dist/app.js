@@ -1,31 +1,26 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = __importDefault(require("express"));
-const cors_1 = __importDefault(require("cors"));
-const auth_routes_js_1 = __importDefault(require("./modules/auth/auth.routes.js"));
-const categories_routes_js_1 = __importDefault(require("./modules/categories/categories.routes.js"));
-const tickets_routes_js_1 = __importDefault(require("./modules/tickets/tickets.routes.js"));
-const users_routes_js_1 = __importDefault(require("./modules/users/users.routes.js"));
-const teams_routes_js_1 = __importDefault(require("./modules/teams/teams.routes.js"));
-const kb_routes_js_1 = __importDefault(require("./modules/kb/kb.routes.js"));
-const sync_routes_js_1 = __importDefault(require("./modules/sync/sync.routes.js"));
-const integrations_routes_js_1 = __importDefault(require("./modules/integrations/integrations.routes.js"));
-const sla_router_js_1 = __importDefault(require("./modules/sla/sla.router.js"));
-const error_middleware_js_1 = require("./middleware/error.middleware.js");
-const swagger_js_1 = require("./config/swagger.js");
-const app = (0, express_1.default)();
+import express from "express";
+import cors from "cors";
+import authRouter from "./modules/auth/auth.routes.js";
+import categoriesRouter from "./modules/categories/categories.routes.js";
+import ticketsRouter from "./modules/tickets/tickets.routes.js";
+import usersRouter from "./modules/users/users.routes.js";
+import teamsRouter from "./modules/teams/teams.routes.js";
+import kbRouter from "./modules/kb/kb.routes.js";
+import syncRouter from "./modules/sync/sync.routes.js";
+import integrationsRouter from "./modules/integrations/integrations.routes.js";
+import slaRouter from "./modules/sla/sla.router.js";
+import { errorHandler } from "./middleware/error.middleware.js";
+import { setupSwagger } from "./config/swagger.js";
+const app = express();
 // ---------------------------------------------------------------------------
 // Global middleware
 // ---------------------------------------------------------------------------
-app.use((0, cors_1.default)());
-app.use(express_1.default.json());
-app.use(express_1.default.urlencoded({ extended: true }));
-app.use("/uploads", express_1.default.static("uploads"));
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use("/uploads", express.static("uploads"));
 // Swagger documentation
-(0, swagger_js_1.setupSwagger)(app);
+setupSwagger(app);
 // ---------------------------------------------------------------------------
 // Health check
 // ---------------------------------------------------------------------------
@@ -35,15 +30,15 @@ app.get("/health", (_, res) => {
 // ---------------------------------------------------------------------------
 // API routes
 // ---------------------------------------------------------------------------
-app.use("/api/auth", auth_routes_js_1.default);
-app.use("/api/sync", sync_routes_js_1.default);
-app.use("/api/integrations", integrations_routes_js_1.default);
-app.use("/api/categories", categories_routes_js_1.default);
-app.use("/api/tickets", tickets_routes_js_1.default);
-app.use("/api/users", users_routes_js_1.default);
-app.use("/api/teams", teams_routes_js_1.default);
-app.use("/api/kb", kb_routes_js_1.default);
-app.use("/api/sla", sla_router_js_1.default);
+app.use("/api/auth", authRouter);
+app.use("/api/sync", syncRouter);
+app.use("/api/integrations", integrationsRouter);
+app.use("/api/categories", categoriesRouter);
+app.use("/api/tickets", ticketsRouter);
+app.use("/api/users", usersRouter);
+app.use("/api/teams", teamsRouter);
+app.use("/api/kb", kbRouter);
+app.use("/api/sla", slaRouter);
 // ---------------------------------------------------------------------------
 // 404 handler — must be after all routes
 // ---------------------------------------------------------------------------
@@ -56,5 +51,5 @@ app.use((_req, res) => {
 // ---------------------------------------------------------------------------
 // Centralised error handler — must be last
 // ---------------------------------------------------------------------------
-app.use(error_middleware_js_1.errorHandler);
-exports.default = app;
+app.use(errorHandler);
+export default app;

@@ -1,11 +1,6 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.handleCustomerCreated = handleCustomerCreated;
-exports.handleCustomerUpdated = handleCustomerUpdated;
-exports.handleCustomerDeactivated = handleCustomerDeactivated;
-const prisma_js_1 = require("../../config/prisma.js");
-async function handleCustomerCreated(data) {
-    return prisma_js_1.prisma.$transaction(async (tx) => {
+import { prisma } from "../../config/prisma.js";
+export async function handleCustomerCreated(data) {
+    return prisma.$transaction(async (tx) => {
         // 1. Upsert CrmCustomer record avoiding primaryEmail conflicts if crmCustomerId changes
         const existing = await tx.crmCustomer.findFirst({
             where: {
@@ -178,12 +173,12 @@ async function handleCustomerCreated(data) {
         return { crmCustomer, userId: user.id };
     });
 }
-async function handleCustomerUpdated(data) {
+export async function handleCustomerUpdated(data) {
     // Re-use logic since handleCustomerCreated implements full idempotent upserts
     return handleCustomerCreated(data);
 }
-async function handleCustomerDeactivated(crmCustomerId) {
-    return prisma_js_1.prisma.$transaction(async (tx) => {
+export async function handleCustomerDeactivated(crmCustomerId) {
+    return prisma.$transaction(async (tx) => {
         // 1. Update CrmCustomer Status
         await tx.crmCustomer.updateMany({
             where: { crmCustomerId },

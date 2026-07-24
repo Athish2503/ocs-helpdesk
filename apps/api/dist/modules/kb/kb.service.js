@@ -1,36 +1,6 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.listArticles = listArticles;
-exports.getArticleById = getArticleById;
-exports.getArticleBySlug = getArticleBySlug;
-exports.createArticle = createArticle;
-exports.updateArticle = updateArticle;
-exports.deleteArticle = deleteArticle;
-exports.listCategories = listCategories;
-exports.createCategory = createCategory;
-exports.updateCategory = updateCategory;
-exports.deleteCategory = deleteCategory;
-exports.listTags = listTags;
-exports.listVersions = listVersions;
-exports.recordArticleRead = recordArticleRead;
-exports.getArticleAnalytics = getArticleAnalytics;
-exports.getArticleSEO = getArticleSEO;
-exports.updateArticleSEO = updateArticleSEO;
-exports.getPublicArticlesForSitemap = getPublicArticlesForSitemap;
-exports.getPublicArticleBySlug = getPublicArticleBySlug;
-exports.listSecurityEvents = listSecurityEvents;
-exports.createAttachment = createAttachment;
-exports.listAttachments = listAttachments;
-exports.deleteAttachment = deleteAttachment;
-exports.setFeaturedImage = setFeaturedImage;
-exports.reorderAttachments = reorderAttachments;
-exports.promoteTicketToKb = promoteTicketToKb;
-const prisma_js_1 = require("../../config/prisma.js");
-const crypto_1 = __importDefault(require("crypto"));
-const seoHelper_js_1 = require("../../utils/seoHelper.js");
+import { prisma } from "../../config/prisma.js";
+import crypto from "crypto";
+import { extractKeywords } from "../../utils/seoHelper.js";
 function slugify(text) {
     return text
         .toString()
@@ -44,11 +14,11 @@ function slugify(text) {
 }
 async function generateUniqueSlug(title) {
     const baseSlug = slugify(title) || "article";
-    const randomSuffix = crypto_1.default.randomBytes(3).toString("hex");
+    const randomSuffix = crypto.randomBytes(3).toString("hex");
     return `${baseSlug}-${randomSuffix}`;
 }
 // --- ARTICLES ---
-async function listArticles(user, query) {
+export async function listArticles(user, query) {
     const where = {};
     // Enforce visibility based on role
     if (!user || user.role === "CUSTOMER") {
@@ -67,19 +37,19 @@ async function listArticles(user, query) {
     // Filter by user's subscribed services if customer
     let allowedCategoryIds = null;
     if (user && user.role === "CUSTOMER") {
-        const customerUser = await prisma_js_1.prisma.user.findUnique({
+        const customerUser = await prisma.user.findUnique({
             where: { id: user.id },
             select: { crmCustomerId: true }
         });
         if (customerUser?.crmCustomerId) {
-            const activeServices = await prisma_js_1.prisma.crmService.findMany({
+            const activeServices = await prisma.crmService.findMany({
                 where: { crmCustomerId: customerUser.crmCustomerId }
             });
             const serviceNames = activeServices
                 .filter(s => s.status.toUpperCase() === "ACTIVE")
                 .map(s => s.name.toLowerCase());
             // Fetch all categories to traverse parents
-            const allCategories = await prisma_js_1.prisma.category.findMany({
+            const allCategories = await prisma.category.findMany({
                 select: { id: true, name: true, parentId: true }
             });
             const getCategoryAncestors = (catId) => {
@@ -151,7 +121,7 @@ async function listArticles(user, query) {
     const limit = query?.limit ? Math.min(query.limit, 100) : 20;
     const offset = query?.offset || 0;
     const [articles, total] = await Promise.all([
-        prisma_js_1.prisma.knowledgeBaseArticle.findMany({
+        prisma.knowledgeBaseArticle.findMany({
             where,
             include: {
                 author: { select: { id: true, name: true } },
@@ -162,7 +132,7 @@ async function listArticles(user, query) {
             take: limit,
             skip: offset,
         }),
-        prisma_js_1.prisma.knowledgeBaseArticle.count({ where }),
+        prisma.knowledgeBaseArticle.count({ where }),
     ]);
     return {
         articles: articles.map((art) => ({
@@ -172,8 +142,8 @@ async function listArticles(user, query) {
         total,
     };
 }
-async function getArticleById(id) {
-    const article = await prisma_js_1.prisma.knowledgeBaseArticle.findUnique({
+export async function getArticleById(id) {
+    const article = await prisma.knowledgeBaseArticle.findUnique({
         where: { id },
         include: {
             author: { select: { id: true, name: true } },
@@ -192,8 +162,8 @@ async function getArticleById(id) {
         tags: article.tags.map((t) => t.name),
     };
 }
-async function getArticleBySlug(slug) {
-    const article = await prisma_js_1.prisma.knowledgeBaseArticle.findUnique({
+export async function getArticleBySlug(slug) {
+    const article = await prisma.knowledgeBaseArticle.findUnique({
         where: { slug },
         include: {
             author: { select: { id: true, name: true } },
@@ -212,14 +182,14 @@ async function getArticleBySlug(slug) {
         tags: article.tags.map((t) => t.name),
     };
 }
-async function createArticle(input, authorId) {
+export async function createArticle(input, authorId) {
     const slug = await generateUniqueSlug(input.title);
     // Connect or create tags if provided
     const tagConnectOrCreate = input.tags?.map((t) => ({
         where: { name: t },
         create: { name: t },
     })) || [];
-    const article = await prisma_js_1.prisma.knowledgeBaseArticle.create({
+    const article = await prisma.knowledgeBaseArticle.create({
         data: {
             title: input.title,
             slug,
@@ -269,8 +239,8 @@ async function createArticle(input, authorId) {
         tags: article.tags.map((t) => t.name),
     };
 }
-async function updateArticle(id, input, changedBy) {
-    const article = await prisma_js_1.prisma.knowledgeBaseArticle.findUnique({
+export async function updateArticle(id, input, changedBy) {
+    const article = await prisma.knowledgeBaseArticle.findUnique({
         where: { id },
         include: { tags: true },
     });
@@ -305,7 +275,7 @@ async function updateArticle(id, input, changedBy) {
         };
     }
     // Run database transactions to ensure version history is snapshot-saved
-    const updated = await prisma_js_1.prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx) => {
         const art = await tx.knowledgeBaseArticle.update({
             where: { id },
             data,
@@ -340,16 +310,16 @@ async function updateArticle(id, input, changedBy) {
         tags: updated.tags.map((t) => t.name),
     };
 }
-async function deleteArticle(id) {
+export async function deleteArticle(id) {
     // Verifies existence
     await getArticleById(id);
-    return prisma_js_1.prisma.knowledgeBaseArticle.delete({
+    return prisma.knowledgeBaseArticle.delete({
         where: { id },
     });
 }
 // --- CATEGORIES ---
-async function listCategories(user) {
-    const categories = await prisma_js_1.prisma.category.findMany({
+export async function listCategories(user) {
+    const categories = await prisma.category.findMany({
         include: {
             _count: {
                 select: { kbArticles: true },
@@ -362,12 +332,12 @@ async function listCategories(user) {
         article_count: cat._count.kbArticles,
     }));
     if (user && user.role === "CUSTOMER") {
-        const customerUser = await prisma_js_1.prisma.user.findUnique({
+        const customerUser = await prisma.user.findUnique({
             where: { id: user.id },
             select: { crmCustomerId: true }
         });
         if (customerUser?.crmCustomerId) {
-            const activeServices = await prisma_js_1.prisma.crmService.findMany({
+            const activeServices = await prisma.crmService.findMany({
                 where: { crmCustomerId: customerUser.crmCustomerId }
             });
             const serviceNames = activeServices
@@ -405,10 +375,10 @@ async function listCategories(user) {
     }
     return filtered;
 }
-async function createCategory(input) {
+export async function createCategory(input) {
     const slug = slugify(input.name) || "category";
     try {
-        return await prisma_js_1.prisma.category.create({
+        return await prisma.category.create({
             data: {
                 name: input.name,
                 slug,
@@ -426,13 +396,13 @@ async function createCategory(input) {
         throw err;
     }
 }
-async function updateCategory(id, input) {
+export async function updateCategory(id, input) {
     const data = { ...input };
     if (input.name) {
         data.slug = slugify(input.name) || "category";
     }
     try {
-        return await prisma_js_1.prisma.category.update({
+        return await prisma.category.update({
             where: { id },
             data,
         });
@@ -446,14 +416,14 @@ async function updateCategory(id, input) {
         throw err;
     }
 }
-async function deleteCategory(id) {
-    return prisma_js_1.prisma.category.delete({
+export async function deleteCategory(id) {
+    return prisma.category.delete({
         where: { id },
     });
 }
 // --- TAGS ---
-async function listTags(limit = 100) {
-    const tags = await prisma_js_1.prisma.tag.findMany({
+export async function listTags(limit = 100) {
+    const tags = await prisma.tag.findMany({
         include: {
             _count: {
                 select: { articles: { where: { isPublished: true } } },
@@ -471,8 +441,8 @@ async function listTags(limit = 100) {
         .sort((a, b) => b.count - a.count);
 }
 // --- VERSIONS ---
-async function listVersions(articleId) {
-    return prisma_js_1.prisma.knowledgeBaseArticleVersion.findMany({
+export async function listVersions(articleId) {
+    return prisma.knowledgeBaseArticleVersion.findMany({
         where: { articleId },
         include: {
             editor: { select: { id: true, name: true } },
@@ -481,8 +451,8 @@ async function listVersions(articleId) {
     });
 }
 // --- TELEMETRY READ TRACKING ---
-async function recordArticleRead(articleId, metadata) {
-    return prisma_js_1.prisma.$transaction(async (tx) => {
+export async function recordArticleRead(articleId, metadata) {
+    return prisma.$transaction(async (tx) => {
         // Check if this fingerprint read this article in the last 24h for unique tracking
         const hours24Ago = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const existing = await tx.knowledgeBaseArticleRead.findFirst({
@@ -520,7 +490,7 @@ async function recordArticleRead(articleId, metadata) {
         return read;
     });
 }
-async function getArticleAnalytics(articleId, dateRange) {
+export async function getArticleAnalytics(articleId, dateRange) {
     const where = { articleId };
     if (dateRange?.startDate || dateRange?.endDate) {
         where.readAt = {};
@@ -530,7 +500,7 @@ async function getArticleAnalytics(articleId, dateRange) {
             where.readAt.lte = dateRange.endDate;
     }
     // Get total reads and unique visitors
-    const aggregate = await prisma_js_1.prisma.knowledgeBaseArticleRead.aggregate({
+    const aggregate = await prisma.knowledgeBaseArticleRead.aggregate({
         where,
         _count: { id: true },
         _avg: {
@@ -538,13 +508,13 @@ async function getArticleAnalytics(articleId, dateRange) {
             scrollDepth: true,
         },
     });
-    const uniqueCount = await prisma_js_1.prisma.knowledgeBaseArticleRead.groupBy({
+    const uniqueCount = await prisma.knowledgeBaseArticleRead.groupBy({
         by: ["sessionFingerprint"],
         where,
         _count: true,
     });
     // Daily reads over time (limit to 30 records)
-    const reads = await prisma_js_1.prisma.knowledgeBaseArticleRead.findMany({
+    const reads = await prisma.knowledgeBaseArticleRead.findMany({
         where,
         select: { readAt: true, isUnique: true },
         orderBy: { readAt: "desc" },
@@ -570,7 +540,7 @@ async function getArticleAnalytics(articleId, dateRange) {
     }))
         .slice(0, 30);
     // Referrer distributions
-    const rawReferrers = await prisma_js_1.prisma.knowledgeBaseArticleRead.groupBy({
+    const rawReferrers = await prisma.knowledgeBaseArticleRead.groupBy({
         by: ["referrer"],
         where: { ...where, NOT: { referrer: null } },
         _count: { id: true },
@@ -578,7 +548,7 @@ async function getArticleAnalytics(articleId, dateRange) {
         take: 10,
     });
     // Campaign distributions
-    const rawCampaigns = await prisma_js_1.prisma.knowledgeBaseArticleRead.groupBy({
+    const rawCampaigns = await prisma.knowledgeBaseArticleRead.groupBy({
         by: ["utmCampaign", "utmSource", "utmMedium"],
         where: { ...where, NOT: { utmCampaign: null } },
         _count: { id: true },
@@ -604,8 +574,8 @@ async function getArticleAnalytics(articleId, dateRange) {
     };
 }
 // --- SEO MANAGEMENT ---
-async function getArticleSEO(articleId) {
-    return prisma_js_1.prisma.knowledgeBaseArticle.findUnique({
+export async function getArticleSEO(articleId) {
+    return prisma.knowledgeBaseArticle.findUnique({
         where: { id: articleId },
         select: {
             id: true,
@@ -621,8 +591,8 @@ async function getArticleSEO(articleId) {
         },
     });
 }
-async function updateArticleSEO(articleId, input) {
-    return prisma_js_1.prisma.knowledgeBaseArticle.update({
+export async function updateArticleSEO(articleId, input) {
+    return prisma.knowledgeBaseArticle.update({
         where: { id: articleId },
         data: {
             metaTitle: input.metaTitle,
@@ -633,8 +603,8 @@ async function updateArticleSEO(articleId, input) {
         },
     });
 }
-async function getPublicArticlesForSitemap() {
-    return prisma_js_1.prisma.knowledgeBaseArticle.findMany({
+export async function getPublicArticlesForSitemap() {
+    return prisma.knowledgeBaseArticle.findMany({
         where: {
             isPublished: true,
             isInternal: false,
@@ -649,8 +619,8 @@ async function getPublicArticlesForSitemap() {
         orderBy: { updatedAt: "desc" },
     });
 }
-async function getPublicArticleBySlug(slug) {
-    const article = await prisma_js_1.prisma.knowledgeBaseArticle.findUnique({
+export async function getPublicArticleBySlug(slug) {
+    const article = await prisma.knowledgeBaseArticle.findUnique({
         where: {
             slug,
             isPublished: true,
@@ -684,7 +654,7 @@ async function getPublicArticleBySlug(slug) {
     };
 }
 // --- SECURITY MONITORING ---
-async function listSecurityEvents(filters) {
+export async function listSecurityEvents(filters) {
     const where = {};
     if (filters.eventType)
         where.eventType = filters.eventType;
@@ -692,15 +662,15 @@ async function listSecurityEvents(filters) {
         where.severity = filters.severity;
     if (filters.isResolved !== undefined)
         where.isResolved = filters.isResolved;
-    return prisma_js_1.prisma.knowledgeBaseSecurityEvent.findMany({
+    return prisma.knowledgeBaseSecurityEvent.findMany({
         where,
         orderBy: { createdAt: "desc" },
         take: filters.limit || 100,
     });
 }
 // --- ATTACHMENTS (IMAGE UPLOAD) ---
-async function createAttachment(articleId, metadata) {
-    return prisma_js_1.prisma.knowledgeBaseArticleAttachment.create({
+export async function createAttachment(articleId, metadata) {
+    return prisma.knowledgeBaseArticleAttachment.create({
         data: {
             articleId,
             filename: metadata.filename,
@@ -714,19 +684,19 @@ async function createAttachment(articleId, metadata) {
         },
     });
 }
-async function listAttachments(articleId) {
-    return prisma_js_1.prisma.knowledgeBaseArticleAttachment.findMany({
+export async function listAttachments(articleId) {
+    return prisma.knowledgeBaseArticleAttachment.findMany({
         where: { articleId },
         orderBy: { displayOrder: "asc" },
     });
 }
-async function deleteAttachment(id) {
-    return prisma_js_1.prisma.knowledgeBaseArticleAttachment.delete({
+export async function deleteAttachment(id) {
+    return prisma.knowledgeBaseArticleAttachment.delete({
         where: { id },
     });
 }
-async function setFeaturedImage(articleId, attachmentId) {
-    return prisma_js_1.prisma.$transaction(async (tx) => {
+export async function setFeaturedImage(articleId, attachmentId) {
+    return prisma.$transaction(async (tx) => {
         // Clear existing featured images for this article
         await tx.knowledgeBaseArticleAttachment.updateMany({
             where: { articleId, isFeatured: true },
@@ -739,15 +709,15 @@ async function setFeaturedImage(articleId, attachmentId) {
         });
     });
 }
-async function reorderAttachments(articleId, orderPairs) {
-    return prisma_js_1.prisma.$transaction(orderPairs.map((pair) => prisma_js_1.prisma.knowledgeBaseArticleAttachment.update({
+export async function reorderAttachments(articleId, orderPairs) {
+    return prisma.$transaction(orderPairs.map((pair) => prisma.knowledgeBaseArticleAttachment.update({
         where: { id: pair.id, articleId },
         data: { displayOrder: pair.order },
     })));
 }
 // --- ADAPTED TICKET PROMOTION ---
-async function promoteTicketToKb(ticketId, authorId) {
-    const ticket = await prisma_js_1.prisma.ticket.findUnique({
+export async function promoteTicketToKb(ticketId, authorId) {
+    const ticket = await prisma.ticket.findUnique({
         where: { id: ticketId },
         include: {
             category: true,
@@ -773,7 +743,7 @@ async function promoteTicketToKb(ticketId, authorId) {
 
 <p><em>This draft was promoted from Ticket ID #${ticketId.slice(0, 8)}. Please refine and verify before publishing.</em></p>`;
     // Auto-generate tags using NLP clean extractKeywords helper
-    const tags = (0, seoHelper_js_1.extractKeywords)(ticket.description || "", 5);
+    const tags = extractKeywords(ticket.description || "", 5);
     tags.push("ticket-promo", ticket.priority.toLowerCase());
     if (ticket.category?.name) {
         tags.push(slugify(ticket.category.name));
@@ -784,7 +754,7 @@ async function promoteTicketToKb(ticketId, authorId) {
         where: { name: t },
         create: { name: t },
     }));
-    const article = await prisma_js_1.prisma.knowledgeBaseArticle.create({
+    const article = await prisma.knowledgeBaseArticle.create({
         data: {
             title,
             slug,

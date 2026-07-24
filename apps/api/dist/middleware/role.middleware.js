@@ -1,9 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.DEFAULT_PERMISSIONS = void 0;
-exports.requireRole = requireRole;
-exports.requirePermission = requirePermission;
-const prisma_js_1 = require("../config/prisma.js");
+import { prisma } from "../config/prisma.js";
 /**
  * requireRole — authorisation middleware factory.
  * Must be used AFTER requireAuth (which populates req.user).
@@ -14,7 +9,7 @@ const prisma_js_1 = require("../config/prisma.js");
  *   router.get("/admin", requireAuth, requireRole("ADMIN"), handler)
  *   router.get("/staff", requireAuth, requireRole("ADMIN", "AGENT"), handler)
  */
-function requireRole(...roles) {
+export function requireRole(...roles) {
     return function roleGuard(req, res, next) {
         if (!req.user) {
             // Should never happen if requireAuth is applied first — defensive check
@@ -40,7 +35,7 @@ function requireRole(...roles) {
         next();
     };
 }
-exports.DEFAULT_PERMISSIONS = {
+export const DEFAULT_PERMISSIONS = {
     ADMIN: [
         "view_tickets",
         "reply_tickets",
@@ -49,21 +44,23 @@ exports.DEFAULT_PERMISSIONS = {
         "manage_kb",
         "adjust_credits",
         "manage_categories_rules",
+        "view_sla",
+        "manage_sla",
         "manage_permissions",
         "manage_staff",
     ],
-    SUPERVISOR: ["view_tickets", "reply_tickets", "assign_tickets", "manage_kb", "manage_teams", "manage_staff"],
-    SUPPORT_L2: ["view_tickets", "reply_tickets", "assign_tickets", "manage_kb"],
-    SUPPORT_L1: ["view_tickets", "reply_tickets", "assign_tickets"],
-    AGENT: ["view_tickets", "reply_tickets"],
-    BILLING: ["view_tickets", "reply_tickets", "adjust_credits"],
+    SUPERVISOR: ["view_tickets", "reply_tickets", "assign_tickets", "manage_kb", "manage_teams", "manage_staff", "view_sla", "manage_sla"],
+    SUPPORT_L2: ["view_tickets", "reply_tickets", "assign_tickets", "manage_kb", "view_sla"],
+    SUPPORT_L1: ["view_tickets", "reply_tickets", "assign_tickets", "view_sla"],
+    AGENT: ["view_tickets", "reply_tickets", "view_sla"],
+    BILLING: ["view_tickets", "reply_tickets", "adjust_credits", "view_sla"],
     CUSTOMER: ["view_tickets", "reply_tickets"],
 };
 /**
  * requirePermission — dynamic permission authorization middleware.
  * Must be used AFTER requireAuth.
  */
-function requirePermission(permission) {
+export function requirePermission(permission) {
     return async function permissionGuard(req, res, next) {
         if (!req.user) {
             res.status(401).json({
@@ -76,10 +73,10 @@ function requirePermission(permission) {
             return;
         }
         try {
-            const rolePerm = await prisma_js_1.prisma.rolePermission.findUnique({
+            const rolePerm = await prisma.rolePermission.findUnique({
                 where: { role: req.user.role },
             });
-            const userPermissions = rolePerm?.permissions ?? exports.DEFAULT_PERMISSIONS[req.user.role] ?? [];
+            const userPermissions = rolePerm?.permissions ?? DEFAULT_PERMISSIONS[req.user.role] ?? [];
             if (!userPermissions.includes(permission)) {
                 res.status(403).json({
                     success: false,

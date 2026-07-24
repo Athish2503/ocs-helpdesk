@@ -1,13 +1,11 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = require("express");
-const sync_controller_js_1 = require("./sync.controller.js");
-const sync_middleware_js_1 = require("../../middleware/sync.middleware.js");
-const auth_middleware_js_1 = require("../../middleware/auth.middleware.js");
-const role_middleware_js_1 = require("../../middleware/role.middleware.js");
-const router = (0, express_1.Router)();
+import { Router } from "express";
+import { crmWebhookHandler, bulkImportCustomersHandler } from "./sync.controller.js";
+import { validateCrmSignature } from "../../middleware/sync.middleware.js";
+import { requireAuth } from "../../middleware/auth.middleware.js";
+import { requirePermission } from "../../middleware/role.middleware.js";
+const router = Router();
 // Webhook from CRM (signature-validated, no auth token required)
-router.post("/crm", sync_middleware_js_1.validateCrmSignature, sync_controller_js_1.crmWebhookHandler);
+router.post("/crm", validateCrmSignature, crmWebhookHandler);
 // Admin-only: bulk import all CRM customers into the local DB
-router.post("/import-all", auth_middleware_js_1.requireAuth, (0, role_middleware_js_1.requirePermission)("manage_permissions"), sync_controller_js_1.bulkImportCustomersHandler);
-exports.default = router;
+router.post("/import-all", requireAuth, requirePermission("manage_permissions"), bulkImportCustomersHandler);
+export default router;
